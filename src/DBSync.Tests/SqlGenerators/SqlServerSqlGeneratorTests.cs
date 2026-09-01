@@ -112,6 +112,59 @@ public class SqlServerSqlGeneratorTests
     }
 
     [Fact]
+    public void GenerateInsertStatements_TableWithIdentity_WrapsIdentityInsert()
+    {
+        var generator = new SqlServerSqlGenerator();
+        var table = TableModelFactory.WithColumns(
+            "Users",
+            [TableModelFactory.IdColumn(), TableModelFactory.Col("Name", DbColumnType.Text)]);
+
+        var sql = generator.GenerateInsertStatements(table, [
+            new Dictionary<string, string?> { ["Id"] = "1", ["Name"] = "张三" }
+        ]);
+
+        Assert.Equal("SET IDENTITY_INSERT [dbo].[Users] ON;", sql[0]);
+        Assert.Contains("INSERT INTO [dbo].[Users] ([Id], [Name]) VALUES (N'1', N'张三');", sql);
+        Assert.Equal("SET IDENTITY_INSERT [dbo].[Users] OFF;", sql[^1]);
+    }
+
+    [Fact]
+    public void GenerateUpgradeScript_WithDataDiffs_WrapsTransactionAndInserts()
+    {
+        var generator = new SqlServerSqlGenerator();
+        var table = TableModelFactory.WithColumns(
+            "Users",
+            [TableModelFactory.IdColumn(), TableModelFactory.Col("Name", DbColumnType.Text)]);
+        var diff = new SchemaDiff
+        {
+            AddedTables = [table],
+            RemovedTables = [],
+            ModifiedTables = [],
+            CyclicDependencyGroups = []
+        };
+        var dataDiffs = new Dictionary<string, DataDiff>
+        {
+            [table.FullName] = new DataDiff
+            {
+                RowsToInsert = [new RowHash { PrimaryKeyValues = new Dictionary<string, string?> { ["Id"] = "1" }, Hash = "abc" }],
+                DeletedRows = [],
+                ChangedRows = []
+            }
+        };
+        var fullData = new Dictionary<string, IReadOnlyList<IReadOnlyDictionary<string, string?>>>
+        {
+            [table.FullName] = [new Dictionary<string, string?> { ["Id"] = "1", ["Name"] = "张三" }]
+        };
+
+        var sql = generator.GenerateUpgradeScript(diff, dataDiffs, fullData);
+
+        Assert.Contains("SET XACT_ABORT ON;", sql);
+        Assert.Contains("BEGIN TRANSACTION;", sql);
+        Assert.Contains("COMMIT TRANSACTION;", sql);
+        Assert.Contains("INSERT INTO [dbo].[Users] ([Id], [Name]) VALUES (N'1', N'张三');", sql);
+    }
+
+    [Fact]
     public void GenerateDdlScript_RemovedTables_DropsChildrenBeforeParents()
     {
         var generator = new SqlServerSqlGenerator();

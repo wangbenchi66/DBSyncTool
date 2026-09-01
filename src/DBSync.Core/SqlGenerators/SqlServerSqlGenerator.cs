@@ -23,8 +23,14 @@ public sealed class SqlServerSqlGenerator : ISqlGenerator
     {
         var script = new StringBuilder();
         script.AppendLine("-- DBSyncTool Upgrade.sql");
-        script.AppendLine($"-- 生成时间 UTC: {DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm:ss}");
-        script.AppendLine($"-- 影响表数量: {schemaDiff.AddedTables.Count + schemaDiff.ModifiedTables.Count}");
+        script.AppendLine($"-- 生成时间: {DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz}");
+        script.AppendLine("-- 工具版本: DBSyncTool");
+        script.AppendLine($"-- 影响表数量: {schemaDiff.AddedTables.Count + schemaDiff.ModifiedTables.Count + dataDiffs.Count}");
+        script.AppendLine($"-- 预计影响行数: {dataDiffs.Values.Sum(d => d.RowsToInsert.Count)}");
+        script.AppendLine();
+
+        script.AppendLine("SET XACT_ABORT ON;");
+        script.AppendLine("BEGIN TRANSACTION;");
         script.AppendLine();
 
         foreach (var sql in GenerateDdlStatements(schemaDiff, includeDropTables: false))
@@ -32,6 +38,26 @@ public sealed class SqlServerSqlGenerator : ISqlGenerator
             script.AppendLine(sql);
             script.AppendLine();
         }
+
+        var dataTables = schemaDiff.AddedTables.Concat(schemaDiff.ModifiedTables.Select(t => t.SourceTable));
+        var sortedDataTables = FkTopologicalSorter.Sort(dataTables).Sorted;
+        foreach (var table in sortedDataTables)
+        {
+            if (!dataDiffs.TryGetValue(table.FullName, out var diff) || diff.Skipped || diff.RowsToInsert.Count == 0)
+                continue;
+
+            var rows = fullData is not null && fullData.TryGetValue(table.FullName, out var fullRows)
+                ? fullRows
+                : diff.RowsToInsert.Select(r => r.PrimaryKeyValues).ToList();
+            foreach (var insert in GenerateInsertStatements(table, rows))
+            {
+                script.AppendLine(insert);
+                script.AppendLine();
+            }
+        }
+
+        script.AppendLine("COMMIT TRANSACTION;");
+        script.AppendLine("GO");
 
         return script.ToString().TrimEnd();
     }
@@ -141,7 +167,22 @@ public sealed class SqlServerSqlGenerator : ISqlGenerator
         TableModel table,
         IReadOnlyList<IReadOnlyDictionary<string, string?>> rows)
     {
-        return [];
+        if (rows.Count == 0)
+            return [];
+
+        var columns = table.Columns.OrderBy(c => c.OrdinalPosition).ToList();
+        var columnNames = string.Join(", ", columns.Select(c => QuoteIdentifier(c.Name)));
+        var statements = new List<string>();
+        var hasIdentity = columns.Any(c => c.IsIdentity);
+        if (hasIdentity)
+            statements.Add($"SET IDENTITY_INSERT {QuoteName(table)} ON;");
+
+        statements.AddRange(rows.Select(row => BuildInsertStatement(table, columnNames, columns, row)));
+
+        if (hasIdentity)
+            statements.Add($"SET IDENTITY_INSERT {QuoteName(table)} OFF;");
+
+        return statements;
     }
 
     /// <summary>
@@ -285,5 +326,28 @@ public sealed class SqlServerSqlGenerator : ISqlGenerator
     private static string QuoteIdentifier(string name)
     {
         return $"[{name.Replace("]", "]]")}]";
+    }
+
+    /// <summary>
+    /// 生成单条 INSERT 语句。
+    /// </summary>
+    private static string BuildInsertStatement(
+        TableModel table,
+        string columnNames,
+        IReadOnlyList<ColumnModel> columns,
+        IReadOnlyDictionary<string, string?> row)
+    {
+        var values = columns.Select(column => FormatSqlLiteral(row.TryGetValue(column.Name, out var value) ? value : null));
+        return $"INSERT INTO {QuoteName(table)} ({columnNames}) VALUES ({string.Join(", ", values)});";
+    }
+
+    /// <summary>
+    /// 格式化 SQL 字面量。
+    /// </summary>
+    private static string FormatSqlLiteral(string? value)
+    {
+        return value is null
+            ? "NULL"
+            : $"N'{value.Replace("'", "''")}'";
     }
 }
