@@ -1,10 +1,11 @@
 using System.Text.Json;
 using DBSync.Desktop.Models;
 using DBSync.Desktop.Services;
+using WBC66.Autofac.Core;
 
 namespace DBSync.Desktop.Storage;
 
-public sealed class JsonAppSettingsStore : IAppSettingsStore
+public sealed class JsonAppSettingsStore : IAppSettingsStore, IDependency
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
     private static readonly string Folder = Path.Combine(

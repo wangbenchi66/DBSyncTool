@@ -2,10 +2,11 @@ using System.Text.Json;
 using DBSync.Core.Models;
 using DBSync.Desktop.Services;
 using DBSync.Desktop.ViewModels;
+using WBC66.Autofac.Core;
 
 namespace DBSync.Desktop.Storage;
 
-public sealed class LocalConnectionStore(IConnectionEncryption encryption) : IConnectionStore
+public sealed class LocalConnectionStore(IConnectionEncryption encryption) : IConnectionStore, IDependency
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
     private static readonly string Folder = Path.Combine(

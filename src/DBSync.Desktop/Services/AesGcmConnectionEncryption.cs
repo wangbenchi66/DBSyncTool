@@ -1,9 +1,9 @@
 using System.Security.Cryptography;
-using System.Text;
+using WBC66.Autofac.Core;
 
 namespace DBSync.Desktop.Services;
 
-public sealed class AesGcmConnectionEncryption(string masterPassword) : IConnectionEncryption
+public sealed class AesGcmConnectionEncryption(string masterPassword) : IConnectionEncryption, IDependency
 {
     private static readonly byte[] Salt = "DBSyncTool.Connection"u8.ToArray();
     private const int KeySize = 32;

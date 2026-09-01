@@ -1,8 +1,9 @@
 using System.Runtime.InteropServices;
+using WBC66.Autofac.Core;
 
 namespace DBSync.Desktop.Services;
 
-public sealed class ConnectionEncryptionFactory : IConnectionEncryption
+public sealed class ConnectionEncryptionFactory : IConnectionEncryption, IDependency
 {
     private readonly IConnectionEncryption _inner;
 

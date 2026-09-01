@@ -4,6 +4,7 @@ using DBSync.Desktop.Services;
 using DBSync.Desktop.Storage;
 using DBSync.Desktop.ViewModels;
 using DBSync.Desktop.Views;
+using DBSync.Desktop.Extensions;
 using Easy.Serilog.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -19,10 +20,7 @@ internal static class Program
         hostBuilder.AddSerilogHost();
         hostBuilder.ConfigureServices(services =>
         {
-            services.AddSingleton<IAppSettingsStore, JsonAppSettingsStore>();
-            services.AddSingleton<IConnectionStore, LocalConnectionStore>();
-            services.AddSingleton<IConnectionEncryption, ConnectionEncryptionFactory>();
-            services.AddSingleton<ISchemaReader, SqlServerSchemaReader>();
+            services.AddRegisterDependencies();
             services.AddSingleton<MainWindowViewModel>();
             services.AddSingleton<MainWindow>();
         });
