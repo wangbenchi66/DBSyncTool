@@ -7,4 +7,6 @@ public sealed record AppSettings
     public string? LastConnectionName { get; init; }
 
     public string? LastExportPath { get; init; }
+
+    public string? LastSnapshotPath { get; init; }
 }
