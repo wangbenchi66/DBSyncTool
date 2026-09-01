@@ -1,0 +1,58 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:DBSync.Desktop.ViewModels"
+        x:Class="DBSync.Desktop.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="DBSyncTool"
+        Width="1100"
+        Height="760">
+  <Grid RowDefinitions="Auto,*,Auto" Margin="16">
+    <Border Padding="12" Background="#1F2937">
+      <DockPanel>
+        <TextBlock Text="DBSyncTool" FontSize="24" FontWeight="Bold" Foreground="White" />
+        <TextBlock DockPanel.Dock="Right" Text="{Binding StatusText}" Foreground="White" />
+      </DockPanel>
+    </Border>
+
+    <Grid Grid.Row="1" ColumnDefinitions="2*,3*" Margin="0,16,0,16">
+      <StackPanel Spacing="12">
+        <Button Content="导出快照 - 在生产机运行" Command="{Binding OpenExportCommand}" Height="56" />
+        <Button Content="加载快照并比对 - 在测试机运行" Command="{Binding OpenCompareCommand}" Height="56" />
+      </StackPanel>
+
+      <Border Grid.Column="1" Padding="16" Background="#F3F4F6">
+        <StackPanel Spacing="12">
+          <TextBlock Text="连接管理" FontSize="18" FontWeight="SemiBold" />
+          <ListBox ItemsSource="{Binding Connections}"
+                   SelectedItem="{Binding SelectedConnection}"
+                   Height="420">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <Grid ColumnDefinitions="2*,*,3*" Margin="4">
+                  <TextBlock Text="{Binding Name}" />
+                  <TextBlock Grid.Column="1" Text="{Binding DbType}" />
+                  <TextBlock Grid.Column="2" Text="{Binding ServerAddress}" />
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Content="新增" Command="{Binding AddConnectionCommand}" />
+            <Button Content="编辑" Command="{Binding EditConnectionCommand}" />
+            <Button Content="删除" Command="{Binding DeleteConnectionCommand}" />
+            <Button Content="测试连接" Command="{Binding TestConnectionCommand}" />
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock VerticalAlignment="Center" Text="行数阈值" />
+            <TextBox Width="140" Text="{Binding RowCountWarningThresholdText, Mode=TwoWay}" />
+            <Button Content="保存设置" Command="{Binding SaveSettingsCommand}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <Border Grid.Row="2" Padding="8" Background="#111827">
+      <TextBlock Text="{Binding LogSummary}" Foreground="White" />
+    </Border>
+  </Grid>
+</Window>
