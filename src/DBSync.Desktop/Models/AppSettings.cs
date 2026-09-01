@@ -9,4 +9,6 @@ public sealed record AppSettings
     public string? LastExportPath { get; init; }
 
     public string? LastSnapshotPath { get; init; }
+
+    public List<RecentHistoryItem> RecentHistoryItems { get; init; } = [];
 }

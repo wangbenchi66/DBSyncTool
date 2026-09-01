@@ -37,7 +37,7 @@
                 <Button Content="反选" Command="{Binding InvertTableSelectionCommand}" />
               </StackPanel>
 
-              <TextBlock Text="3. 密码与路径" FontWeight="SemiBold" />
+              <TextBlock Text="3. 密码和路径" FontWeight="SemiBold" />
               <TextBox PlaceholderText="加密密码" Text="{Binding ExportPassword, Mode=TwoWay}" />
               <TextBox PlaceholderText="确认密码" Text="{Binding ExportPasswordConfirm, Mode=TwoWay}" />
               <TextBox PlaceholderText="密码提示（明文写入快照文件）" Text="{Binding PasswordHint, Mode=TwoWay}" />
@@ -76,6 +76,12 @@
               <ProgressBar Minimum="0" Maximum="100" Value="{Binding CompareProgress}" />
               <TextBlock Text="{Binding CompareProgressText}" TextWrapping="Wrap" />
               <TextBlock Text="{Binding CompareSummaryText}" TextWrapping="Wrap" />
+
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="生成脚本" Command="{Binding GenerateUpgradeScriptCommand}" />
+                <Button Content="导出 Markdown" Command="{Binding ExportMarkdownReportCommand}" />
+                <Button Content="导出 HTML" Command="{Binding ExportHtmlReportCommand}" />
+              </StackPanel>
 
               <TextBlock Text="3. 结构差异预览" FontWeight="SemiBold" />
               <ItemsControl ItemsSource="{Binding CompareSchemaNodes}">
@@ -124,69 +130,97 @@
       </ScrollViewer>
 
       <Border Grid.Column="1" Padding="16" Background="#F3F4F6">
-        <StackPanel Spacing="12">
-          <TextBlock Text="连接管理" FontSize="18" FontWeight="SemiBold" />
-          <ListBox ItemsSource="{Binding Connections}"
-                   SelectedItem="{Binding SelectedConnection}"
-                   Height="420">
-            <ListBox.ItemTemplate>
-              <DataTemplate>
-                <Grid ColumnDefinitions="2*,*,3*" Margin="4">
-                  <TextBlock Text="{Binding Name}" />
-                  <TextBlock Grid.Column="1" Text="{Binding DbType}" />
-                  <TextBlock Grid.Column="2" Text="{Binding ServerAddress}" />
-                </Grid>
-              </DataTemplate>
-            </ListBox.ItemTemplate>
-          </ListBox>
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Content="新增" Command="{Binding AddConnectionCommand}" />
-            <Button Content="编辑" Command="{Binding EditConnectionCommand}" />
-            <Button Content="删除" Command="{Binding DeleteConnectionCommand}" />
-            <Button Content="测试连接" Command="{Binding TestConnectionCommand}" />
-          </StackPanel>
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <TextBlock VerticalAlignment="Center" Text="行数阈值" />
-            <TextBox Width="140" Text="{Binding RowCountWarningThresholdText, Mode=TwoWay}" />
-            <Button Content="保存设置" Command="{Binding SaveSettingsCommand}" />
-          </StackPanel>
-
-          <Border Padding="8" Background="#FFFFFF" BorderBrush="#E5E7EB" BorderThickness="1">
-            <Grid RowDefinitions="Auto,*">
-              <Grid ColumnDefinitions="40,2*,*,*,*,2*" Margin="4">
-                <TextBlock Text="选" FontWeight="SemiBold" />
-                <TextBlock Grid.Column="1" Text="表名" FontWeight="SemiBold" />
-                <TextBlock Grid.Column="2" Text="预估行数" FontWeight="SemiBold" />
-                <TextBlock Grid.Column="3" Text="大小" FontWeight="SemiBold" />
-                <TextBlock Grid.Column="4" Text="模式" FontWeight="SemiBold" />
-                <TextBlock Grid.Column="5" Text="WHERE 条件" FontWeight="SemiBold" />
-              </Grid>
-              <ListBox Grid.Row="1"
-                       ItemsSource="{Binding FilteredExportTables}"
-                       Height="250">
+        <TabControl>
+          <TabItem Header="连接管理">
+            <StackPanel Spacing="12">
+              <ListBox ItemsSource="{Binding Connections}"
+                       SelectedItem="{Binding SelectedConnection}"
+                       Height="420">
                 <ListBox.ItemTemplate>
                   <DataTemplate>
-                    <Grid ColumnDefinitions="40,2*,*,*,*,2*" Margin="4">
-                      <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" />
-                      <TextBlock Grid.Column="1" Text="{Binding FullName}" VerticalAlignment="Center" />
-                      <TextBlock Grid.Column="2" Text="{Binding EstimatedRowCountText}" VerticalAlignment="Center" />
-                      <TextBlock Grid.Column="3" Text="{Binding DataSizeText}" VerticalAlignment="Center" />
-                      <StackPanel Grid.Column="4" Spacing="2">
-                        <CheckBox Content="结构+数据"
-                                  IsChecked="{Binding SyncData, Mode=TwoWay}"
-                                  IsEnabled="{Binding HasPrimaryKey}" />
-                        <TextBlock Text="{Binding SyncModeText}" FontSize="12" />
-                      </StackPanel>
-                      <TextBox Grid.Column="5"
-                               PlaceholderText="不含 WHERE"
-                               Text="{Binding WhereClause, Mode=TwoWay}" />
+                    <Grid ColumnDefinitions="2*,*,3*" Margin="4">
+                      <TextBlock Text="{Binding Name}" />
+                      <TextBlock Grid.Column="1" Text="{Binding DbType}" />
+                      <TextBlock Grid.Column="2" Text="{Binding ServerAddress}" />
                     </Grid>
                   </DataTemplate>
                 </ListBox.ItemTemplate>
               </ListBox>
-            </Grid>
-          </Border>
-        </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="新增" Command="{Binding AddConnectionCommand}" />
+                <Button Content="编辑" Command="{Binding EditConnectionCommand}" />
+                <Button Content="删除" Command="{Binding DeleteConnectionCommand}" />
+                <Button Content="测试连接" Command="{Binding TestConnectionCommand}" />
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock VerticalAlignment="Center" Text="行数阈值" />
+                <TextBox Width="140" Text="{Binding RowCountWarningThresholdText, Mode=TwoWay}" />
+                <Button Content="保存设置" Command="{Binding SaveSettingsCommand}" />
+              </StackPanel>
+
+              <Border Padding="8" Background="#FFFFFF" BorderBrush="#E5E7EB" BorderThickness="1">
+                <Grid RowDefinitions="Auto,*">
+                  <Grid ColumnDefinitions="40,2*,*,*,*,2*" Margin="4">
+                    <TextBlock Text="选" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="1" Text="表名" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="2" Text="预估行数" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="3" Text="大小" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="4" Text="模式" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="5" Text="WHERE 条件" FontWeight="SemiBold" />
+                  </Grid>
+                  <ListBox Grid.Row="1"
+                           ItemsSource="{Binding FilteredExportTables}"
+                           Height="250">
+                    <ListBox.ItemTemplate>
+                      <DataTemplate>
+                        <Grid ColumnDefinitions="40,2*,*,*,*,2*" Margin="4">
+                          <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+                          <TextBlock Grid.Column="1" Text="{Binding FullName}" VerticalAlignment="Center" />
+                          <TextBlock Grid.Column="2" Text="{Binding EstimatedRowCountText}" VerticalAlignment="Center" />
+                          <TextBlock Grid.Column="3" Text="{Binding DataSizeText}" VerticalAlignment="Center" />
+                          <StackPanel Grid.Column="4" Spacing="2">
+                            <CheckBox Content="结构+数据"
+                                      IsChecked="{Binding SyncData, Mode=TwoWay}"
+                                      IsEnabled="{Binding HasPrimaryKey}" />
+                            <TextBlock Text="{Binding SyncModeText}" FontSize="12" />
+                          </StackPanel>
+                          <TextBox Grid.Column="5"
+                                   PlaceholderText="不含 WHERE"
+                                   Text="{Binding WhereClause, Mode=TwoWay}" />
+                        </Grid>
+                      </DataTemplate>
+                    </ListBox.ItemTemplate>
+                  </ListBox>
+                </Grid>
+              </Border>
+            </StackPanel>
+          </TabItem>
+
+          <TabItem Header="历史记录">
+            <StackPanel Spacing="8">
+              <TextBlock Text="最近使用的连接、快照和导出文件" FontWeight="SemiBold" />
+              <ListBox ItemsSource="{Binding RecentHistoryEntries}" Height="520">
+                <ListBox.ItemTemplate>
+                  <DataTemplate>
+                    <Border Margin="0,0,0,8" Padding="8" Background="#FFFFFF" BorderBrush="#E5E7EB" BorderThickness="1">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Spacing="2">
+                          <TextBlock Text="{Binding DisplayText}" FontWeight="SemiBold" />
+                          <TextBlock Text="{Binding PathText}" TextWrapping="Wrap" FontSize="12" Foreground="#6B7280" />
+                        </StackPanel>
+                        <Button Grid.Column="1"
+                                x:CompileBindings="False"
+                                Content="使用"
+                                Command="{Binding DataContext.OpenHistoryEntryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="{Binding}" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </StackPanel>
+          </TabItem>
+        </TabControl>
       </Border>
     </Grid>
 

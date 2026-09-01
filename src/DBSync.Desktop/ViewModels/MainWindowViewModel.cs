@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using Avalonia.Media;
@@ -9,11 +9,14 @@ using CommunityToolkit.Mvvm.Input;
 using DBSync.Core.Models;
 using DBSync.Core.Schema;
 using DBSync.Core.Snapshot;
+using DBSync.Core.SqlGenerators;
 using DBSync.Desktop.Services;
 using DBSync.Desktop.Storage;
 using DBSync.Desktop.Models;
 using DBSync.Desktop.Views;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Text;
 
 namespace DBSync.Desktop.ViewModels;
 
@@ -24,6 +27,8 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly ISchemaReader _schemaReader;
     private readonly ISnapshotExporter _snapshotExporter;
     private readonly ISnapshotLoader _snapshotLoader;
+    private readonly ISqlGenerator _sqlGenerator;
+    private readonly DiffReportExporter _reportExporter;
     private readonly SqlServerDataFingerprinter _fingerprinter;
     private Window? _ownerWindow;
     private CancellationTokenSource? _exportCancellation;
@@ -110,12 +115,16 @@ public partial class MainWindowViewModel : ObservableObject
 
     public ObservableCollection<CompareDataSummaryViewModel> CompareDataSummaries { get; } = new();
 
+    public ObservableCollection<HistoryEntryViewModel> RecentHistoryEntries { get; } = new();
+
     public MainWindowViewModel(
         IConnectionStore connectionStore,
         IAppSettingsStore appSettingsStore,
         ISchemaReader schemaReader,
         ISnapshotExporter snapshotExporter,
         ISnapshotLoader snapshotLoader,
+        ISqlGenerator sqlGenerator,
+        DiffReportExporter reportExporter,
         SqlServerDataFingerprinter fingerprinter)
     {
         _connectionStore = connectionStore;
@@ -123,12 +132,15 @@ public partial class MainWindowViewModel : ObservableObject
         _schemaReader = schemaReader;
         _snapshotExporter = snapshotExporter;
         _snapshotLoader = snapshotLoader;
+        _sqlGenerator = sqlGenerator;
+        _reportExporter = reportExporter;
         _fingerprinter = fingerprinter;
         _settings = _appSettingsStore.Load();
         RowCountWarningThresholdText = _settings.RowCountWarningThreshold.ToString();
         ExportPath = _settings.LastExportPath ?? CreateDefaultExportPath();
         CompareSnapshotPath = _settings.LastSnapshotPath ?? string.Empty;
         LoadConnections();
+        LoadHistory();
         SelectedConnection = Connections.FirstOrDefault(c =>
             string.Equals(c.Name, _settings.LastConnectionName, StringComparison.OrdinalIgnoreCase))
             ?? Connections.FirstOrDefault();
@@ -353,6 +365,7 @@ public partial class MainWindowViewModel : ObservableObject
             HasPendingOperation = true;
             _settings = _settings with { LastSnapshotPath = CompareSnapshotPath };
             _appSettingsStore.Save(_settings);
+            SaveRecentHistory("快照", Path.GetFileName(CompareSnapshotPath), CompareSnapshotPath);
             RefreshCompareConnections();
         }
         catch (Exception ex)
@@ -445,6 +458,7 @@ public partial class MainWindowViewModel : ObservableObject
             LogSummary = CompareSummaryText;
             HasPendingOperation = true;
             SaveCompareHistory(connection.Name);
+            SaveRecentHistory("比对", connection.Name, CompareSnapshotPath, connection.Name);
         }
         catch (Exception ex)
         {
@@ -532,6 +546,7 @@ public partial class MainWindowViewModel : ObservableObject
             StatusText = "导出完成";
             LogSummary = ExportSummary;
             SaveExportHistory(connection.Name, ExportPath);
+            SaveRecentHistory("导出快照", Path.GetFileName(ExportPath), ExportPath, connection.Name);
             HasPendingOperation = false;
         }
         catch (OperationCanceledException)
@@ -551,6 +566,104 @@ public partial class MainWindowViewModel : ObservableObject
             IsExporting = false;
             _exportCancellation.Dispose();
             _exportCancellation = null;
+        }
+    }
+
+    [RelayCommand]
+    private async Task GenerateUpgradeScriptAsync()
+    {
+        if (!EnsureCompareReady())
+            return;
+
+        var path = await PickSaveFileAsync(
+            "淇濆瓨鍗囩骇鑴氭湰",
+            $"Upgrade_{DateTime.Now:yyyyMMdd_HHmmss}.sql",
+            new FilePickerFileType("SQL 鑴氭湰") { Patterns = ["*.sql"] });
+        if (path is null)
+            return;
+
+        try
+        {
+            StatusText = "正在生成脚本...";
+            var script = _sqlGenerator.GenerateUpgradeScript(_loadedSchemaDiff!, _loadedDataDiffs, _loadedSnapshot!.FullData);
+            var lines = script.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+            var ddlCount = lines.Count(line =>
+                line.StartsWith("CREATE ", StringComparison.OrdinalIgnoreCase) ||
+                line.StartsWith("ALTER ", StringComparison.OrdinalIgnoreCase) ||
+                line.StartsWith("DROP ", StringComparison.OrdinalIgnoreCase));
+            var insertCount = lines.Count(line => line.StartsWith("INSERT INTO", StringComparison.OrdinalIgnoreCase));
+            var estimatedRows = _loadedDataDiffs.Values.Sum(diff => diff.RowsToInsert.Count + diff.DeletedRows.Count + diff.ChangedRows.Count);
+
+            await File.WriteAllTextAsync(path, script, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+            SaveRecentHistory("脚本", Path.GetFileName(path), path, CreateSelectedCompareConnection()?.Name);
+            var fileSize = new FileInfo(path).Length;
+            StatusText = "脚本已生成";
+            LogSummary = $"脚本已保存：{path}；DDL {ddlCount} 条，INSERT {insertCount} 条，估计行数 {estimatedRows}，大小 {FormatFileSize(fileSize)}";
+        }
+        catch (Exception ex)
+        {
+            StatusText = "脚本生成失败";
+            LogSummary = ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private async Task ExportMarkdownReportAsync()
+    {
+        await ExportReportAsync(isHtml: false);
+    }
+
+    [RelayCommand]
+    private async Task ExportHtmlReportAsync()
+    {
+        await ExportReportAsync(isHtml: true);
+    }
+
+    [RelayCommand]
+    private void OpenHistoryEntry(HistoryEntryViewModel? entry)
+    {
+        if (entry is null)
+            return;
+
+        if (entry.Kind.Contains("脚本", StringComparison.Ordinal) || entry.Kind.Contains("报告", StringComparison.Ordinal))
+        {
+            if (!string.IsNullOrWhiteSpace(entry.Path) && File.Exists(entry.Path))
+            {
+                _ = OpenFileAsync(entry.Path);
+                StatusText = "已打开历史文件";
+                LogSummary = entry.Path;
+            }
+
+            return;
+        }
+
+        if (entry.Kind.Contains("导出", StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(entry.Path))
+        {
+            ExportPath = entry.Path;
+            StatusText = "已恢复导出路径";
+            LogSummary = entry.Path;
+        }
+        else if ((entry.Kind.Contains("快照", StringComparison.Ordinal) || entry.Kind.Contains("比对", StringComparison.Ordinal)) && !string.IsNullOrWhiteSpace(entry.Path))
+        {
+            CompareSnapshotPath = entry.Path;
+            StatusText = "已恢复快照路径";
+            LogSummary = entry.Path;
+        }
+
+        if (!string.IsNullOrWhiteSpace(entry.ConnectionName))
+        {
+            SelectedConnection = Connections.FirstOrDefault(c =>
+                string.Equals(c.Name, entry.ConnectionName, StringComparison.OrdinalIgnoreCase));
+            if (SelectedConnection is not null)
+            {
+                if (!entry.Kind.Contains("导出", StringComparison.Ordinal) &&
+                    !entry.Kind.Contains("快照", StringComparison.Ordinal) &&
+                    !entry.Kind.Contains("比对", StringComparison.Ordinal))
+                {
+                    StatusText = "已恢复历史连接";
+                    LogSummary = $"{SelectedConnection.Name}";
+                }
+            }
         }
     }
 
@@ -829,6 +942,124 @@ public partial class MainWindowViewModel : ObservableObject
             LastExportPath = path
         };
         _appSettingsStore.Save(_settings);
+    }
+
+    private void LoadHistory()
+    {
+        RecentHistoryEntries.Clear();
+
+        foreach (var item in _settings.RecentHistoryItems
+                     .OrderByDescending(x => x.CreatedAt)
+                     .Take(20))
+        {
+            RecentHistoryEntries.Add(new HistoryEntryViewModel(
+                item.Kind,
+                item.Title,
+                item.Path,
+                item.ConnectionName,
+                item.CreatedAt));
+        }
+    }
+
+    private void SaveRecentHistory(string kind, string title, string path, string? connectionName = null)
+    {
+        var record = new RecentHistoryItem
+        {
+            Kind = kind,
+            Title = title,
+            Path = path,
+            ConnectionName = connectionName,
+            CreatedAt = DateTimeOffset.Now
+        };
+
+        var items = _settings.RecentHistoryItems
+            .Where(item => !string.Equals(item.Kind, kind, StringComparison.OrdinalIgnoreCase) ||
+                           !string.Equals(item.Path, path, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(item => item.CreatedAt)
+            .Take(19)
+            .ToList();
+        items.Insert(0, record);
+
+        _settings = _settings with { RecentHistoryItems = items };
+        _appSettingsStore.Save(_settings);
+        LoadHistory();
+    }
+
+    private bool EnsureCompareReady()
+    {
+        if (_loadedSnapshot is null || _loadedSchemaDiff is null)
+        {
+            StatusText = "请先加载快照并完成比对";
+            return false;
+        }
+
+        return true;
+    }
+
+    private async Task ExportReportAsync(bool isHtml)
+    {
+        if (!EnsureCompareReady())
+            return;
+
+        var path = await PickSaveFileAsync(
+            isHtml ? "保存 HTML 报告" : "保存 Markdown 报告",
+            $"DiffReport_{DateTime.Now:yyyyMMdd_HHmmss}.{(isHtml ? "html" : "md")}",
+            new FilePickerFileType(isHtml ? "HTML 报告" : "Markdown 报告")
+            {
+                Patterns = isHtml ? ["*.html"] : ["*.md"]
+            });
+        if (path is null)
+            return;
+
+        try
+        {
+            StatusText = isHtml ? "正在导出 HTML 报告..." : "正在导出 Markdown 报告...";
+            var content = isHtml
+                ? _reportExporter.BuildHtmlReport(_loadedSnapshot!, _loadedSchemaDiff!, _loadedDataDiffs, CreateSelectedCompareConnection()?.Name)
+                : _reportExporter.BuildMarkdownReport(_loadedSnapshot!, _loadedSchemaDiff!, _loadedDataDiffs, CreateSelectedCompareConnection()?.Name);
+
+            await File.WriteAllTextAsync(path, content, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+            SaveRecentHistory(isHtml ? "报告" : "报告", Path.GetFileName(path), path, CreateSelectedCompareConnection()?.Name);
+            StatusText = isHtml ? "HTML 报告已导出" : "Markdown 报告已导出";
+            LogSummary = $"已保存：{path}";
+        }
+        catch (Exception ex)
+        {
+            StatusText = isHtml ? "HTML 报告导出失败" : "Markdown 报告导出失败";
+            LogSummary = ex.Message;
+        }
+    }
+
+    private async Task<string?> PickSaveFileAsync(string title, string defaultFileName, FilePickerFileType fileType)
+    {
+        if (_ownerWindow is null)
+            return null;
+
+        var file = await _ownerWindow.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = title,
+            SuggestedFileName = defaultFileName,
+            FileTypeChoices = [fileType]
+        });
+
+        return file?.TryGetLocalPath();
+    }
+
+    private static Task OpenFileAsync(string path)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = path,
+                UseShellExecute = true
+            });
+        }
+        catch
+        {
+        }
+
+        return Task.CompletedTask;
     }
 
     private static string CreateDefaultExportPath()
