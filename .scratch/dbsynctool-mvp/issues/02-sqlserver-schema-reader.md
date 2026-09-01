@@ -1,6 +1,6 @@
 # 02: SQL Server 结构读取器
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **Blocked by:** 01 - 解决方案脚手架 + 核心领域模型
 
@@ -15,3 +15,24 @@
 - [ ] 结果映射为 `TableModel` 列表
 - [ ] 集成测试：连接真实 SQL Server（本地或 Docker），创建含各种列类型和约束的测试表，验证读取结果与预期一致
 - [ ] 集成测试覆盖：有外键关系的表、有复合主键的表、无主键的表
+
+## 答案
+
+已实现 `SqlServerSchemaReader : ISchemaReader`：
+
+- 通过 Easy.SqlSugar.Core / SqlSugar 连接 SQL Server。
+- 读取 `INFORMATION_SCHEMA.TABLES`、`INFORMATION_SCHEMA.COLUMNS`、`INFORMATION_SCHEMA.TABLE_CONSTRAINTS`、`INFORMATION_SCHEMA.KEY_COLUMN_USAGE`。
+- 读取 `sys.foreign_keys`、`sys.foreign_key_columns`、`sys.indexes`、`sys.index_columns`。
+- 映射为 `TableModel`、`ColumnModel`、`ForeignKeyModel`、`IndexModel`。
+- `ReadTableAsync` 复用全量读取并支持表名或完整表名匹配。
+- `AddDbSyncCore` 已注册 `ISchemaReader` 到 `SqlServerSchemaReader`。
+
+验证命令：
+
+```powershell
+dotnet test 'src\DBSyncTool.slnx' --no-restore
+```
+
+结果：20 个测试通过，1 个 LocalDB 集成测试跳过。
+
+环境说明：本机 `MSSQLLocalDB` 存在，但启动失败，错误为 `Cannot create an automatic instance`；Docker 引擎也未运行。因此真实 SQL Server 读取用例已保留在测试中，但本轮无法在当前机器实际执行。

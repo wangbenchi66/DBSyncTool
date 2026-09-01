@@ -1,3 +1,4 @@
+using DBSync.Core.Schema;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DBSync.Core.Extensions;
@@ -14,6 +15,8 @@ public static class ServiceCollectionExtensions
     /// <returns>服务集合（用于链式调用）</returns>
     public static IServiceCollection AddDbSyncCore(this IServiceCollection services)
     {
+        services.AddSingleton<ISchemaReader, SqlServerSchemaReader>();
+
         return services;
     }
 }
