@@ -1,4 +1,5 @@
 using DBSync.Core.Schema;
+using DBSync.Core.SqlGenerators;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DBSync.Core.Extensions;
@@ -16,6 +17,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddDbSyncCore(this IServiceCollection services)
     {
         services.AddSingleton<ISchemaReader, SqlServerSchemaReader>();
+        services.AddSingleton<ISqlGenerator, SqlServerSqlGenerator>();
 
         return services;
     }
