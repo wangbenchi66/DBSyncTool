@@ -1,5 +1,6 @@
 using DBSync.Core.Data;
 using DBSync.Core.Schema;
+using DBSync.Core.Snapshot;
 using DBSync.Core.SqlGenerators;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -20,6 +21,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISchemaReader, SqlServerSchemaReader>();
         services.AddSingleton<ISqlGenerator, SqlServerSqlGenerator>();
         services.AddSingleton<SqlServerDataFingerprinter>();
+        services.AddSingleton<ISnapshotExporter, SnapshotExporter>();
+        services.AddSingleton<ISnapshotLoader, SnapshotLoader>();
 
         return services;
     }

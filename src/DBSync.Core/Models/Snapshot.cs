@@ -31,7 +31,7 @@ public sealed record SnapshotManifest
     public required DatabaseType DbType { get; init; }
 
     /// <summary>
-    /// 快照导出时间（UTC）
+    /// 快照导出时间（本地时区）
     ///</summary>
     public required DateTimeOffset ExportedAt { get; init; }
 
