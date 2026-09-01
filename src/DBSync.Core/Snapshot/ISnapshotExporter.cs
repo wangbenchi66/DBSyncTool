@@ -19,6 +19,6 @@ public interface ISnapshotExporter
         DatabaseConnection connection,
         ExportOptions options,
         Stream outputStream,
-        IProgress<(int current, int total, string tableName)>? progress = null,
+        IProgress<(int currentTable, int totalTables, string tableName, long currentRow)>? progress = null,
         CancellationToken cancellationToken = default);
 }

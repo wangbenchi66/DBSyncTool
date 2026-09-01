@@ -106,6 +106,8 @@ public sealed class SqlServerSchemaReader : ISchemaReader
         {
             Name = table.Name,
             Schema = table.SchemaName,
+            EstimatedRowCount = table.EstimatedRowCount,
+            EstimatedDataSizeMb = table.EstimatedDataSizeMb,
             Columns = columns
                 .Where(c => SameTable(c.SchemaName, c.TableName, table))
                 .OrderBy(c => c.OrdinalPosition)
@@ -250,6 +252,16 @@ public sealed class SqlServerSchemaReader : ISchemaReader
         /// 表名
         ///</summary>
         public string Name { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 预估行数
+        ///</summary>
+        public long EstimatedRowCount { get; set; }
+
+        /// <summary>
+        /// 预估数据大小（MB）
+        ///</summary>
+        public decimal EstimatedDataSizeMb { get; set; }
     }
 
     /// <summary>
@@ -429,11 +441,23 @@ public sealed class SqlServerSchemaReader : ISchemaReader
         /// <summary>
         /// 读取用户表列表
         ///</summary>
-        internal const string Tables = """
+internal const string Tables = """
 SELECT
     TABLE_SCHEMA AS SchemaName,
-    TABLE_NAME AS Name
+    TABLE_NAME AS Name,
+    ISNULL(ps.EstimatedRowCount, 0) AS EstimatedRowCount,
+    ISNULL(ps.EstimatedDataSizeMb, 0) AS EstimatedDataSizeMb
 FROM INFORMATION_SCHEMA.TABLES
+OUTER APPLY
+(
+    SELECT
+        SUM(CASE WHEN p.index_id IN (0, 1) THEN p.row_count ELSE 0 END) AS EstimatedRowCount,
+        CAST(SUM(a.total_pages) * 8.0 / 1024.0 AS decimal(18, 2)) AS EstimatedDataSizeMb
+    FROM sys.dm_db_partition_stats p
+    LEFT JOIN sys.allocation_units a
+        ON p.partition_id = a.container_id
+    WHERE p.object_id = OBJECT_ID(QUOTENAME(TABLE_SCHEMA) + '.' + QUOTENAME(TABLE_NAME))
+) ps
 WHERE TABLE_TYPE = 'BASE TABLE'
 ORDER BY TABLE_SCHEMA, TABLE_NAME
 """;

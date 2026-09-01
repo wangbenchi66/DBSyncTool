@@ -8,6 +8,7 @@ using DBSync.Desktop.Extensions;
 using Easy.Serilog.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using WBC66.Autofac.Core;
 
 namespace DBSync.Desktop;
 
@@ -18,11 +19,12 @@ internal static class Program
     {
         var hostBuilder = Host.CreateDefaultBuilder(args);
         hostBuilder.AddSerilogHost();
-        hostBuilder.ConfigureServices(services =>
+        hostBuilder.ConfigureServices((_, services) =>
         {
             services.AddRegisterDependencies();
             services.AddSingleton<MainWindowViewModel>();
             services.AddSingleton<MainWindow>();
+            //hostBuilder.AddAutofacHostSetup(services, AutofacSetup.AddAutofacModule);//上边已经注入了
         });
 
         var host = hostBuilder.Build();

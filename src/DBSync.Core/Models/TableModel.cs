@@ -36,6 +36,16 @@ public sealed record TableModel
     public required IReadOnlyList<IndexModel> Indexes { get; init; }
 
     /// <summary>
+    /// 预估行数
+    ///</summary>
+    public long? EstimatedRowCount { get; init; }
+
+    /// <summary>
+    /// 预估数据大小（MB）
+    ///</summary>
+    public decimal? EstimatedDataSizeMb { get; init; }
+
+    /// <summary>
     /// 表是否有主键
     ///</summary>
     public bool HasPrimaryKey => PrimaryKeyColumns.Count > 0;

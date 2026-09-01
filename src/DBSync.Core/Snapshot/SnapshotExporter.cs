@@ -31,7 +31,7 @@ public sealed class SnapshotExporter(ISchemaReader schemaReader, SqlServerDataFi
         DatabaseConnection connection,
         ExportOptions options,
         Stream outputStream,
-        IProgress<(int current, int total, string tableName)>? progress = null,
+        IProgress<(int currentTable, int totalTables, string tableName, long currentRow)>? progress = null,
         CancellationToken cancellationToken = default)
     {
         var header = await SnapshotFileFormat.WriteHeaderAsync(outputStream, options.PasswordHint);
@@ -55,15 +55,15 @@ public sealed class SnapshotExporter(ISchemaReader schemaReader, SqlServerDataFi
         {
             var table = selectedTables[i];
             var tableOptions = FindOptions(options.Tables, table);
-            progress?.Report((i + 1, selectedTables.Count, table.FullName));
+            progress?.Report((i + 1, selectedTables.Count, table.FullName, 0));
 
             if (tableOptions.SyncSchema)
                 await WriteJsonEntryAsync(archive, $"schema/{table.FullName}.json", table, cancellationToken);
 
-            await WriteFingerprintsAsync(archive, connection, table, tableOptions.WhereClause, cancellationToken);
+            await WriteFingerprintsAsync(archive, connection, table, tableOptions.WhereClause, progress, i + 1, selectedTables.Count, cancellationToken);
 
             if (tableOptions.SyncData)
-                await WriteFullDataAsync(archive, connection, table, tableOptions.WhereClause, cancellationToken);
+                await WriteFullDataAsync(archive, connection, table, tableOptions.WhereClause, progress, i + 1, selectedTables.Count, cancellationToken);
         }
     }
 
@@ -99,6 +99,9 @@ public sealed class SnapshotExporter(ISchemaReader schemaReader, SqlServerDataFi
         DatabaseConnection connection,
         TableModel table,
         string? whereClause,
+        IProgress<(int currentTable, int totalTables, string tableName, long currentRow)>? progress,
+        int currentTable,
+        int totalTables,
         CancellationToken cancellationToken)
     {
         var entry = archive.CreateEntry($"data_fingerprint/{table.FullName}.fp", CompressionLevel.Optimal);
@@ -106,9 +109,12 @@ public sealed class SnapshotExporter(ISchemaReader schemaReader, SqlServerDataFi
         await using var gzipStream = new GZipStream(stream, CompressionMode.Compress);
         await using var writer = new StreamWriter(gzipStream);
 
+        var currentRow = 0L;
         await foreach (var row in fingerprinter.ReadRowHashesAsync(connection, table, whereClause, cancellationToken))
         {
             await writer.WriteLineAsync(JsonSerializer.Serialize(row, JsonOptions));
+            currentRow++;
+            progress?.Report((currentTable, totalTables, table.FullName, currentRow));
         }
     }
 
@@ -125,6 +131,9 @@ public sealed class SnapshotExporter(ISchemaReader schemaReader, SqlServerDataFi
         DatabaseConnection connection,
         TableModel table,
         string? whereClause,
+        IProgress<(int currentTable, int totalTables, string tableName, long currentRow)>? progress,
+        int currentTable,
+        int totalTables,
         CancellationToken cancellationToken)
     {
         var entry = archive.CreateEntry($"data_full/{table.FullName}.csv.gz", CompressionLevel.Optimal);
@@ -141,6 +150,7 @@ public sealed class SnapshotExporter(ISchemaReader schemaReader, SqlServerDataFi
         command.CommandText = BuildFullDataSql(table, whereClause);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
+        var currentRow = 0L;
         while (await reader.ReadAsync(cancellationToken))
         {
             var values = new List<string>(columns.Count);
@@ -151,6 +161,8 @@ public sealed class SnapshotExporter(ISchemaReader schemaReader, SqlServerDataFi
             }
 
             await writer.WriteLineAsync(string.Join(",", values));
+            currentRow++;
+            progress?.Report((currentTable, totalTables, table.FullName, currentRow));
         }
     }
 

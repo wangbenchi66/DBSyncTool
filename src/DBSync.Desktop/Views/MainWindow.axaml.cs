@@ -18,6 +18,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = viewModel;
+        viewModel.AttachOwnerWindow(this);
         Closing += OnClosing;
     }
 
