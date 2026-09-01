@@ -1,6 +1,6 @@
 # 01: 解决方案脚手架 + 核心领域模型
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **Blocked by:** 无（可立即开始）
 
@@ -14,3 +14,7 @@
 - [ ] 定义核心接口：`ISchemaReader`、`ISqlGenerator`、`ISnapshotExporter`、`ISnapshotLoader`
 - [ ] 配置依赖注入容器入口（`ServiceCollectionExtensions`）
 - [ ] `DBSync.Tests` 项目引用 `DBSync.Core`，添加 Easy.Bogus.Core 用于生成测试数据，能成功编译即可
+
+## 答案
+
+已在提交 `3368cfe` 完成解决方案脚手架和核心领域模型。
