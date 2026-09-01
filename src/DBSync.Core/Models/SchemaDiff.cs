@@ -94,9 +94,14 @@ public sealed record TableDiff
     public required IReadOnlyList<IndexDiff> IndexDiffs { get; init; }
 
     /// <summary>
+    /// 主键列是否发生变更
+    ///</summary>
+    public bool PrimaryKeyChanged { get; init; }
+
+    /// <summary>
     /// 该表是否存在任何结构差异
     ///</summary>
-    public bool HasChanges => ColumnDiffs.Count > 0 || IndexDiffs.Count > 0;
+    public bool HasChanges => ColumnDiffs.Count > 0 || IndexDiffs.Count > 0 || PrimaryKeyChanged;
 }
 
 /// <summary>

@@ -1,6 +1,6 @@
 # 03: Schema 比较器 + 外键拓扑排序
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **Blocked by:** 01 - 解决方案脚手架 + 核心领域模型
 
@@ -17,3 +17,21 @@
 - [ ] DROP TABLE 顺序为 CREATE 顺序的逆序
 - [ ] 全部单元测试，使用 Easy.Bogus.Core 构造 `TableModel` 测试数据
 - [ ] 测试用例覆盖：无依赖的表集合、线性依赖链、菱形依赖、循环依赖
+
+## 答案
+
+已实现 `SchemaComparer.Compare` 和 `FkTopologicalSorter`：
+
+- 支持新增表、删除表、列新增/删除/变更、主键列变更、索引新增/删除/变更检测。
+- 索引变更包含唯一性、聚集标记、主键索引标记和索引列顺序。
+- 外键拓扑排序按父表优先返回创建顺序，检测循环依赖并把循环组从正常排序结果中分离。
+- DROP TABLE 顺序由调用方对 CREATE 顺序反转得到，已有测试覆盖。
+- 单元测试覆盖无差异、新增/删除表、列变更、主键变更、索引变更、无依赖、线性依赖、菱形依赖、循环依赖和 DROP 反序。
+
+验证命令：
+
+```powershell
+dotnet test 'src\DBSyncTool.slnx' --no-restore
+```
+
+结果：17 个测试全部通过。
