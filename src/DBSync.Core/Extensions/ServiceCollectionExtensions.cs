@@ -1,3 +1,4 @@
+using DBSync.Core.Data;
 using DBSync.Core.Schema;
 using DBSync.Core.SqlGenerators;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,6 +19,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton<ISchemaReader, SqlServerSchemaReader>();
         services.AddSingleton<ISqlGenerator, SqlServerSqlGenerator>();
+        services.AddSingleton<SqlServerDataFingerprinter>();
 
         return services;
     }
