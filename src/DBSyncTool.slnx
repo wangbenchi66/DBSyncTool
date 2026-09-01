@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="DBSync.Core/DBSync.Core.csproj" />
+  <Project Path="DBSync.Tests/DBSync.Tests.csproj" />
+</Solution>
