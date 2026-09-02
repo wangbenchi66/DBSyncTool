@@ -99,9 +99,14 @@ public sealed record TableDiff
     public bool PrimaryKeyChanged { get; init; }
 
     /// <summary>
+    /// 表注释是否发生变更
+    ///</summary>
+    public bool CommentChanged { get; init; }
+
+    /// <summary>
     /// 该表是否存在任何结构差异
     ///</summary>
-    public bool HasChanges => ColumnDiffs.Count > 0 || IndexDiffs.Count > 0 || PrimaryKeyChanged;
+    public bool HasChanges => ColumnDiffs.Count > 0 || IndexDiffs.Count > 0 || PrimaryKeyChanged || CommentChanged;
 }
 
 /// <summary>

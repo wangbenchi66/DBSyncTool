@@ -73,6 +73,11 @@ public sealed record ColumnModel
     public string? DefaultValue { get; init; }
 
     /// <summary>
+    /// 列注释
+    ///</summary>
+    public string? Comment { get; init; }
+
+    /// <summary>
     /// 是否为 SQL Server IDENTITY 列
     ///</summary>
     public bool IsIdentity { get; init; }

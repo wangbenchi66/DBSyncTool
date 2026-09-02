@@ -266,6 +266,26 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
     }
 
     /// <summary>
+    /// 当前筛选列表中的有主键表全部设置为结构+数据
+    ///</summary>
+    [RelayCommand]
+    private void SelectAllDataModes()
+    {
+        foreach (var table in FilteredExportTables.Where(t => t.HasPrimaryKey))
+            table.SyncData = true;
+    }
+
+    /// <summary>
+    /// 当前筛选列表中的所有表全部设置为仅结构
+    ///</summary>
+    [RelayCommand]
+    private void SelectSchemaOnlyModes()
+    {
+        foreach (var table in FilteredExportTables)
+            table.SyncData = false;
+    }
+
+    /// <summary>
     /// 选择快照导出目录
     ///</summary>
     [RelayCommand]

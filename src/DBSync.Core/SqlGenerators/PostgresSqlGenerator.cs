@@ -11,7 +11,8 @@ public sealed class PostgresSqlGenerator : ISqlGenerator
         DatabaseType dbType,
         SchemaDiff schemaDiff,
         IReadOnlyDictionary<string, DataDiff> dataDiffs,
-        IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, string?>>>? fullData = null)
+        IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, string?>>>? fullData = null,
+        bool useTransaction = true)
     {
         if (dbType != DatabaseType.PostgreSql)
             throw new ArgumentException("PostgresSqlGenerator 只支持 PostgreSQL。", nameof(dbType));
@@ -24,8 +25,11 @@ public sealed class PostgresSqlGenerator : ISqlGenerator
         script.AppendLine($"-- 预计影响行数: {dataDiffs.Values.Sum(d => d.RowsToInsert.Count)}");
         script.AppendLine();
 
-        script.AppendLine("BEGIN;");
-        script.AppendLine();
+        if (useTransaction)
+        {
+            script.AppendLine("BEGIN;");
+            script.AppendLine();
+        }
 
         foreach (var sql in GenerateDdlStatements(schemaDiff, includeDropTables: false))
         {
@@ -40,9 +44,7 @@ public sealed class PostgresSqlGenerator : ISqlGenerator
             if (!dataDiffs.TryGetValue(table.FullName, out var diff) || diff.Skipped || diff.RowsToInsert.Count == 0)
                 continue;
 
-            var rows = fullData is not null && fullData.TryGetValue(table.FullName, out var fullRows)
-                ? fullRows
-                : diff.RowsToInsert.Select(r => r.PrimaryKeyValues).ToList();
+            var rows = SqlGeneratorRows.ResolveRowsToInsert(table, diff, fullData);
             foreach (var insert in GenerateInsertStatements(table, rows))
             {
                 script.AppendLine(insert);
@@ -50,7 +52,8 @@ public sealed class PostgresSqlGenerator : ISqlGenerator
             }
         }
 
-        script.AppendLine("COMMIT;");
+        if (useTransaction)
+            script.AppendLine("COMMIT;");
         return script.ToString().TrimEnd();
     }
 
@@ -83,6 +86,12 @@ public sealed class PostgresSqlGenerator : ISqlGenerator
             script.Append(GenerateCreateIndex(table, index));
         }
 
+        foreach (var comment in GenerateCommentStatements(table))
+        {
+            script.AppendLine();
+            script.Append(comment);
+        }
+
         return script.ToString();
     }
 
@@ -105,14 +114,23 @@ public sealed class PostgresSqlGenerator : ISqlGenerator
         foreach (var columnDiff in diff.ColumnDiffs)
         {
             if (columnDiff.DiffType == ColumnDiffType.Added && columnDiff.After is not null)
+            {
                 result.Add($"ALTER TABLE {tableName} ADD COLUMN {FormatColumnDefinition(columnDiff.After, includeIdentity: true, includeDefault: true)};");
+                result.AddRange(GenerateCommentStatements(diff.SourceTable, columnDiff.After));
+            }
 
             if (columnDiff.DiffType == ColumnDiffType.Removed && columnDiff.Before is not null)
                 result.Add($"ALTER TABLE {tableName} DROP COLUMN {QuoteIdentifier(columnDiff.Before.Name)};");
 
             if (columnDiff.DiffType == ColumnDiffType.Modified && columnDiff.After is not null)
+            {
                 result.Add($"ALTER TABLE {tableName} ALTER COLUMN {QuoteIdentifier(columnDiff.After.Name)} TYPE {FormatColumnType(columnDiff.After)};");
+                result.AddRange(GenerateCommentStatements(diff.SourceTable, columnDiff.After));
+            }
         }
+
+        if (diff.CommentChanged)
+            result.AddRange(GenerateCommentStatements(diff.SourceTable, includeColumns: false));
 
         if (diff.PrimaryKeyChanged)
         {
@@ -226,6 +244,29 @@ public sealed class PostgresSqlGenerator : ISqlGenerator
         return $"DROP INDEX IF EXISTS {QuoteIdentifier(index.Name)};";
     }
 
+    private static IEnumerable<string> GenerateCommentStatements(TableModel table, bool includeColumns = true)
+    {
+        if (!string.IsNullOrWhiteSpace(table.Comment))
+            yield return $"COMMENT ON TABLE {QuoteName(table)} IS '{EscapeSqlLiteral(table.Comment)}';";
+
+        if (!includeColumns)
+            yield break;
+
+        foreach (var column in table.Columns.Where(c => !string.IsNullOrWhiteSpace(c.Comment)))
+            yield return GenerateCommentStatement(table, column);
+    }
+
+    private static IEnumerable<string> GenerateCommentStatements(TableModel table, ColumnModel column)
+    {
+        if (!string.IsNullOrWhiteSpace(column.Comment))
+            yield return GenerateCommentStatement(table, column);
+    }
+
+    private static string GenerateCommentStatement(TableModel table, ColumnModel column)
+    {
+        return $"COMMENT ON COLUMN {QuoteName(table)}.{QuoteIdentifier(column.Name)} IS '{EscapeSqlLiteral(column.Comment!)}';";
+    }
+
     private static string FormatColumnList(IEnumerable<string> columnNames)
     {
         return string.Join(", ", columnNames.Select(QuoteIdentifier));
@@ -266,4 +307,6 @@ public sealed class PostgresSqlGenerator : ISqlGenerator
             ? "NULL"
             : $"'{value.Replace("'", "''")}'";
     }
+
+    private static string EscapeSqlLiteral(string value) => value.Replace("'", "''");
 }

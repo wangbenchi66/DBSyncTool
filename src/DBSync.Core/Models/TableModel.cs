@@ -36,6 +36,11 @@ public sealed record TableModel
     public required IReadOnlyList<IndexModel> Indexes { get; init; }
 
     /// <summary>
+    /// 表注释
+    ///</summary>
+    public string? Comment { get; init; }
+
+    /// <summary>
     /// 预估行数
     ///</summary>
     public long? EstimatedRowCount { get; init; }

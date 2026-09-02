@@ -11,7 +11,8 @@ public sealed class SqliteSqlGenerator : ISqlGenerator
         DatabaseType dbType,
         SchemaDiff schemaDiff,
         IReadOnlyDictionary<string, DataDiff> dataDiffs,
-        IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, string?>>>? fullData = null)
+        IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, string?>>>? fullData = null,
+        bool useTransaction = true)
     {
         if (dbType != DatabaseType.Sqlite)
             throw new ArgumentException("SqliteSqlGenerator 只支持 SQLite。", nameof(dbType));
@@ -24,8 +25,11 @@ public sealed class SqliteSqlGenerator : ISqlGenerator
         script.AppendLine($"-- 预计影响行数: {dataDiffs.Values.Sum(d => d.RowsToInsert.Count)}");
         script.AppendLine();
 
-        script.AppendLine("BEGIN;");
-        script.AppendLine();
+        if (useTransaction)
+        {
+            script.AppendLine("BEGIN;");
+            script.AppendLine();
+        }
 
         foreach (var sql in GenerateDdlStatements(schemaDiff, includeDropTables: false))
         {
@@ -40,9 +44,7 @@ public sealed class SqliteSqlGenerator : ISqlGenerator
             if (!dataDiffs.TryGetValue(table.FullName, out var diff) || diff.Skipped || diff.RowsToInsert.Count == 0)
                 continue;
 
-            var rows = fullData is not null && fullData.TryGetValue(table.FullName, out var fullRows)
-                ? fullRows
-                : diff.RowsToInsert.Select(r => r.PrimaryKeyValues).ToList();
+            var rows = SqlGeneratorRows.ResolveRowsToInsert(table, diff, fullData);
             foreach (var insert in GenerateInsertStatements(table, rows))
             {
                 script.AppendLine(insert);
@@ -50,7 +52,8 @@ public sealed class SqliteSqlGenerator : ISqlGenerator
             }
         }
 
-        script.AppendLine("COMMIT;");
+        if (useTransaction)
+            script.AppendLine("COMMIT;");
         return script.ToString().TrimEnd();
     }
 

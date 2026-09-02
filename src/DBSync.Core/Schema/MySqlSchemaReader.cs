@@ -74,6 +74,7 @@ public sealed class MySqlSchemaReader : ISchemaReader
         {
             Name = table.Name,
             Schema = table.SchemaName,
+            Comment = table.Comment,
             EstimatedRowCount = table.EstimatedRowCount,
             EstimatedDataSizeMb = table.EstimatedDataSizeMb,
             Columns = columns
@@ -116,6 +117,7 @@ public sealed class MySqlSchemaReader : ISchemaReader
             Scale = row.Scale,
             IsNullable = string.Equals(row.IsNullable, "YES", StringComparison.OrdinalIgnoreCase),
             DefaultValue = row.DefaultValue,
+            Comment = row.Comment,
             IsIdentity = false,
             IsAutoIncrement = row.Extra.Contains("auto_increment", StringComparison.OrdinalIgnoreCase),
             OrdinalPosition = row.OrdinalPosition
@@ -216,6 +218,7 @@ public sealed class MySqlSchemaReader : ISchemaReader
     {
         public string SchemaName { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
+        public string? Comment { get; set; }
         public long EstimatedRowCount { get; set; }
         public decimal EstimatedDataSizeMb { get; set; }
     }
@@ -232,6 +235,7 @@ public sealed class MySqlSchemaReader : ISchemaReader
         public int? Scale { get; set; }
         public string IsNullable { get; set; } = string.Empty;
         public string? DefaultValue { get; set; }
+        public string? Comment { get; set; }
         public string Extra { get; set; } = string.Empty;
         public int OrdinalPosition { get; set; }
     }
@@ -271,6 +275,7 @@ public sealed class MySqlSchemaReader : ISchemaReader
 SELECT
     TABLE_SCHEMA AS SchemaName,
     TABLE_NAME AS Name,
+    NULLIF(TABLE_COMMENT, '') AS Comment,
     COALESCE(TABLE_ROWS, 0) AS EstimatedRowCount,
     COALESCE(ROUND((DATA_LENGTH + INDEX_LENGTH) / 1024 / 1024, 2), 0) AS EstimatedDataSizeMb
 FROM INFORMATION_SCHEMA.TABLES
@@ -291,6 +296,7 @@ SELECT
     NUMERIC_SCALE AS `Scale`,
     IS_NULLABLE AS `IsNullable`,
     COLUMN_DEFAULT AS DefaultValue,
+    NULLIF(COLUMN_COMMENT, '') AS Comment,
     EXTRA AS Extra,
     ORDINAL_POSITION AS OrdinalPosition
 FROM INFORMATION_SCHEMA.COLUMNS

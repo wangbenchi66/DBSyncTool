@@ -11,7 +11,8 @@ public sealed class MySqlSqlGenerator : ISqlGenerator
         DatabaseType dbType,
         SchemaDiff schemaDiff,
         IReadOnlyDictionary<string, DataDiff> dataDiffs,
-        IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, string?>>>? fullData = null)
+        IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, string?>>>? fullData = null,
+        bool useTransaction = true)
     {
         if (dbType != DatabaseType.MySql)
             throw new ArgumentException("MySqlSqlGenerator 只支持 MySQL。", nameof(dbType));
@@ -24,8 +25,11 @@ public sealed class MySqlSqlGenerator : ISqlGenerator
         script.AppendLine($"-- 预计影响行数: {dataDiffs.Values.Sum(d => d.RowsToInsert.Count)}");
         script.AppendLine();
 
-        script.AppendLine("START TRANSACTION;");
-        script.AppendLine();
+        if (useTransaction)
+        {
+            script.AppendLine("START TRANSACTION;");
+            script.AppendLine();
+        }
 
         foreach (var sql in GenerateDdlStatements(schemaDiff, includeDropTables: false))
         {
@@ -40,9 +44,7 @@ public sealed class MySqlSqlGenerator : ISqlGenerator
             if (!dataDiffs.TryGetValue(table.FullName, out var diff) || diff.Skipped || diff.RowsToInsert.Count == 0)
                 continue;
 
-            var rows = fullData is not null && fullData.TryGetValue(table.FullName, out var fullRows)
-                ? fullRows
-                : diff.RowsToInsert.Select(r => r.PrimaryKeyValues).ToList();
+            var rows = SqlGeneratorRows.ResolveRowsToInsert(table, diff, fullData);
             foreach (var insert in GenerateInsertStatements(table, rows))
             {
                 script.AppendLine(insert);
@@ -50,7 +52,8 @@ public sealed class MySqlSqlGenerator : ISqlGenerator
             }
         }
 
-        script.AppendLine("COMMIT;");
+        if (useTransaction)
+            script.AppendLine("COMMIT;");
         return script.ToString().TrimEnd();
     }
 
@@ -75,7 +78,10 @@ public sealed class MySqlSqlGenerator : ISqlGenerator
         script.AppendLine($"CREATE TABLE {QuoteName(table)}");
         script.AppendLine("(");
         script.AppendLine(body);
-        script.AppendLine(") ENGINE=InnoDB;");
+        script.Append(") ENGINE=InnoDB");
+        if (!string.IsNullOrWhiteSpace(table.Comment))
+            script.Append($" COMMENT='{EscapeSqlLiteral(table.Comment)}'");
+        script.AppendLine(";");
 
         foreach (var index in table.Indexes.Where(i => !i.IsPrimaryKey))
         {
@@ -113,6 +119,9 @@ public sealed class MySqlSqlGenerator : ISqlGenerator
             if (columnDiff.DiffType == ColumnDiffType.Modified && columnDiff.After is not null)
                 result.Add($"ALTER TABLE {tableName} MODIFY COLUMN {FormatColumnDefinition(columnDiff.After, includeIdentity: true, includeDefault: true)};");
         }
+
+        if (diff.CommentChanged)
+            result.Add($"ALTER TABLE {tableName} COMMENT = '{EscapeSqlLiteral(diff.SourceTable.Comment ?? string.Empty)}';");
 
         if (diff.PrimaryKeyChanged)
         {
@@ -190,9 +199,10 @@ public sealed class MySqlSqlGenerator : ISqlGenerator
     {
         var identity = includeIdentity && (column.IsIdentity || column.IsAutoIncrement) ? " AUTO_INCREMENT" : string.Empty;
         var defaultValue = includeDefault && !string.IsNullOrWhiteSpace(column.DefaultValue) ? $" DEFAULT {column.DefaultValue}" : string.Empty;
+        var comment = !string.IsNullOrWhiteSpace(column.Comment) ? $" COMMENT '{EscapeSqlLiteral(column.Comment)}'" : string.Empty;
         var nullable = column.IsNullable ? "NULL" : "NOT NULL";
 
-        return $"{QuoteIdentifier(column.Name)} {FormatColumnType(column)}{identity} {nullable}{defaultValue}";
+        return $"{QuoteIdentifier(column.Name)} {FormatColumnType(column)}{identity} {nullable}{defaultValue}{comment}";
     }
 
     private static string FormatColumnType(ColumnModel column)
@@ -261,4 +271,6 @@ public sealed class MySqlSqlGenerator : ISqlGenerator
             ? "NULL"
             : $"'{value.Replace("'", "''")}'";
     }
+
+    private static string EscapeSqlLiteral(string value) => value.Replace("'", "''");
 }

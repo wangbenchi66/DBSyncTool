@@ -106,6 +106,7 @@ public sealed class SqlServerSchemaReader : ISchemaReader
         {
             Name = table.Name,
             Schema = table.SchemaName,
+            Comment = table.Comment,
             EstimatedRowCount = table.EstimatedRowCount,
             EstimatedDataSizeMb = table.EstimatedDataSizeMb,
             Columns = columns
@@ -153,6 +154,7 @@ public sealed class SqlServerSchemaReader : ISchemaReader
             Scale = row.Scale,
             IsNullable = string.Equals(row.IsNullable, "YES", StringComparison.OrdinalIgnoreCase),
             DefaultValue = row.DefaultValue,
+            Comment = row.Comment,
             IsIdentity = row.IsIdentity == 1,
             IsAutoIncrement = false,
             OrdinalPosition = row.OrdinalPosition
@@ -254,6 +256,11 @@ public sealed class SqlServerSchemaReader : ISchemaReader
         public string Name { get; set; } = string.Empty;
 
         /// <summary>
+        /// 表注释
+        ///</summary>
+        public string? Comment { get; set; }
+
+        /// <summary>
         /// 预估行数
         ///</summary>
         public long EstimatedRowCount { get; set; }
@@ -313,6 +320,11 @@ public sealed class SqlServerSchemaReader : ISchemaReader
         /// 默认值表达式
         ///</summary>
         public string? DefaultValue { get; set; }
+
+        /// <summary>
+        /// 列注释
+        ///</summary>
+        public string? Comment { get; set; }
 
         /// <summary>
         /// 是否 IDENTITY 列
@@ -445,9 +457,14 @@ internal const string Tables = """
 SELECT
     TABLE_SCHEMA AS SchemaName,
     TABLE_NAME AS Name,
+    CAST(ep.value AS nvarchar(max)) AS Comment,
     ISNULL(ps.EstimatedRowCount, 0) AS EstimatedRowCount,
     ISNULL(ps.EstimatedDataSizeMb, 0) AS EstimatedDataSizeMb
 FROM INFORMATION_SCHEMA.TABLES
+LEFT JOIN sys.extended_properties ep
+    ON ep.major_id = OBJECT_ID(QUOTENAME(TABLE_SCHEMA) + '.' + QUOTENAME(TABLE_NAME))
+    AND ep.minor_id = 0
+    AND ep.name = 'MS_Description'
 OUTER APPLY
 (
     SELECT
@@ -476,9 +493,17 @@ SELECT
     c.NUMERIC_SCALE AS Scale,
     c.IS_NULLABLE AS IsNullable,
     c.COLUMN_DEFAULT AS DefaultValue,
+    CAST(ep.value AS nvarchar(max)) AS Comment,
     COLUMNPROPERTY(OBJECT_ID(QUOTENAME(c.TABLE_SCHEMA) + '.' + QUOTENAME(c.TABLE_NAME)), c.COLUMN_NAME, 'IsIdentity') AS IsIdentity,
     c.ORDINAL_POSITION AS OrdinalPosition
 FROM INFORMATION_SCHEMA.COLUMNS c
+LEFT JOIN sys.columns sc
+    ON sc.object_id = OBJECT_ID(QUOTENAME(c.TABLE_SCHEMA) + '.' + QUOTENAME(c.TABLE_NAME))
+    AND sc.name = c.COLUMN_NAME
+LEFT JOIN sys.extended_properties ep
+    ON ep.major_id = sc.object_id
+    AND ep.minor_id = sc.column_id
+    AND ep.name = 'MS_Description'
 ORDER BY c.TABLE_SCHEMA, c.TABLE_NAME, c.ORDINAL_POSITION
 """;
 

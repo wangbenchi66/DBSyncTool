@@ -90,6 +90,7 @@ public sealed class SqliteSchemaReader : ISchemaReader
         {
             Name = table.Name,
             Schema = string.Empty,
+            Comment = null,
             EstimatedRowCount = table.EstimatedRowCount,
             EstimatedDataSizeMb = table.EstimatedDataSizeMb,
             Columns = columns
@@ -104,6 +105,7 @@ public sealed class SqliteSchemaReader : ISchemaReader
                     Scale = null,
                     IsNullable = c.NotNull == 0,
                     DefaultValue = c.DefaultValue,
+                    Comment = null,
                     IsIdentity = false,
                     IsAutoIncrement = createSql.Contains("AUTOINCREMENT", StringComparison.OrdinalIgnoreCase) &&
                                        c.PrimaryKeyOrdinal > 0 &&

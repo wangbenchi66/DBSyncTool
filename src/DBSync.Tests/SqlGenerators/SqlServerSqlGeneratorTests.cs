@@ -165,6 +165,80 @@ public class SqlServerSqlGeneratorTests
     }
 
     [Fact]
+    public void GenerateUpgradeScript_UseTransactionFalse_DoesNotWrapTransaction()
+    {
+        var generator = new SqlServerSqlGenerator();
+        var diff = new SchemaDiff
+        {
+            AddedTables = [TableModelFactory.Simple("Users")],
+            RemovedTables = [],
+            ModifiedTables = [],
+            CyclicDependencyGroups = []
+        };
+
+        var sql = generator.GenerateUpgradeScript(diff, new Dictionary<string, DataDiff>(), useTransaction: false);
+
+        Assert.DoesNotContain("BEGIN TRANSACTION", sql);
+        Assert.DoesNotContain("COMMIT TRANSACTION", sql);
+        Assert.Contains("CREATE TABLE [dbo].[Users]", sql);
+    }
+
+    [Fact]
+    public void GenerateCreateTable_TableAndColumnComments_GeneratesExtendedProperties()
+    {
+        var generator = new SqlServerSqlGenerator();
+        var table = TableModelFactory.WithColumns(
+            "Users",
+            [TableModelFactory.IdColumn(), TableModelFactory.Col("Name", DbColumnType.Text) with { Comment = "用户名称" }])
+            with { Comment = "用户表" };
+
+        var sql = generator.GenerateCreateTable(table);
+
+        Assert.Contains("@value=N'用户表'", sql);
+        Assert.Contains("@level1name=N'Users'", sql);
+        Assert.Contains("@value=N'用户名称'", sql);
+        Assert.Contains("@level2name=N'Name'", sql);
+    }
+
+    [Fact]
+    public void GenerateUpgradeScript_FullDataOnlyInsertsRowsToInsert()
+    {
+        var generator = new SqlServerSqlGenerator();
+        var table = TableModelFactory.WithColumns(
+            "Users",
+            [TableModelFactory.IdColumn(), TableModelFactory.Col("Name", DbColumnType.Text)]);
+        var diff = new SchemaDiff
+        {
+            AddedTables = [table],
+            RemovedTables = [],
+            ModifiedTables = [],
+            CyclicDependencyGroups = []
+        };
+        var dataDiffs = new Dictionary<string, DataDiff>
+        {
+            [table.FullName] = new DataDiff
+            {
+                RowsToInsert = [new RowHash { PrimaryKeyValues = new Dictionary<string, string?> { ["Id"] = "2" }, Hash = "abc" }],
+                DeletedRows = [],
+                ChangedRows = []
+            }
+        };
+        var fullData = new Dictionary<string, IReadOnlyList<IReadOnlyDictionary<string, string?>>>
+        {
+            [table.FullName] =
+            [
+                new Dictionary<string, string?> { ["Id"] = "1", ["Name"] = "旧数据" },
+                new Dictionary<string, string?> { ["Id"] = "2", ["Name"] = "新增数据" }
+            ]
+        };
+
+        var sql = generator.GenerateUpgradeScript(diff, dataDiffs, fullData);
+
+        Assert.DoesNotContain("旧数据", sql);
+        Assert.Contains("新增数据", sql);
+    }
+
+    [Fact]
     public void GenerateDdlScript_RemovedTables_DropsChildrenBeforeParents()
     {
         var generator = new SqlServerSqlGenerator();

@@ -40,6 +40,12 @@ public sealed partial class CompareSchemaNodeViewModel : ObservableObject
     private IBrush statusBrush = Brushes.Gray;
 
     /// <summary>
+    /// 是否展开显示子差异
+    ///</summary>
+    [ObservableProperty]
+    private bool isExpanded;
+
+    /// <summary>
     /// 子节点集合（列级差异、索引差异等）
     ///</summary>
     public ObservableCollection<CompareSchemaNodeViewModel> Children { get; } = new();
@@ -91,4 +97,49 @@ public sealed partial class CompareDataSummaryViewModel : ObservableObject
     ///</summary>
     [ObservableProperty]
     private IBrush summaryBrush = Brushes.Gray;
+
+    /// <summary>
+    /// 该表将生成的数据差异 SQL
+    ///</summary>
+    [ObservableProperty]
+    private string sqlPreviewText = string.Empty;
+
+    /// <summary>
+    /// 是否存在可预览的 SQL
+    ///</summary>
+    [ObservableProperty]
+    private bool hasSqlPreview;
+
+    /// <summary>
+    /// 是否展开 SQL 预览
+    ///</summary>
+    [ObservableProperty]
+    private bool isSqlExpanded;
+}
+
+/// <summary>
+/// 比对表选择项的视图模型
+///</summary>
+public sealed partial class CompareTableSelectionViewModel : ObservableObject
+{
+    /// <summary>
+    /// 是否参与比对
+    ///</summary>
+    [ObservableProperty]
+    private bool isSelected = true;
+
+    /// <summary>
+    /// 表结构模型
+    ///</summary>
+    public required DBSync.Core.Models.TableModel Table { get; init; }
+
+    /// <summary>
+    /// 表完整名称
+    ///</summary>
+    public string FullName => Table.FullName;
+
+    /// <summary>
+    /// 表注释
+    ///</summary>
+    public string Comment => string.IsNullOrWhiteSpace(Table.Comment) ? string.Empty : Table.Comment;
 }

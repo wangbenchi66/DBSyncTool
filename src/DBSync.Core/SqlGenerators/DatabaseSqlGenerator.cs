@@ -12,14 +12,15 @@ public sealed class DatabaseSqlGenerator(
         DatabaseType dbType,
         SchemaDiff schemaDiff,
         IReadOnlyDictionary<string, DataDiff> dataDiffs,
-        IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, string?>>>? fullData = null)
+        IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, string?>>>? fullData = null,
+        bool useTransaction = true)
     {
         return dbType switch
         {
-            DatabaseType.SqlServer => sqlServer.GenerateUpgradeScript(dbType, schemaDiff, dataDiffs, fullData),
-            DatabaseType.MySql => mySql.GenerateUpgradeScript(dbType, schemaDiff, dataDiffs, fullData),
-            DatabaseType.PostgreSql => postgreSql.GenerateUpgradeScript(dbType, schemaDiff, dataDiffs, fullData),
-            DatabaseType.Sqlite => sqlite.GenerateUpgradeScript(dbType, schemaDiff, dataDiffs, fullData),
+            DatabaseType.SqlServer => sqlServer.GenerateUpgradeScript(dbType, schemaDiff, dataDiffs, fullData, useTransaction),
+            DatabaseType.MySql => mySql.GenerateUpgradeScript(dbType, schemaDiff, dataDiffs, fullData, useTransaction),
+            DatabaseType.PostgreSql => postgreSql.GenerateUpgradeScript(dbType, schemaDiff, dataDiffs, fullData, useTransaction),
+            DatabaseType.Sqlite => sqlite.GenerateUpgradeScript(dbType, schemaDiff, dataDiffs, fullData, useTransaction),
             _ => throw new NotSupportedException($"不支持的数据库类型：{dbType}")
         };
     }

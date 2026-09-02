@@ -94,7 +94,8 @@ public static class SchemaComparer
             SourceTable = source,
             ColumnDiffs = columnDiffs,
             IndexDiffs = indexDiffs,
-            PrimaryKeyChanged = !baseline.PrimaryKeyColumns.SequenceEqual(source.PrimaryKeyColumns, StringComparer.OrdinalIgnoreCase)
+            PrimaryKeyChanged = !baseline.PrimaryKeyColumns.SequenceEqual(source.PrimaryKeyColumns, StringComparer.OrdinalIgnoreCase),
+            CommentChanged = !string.Equals(NormalizeComment(baseline.Comment), NormalizeComment(source.Comment), StringComparison.Ordinal)
         };
     }
 
@@ -111,7 +112,8 @@ public static class SchemaComparer
         a.Scale == b.Scale &&
         a.IsNullable == b.IsNullable &&
         a.IsIdentity == b.IsIdentity &&
-        string.Equals(a.DefaultValue, b.DefaultValue, StringComparison.OrdinalIgnoreCase);
+        string.Equals(a.DefaultValue, b.DefaultValue, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(NormalizeComment(a.Comment), NormalizeComment(b.Comment), StringComparison.Ordinal);
 
     /// <summary>
     /// 判断两索引定义是否结构相同
@@ -124,4 +126,6 @@ public static class SchemaComparer
         a.IsClustered == b.IsClustered &&
         a.IsPrimaryKey == b.IsPrimaryKey &&
         a.ColumnNames.SequenceEqual(b.ColumnNames, StringComparer.OrdinalIgnoreCase);
+
+    private static string NormalizeComment(string? value) => string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
 }

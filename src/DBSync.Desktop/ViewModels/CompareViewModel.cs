@@ -83,6 +83,11 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
     private readonly Dictionary<string, DataDiff> _loadedDataDiffs = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// 最近一次实际参与比对的快照表
+    ///</summary>
+    private IReadOnlyList<TableModel> _comparedSnapshotTables = [];
+
+    /// <summary>
     /// 当前应用设置
     ///</summary>
     private AppSettings _settings;
@@ -142,6 +147,12 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
     private string compareSummaryText = "尚未比对";
 
     /// <summary>
+    /// 生成升级脚本时是否启用事务
+    ///</summary>
+    [ObservableProperty]
+    private bool useTransaction = true;
+
+    /// <summary>
     /// 当前选中的比对目标数据库连接
     ///</summary>
     [ObservableProperty]
@@ -167,6 +178,16 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
     /// 数据差异摘要集合
     ///</summary>
     public ObservableCollection<CompareDataSummaryViewModel> CompareDataSummaries { get; } = new();
+
+    /// <summary>
+    /// 快照文件中的可选表
+    ///</summary>
+    public ObservableCollection<CompareTableSelectionViewModel> SnapshotCompareTables { get; } = new();
+
+    /// <summary>
+    /// 当前数据库中的可选表
+    ///</summary>
+    public ObservableCollection<CompareTableSelectionViewModel> DatabaseCompareTables { get; } = new();
 
     /// <summary>
     /// 初始化比对视图模型，注入所有依赖并加载初始配置
@@ -269,6 +290,8 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
             StatusText = "快照加载成功";
             LogSummary = CompareSnapshotMetaText;
             HasPendingOperation = true;
+            RefreshSnapshotCompareTables();
+            DatabaseCompareTables.Clear();
             _settings = _settings with { LastSnapshotPath = CompareSnapshotPath };
             _appSettingsStore.Save(_settings);
             SaveRecentHistory("快照", Path.GetFileName(CompareSnapshotPath), CompareSnapshotPath);
@@ -279,13 +302,45 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
             _loadedSnapshot = null;
             _loadedSchemaDiff = null;
             _loadedDataDiffs.Clear();
+            _comparedSnapshotTables = [];
             CompareSchemaNodes.Clear();
             CompareDataSummaries.Clear();
+            SnapshotCompareTables.Clear();
+            DatabaseCompareTables.Clear();
             RefreshCompareConnections();
             CompareSnapshotMetaText = "快照加载失败";
             StatusText = "快照加载失败";
             LogSummary = ex.InnerException?.Message ?? ex.Message;
             Log.Error(ex, "加载快照失败，路径：{SnapshotPath}，是否空密码：{IsEmptyPassword}", CompareSnapshotPath, string.IsNullOrEmpty(ComparePassword));
+        }
+    }
+
+    /// <summary>
+    /// 读取当前选中数据库的表列表，供用户勾选参与比对的范围
+    ///</summary>
+    [RelayCommand]
+    private async Task LoadCompareTablesAsync()
+    {
+        var connection = SelectedCompareConnection?.ToDatabaseConnection();
+        if (connection is null)
+        {
+            StatusText = "请先选择匹配的数据库连接";
+            return;
+        }
+
+        try
+        {
+            StatusText = "正在加载数据库表...";
+            var currentTables = await _schemaReader.ReadAllTablesAsync(connection);
+            RefreshDatabaseCompareTables(currentTables);
+            StatusText = $"已加载数据库表 {DatabaseCompareTables.Count} 张";
+            LogSummary = "请分别勾选快照表和数据库表后开始比对。";
+        }
+        catch (Exception ex)
+        {
+            StatusText = "加载数据库表失败";
+            LogSummary = ex.Message;
+            Log.Error(ex, "加载比对数据库表失败");
         }
     }
 
@@ -317,13 +372,36 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
             CompareSchemaNodes.Clear();
             CompareDataSummaries.Clear();
             _loadedDataDiffs.Clear();
+            _comparedSnapshotTables = [];
 
-            var currentTables = await _schemaReader.ReadAllTablesAsync(connection);
-            _loadedSchemaDiff = SchemaComparer.Compare(currentTables, _loadedSnapshot.Tables.Values);
+            if (SnapshotCompareTables.Count == 0)
+                RefreshSnapshotCompareTables();
+
+            if (DatabaseCompareTables.Count == 0)
+                await LoadAndRefreshDatabaseCompareTablesAsync(connection);
+
+            var selectedCurrentTables = DatabaseCompareTables
+                .Where(t => t.IsSelected)
+                .Select(t => t.Table)
+                .ToList();
+            var selectedSnapshotTables = SnapshotCompareTables
+                .Where(t => t.IsSelected)
+                .Select(t => t.Table)
+                .ToList();
+
+            if (selectedSnapshotTables.Count == 0 || selectedCurrentTables.Count == 0)
+            {
+                StatusText = "请至少分别选择一张快照表和数据库表";
+                CompareProgressText = "未开始";
+                return;
+            }
+
+            _loadedSchemaDiff = SchemaComparer.Compare(selectedCurrentTables, selectedSnapshotTables);
             BuildSchemaPreview(_loadedSchemaDiff);
 
-            var currentTableMap = currentTables.ToDictionary(t => t.FullName, t => t, StringComparer.OrdinalIgnoreCase);
-            var snapshotTables = _loadedSnapshot.Tables.Values.OrderBy(t => t.FullName).ToList();
+            var currentTableMap = selectedCurrentTables.ToDictionary(t => t.FullName, t => t, StringComparer.OrdinalIgnoreCase);
+            var snapshotTables = selectedSnapshotTables.OrderBy(t => t.FullName).ToList();
+            _comparedSnapshotTables = snapshotTables;
 
             for (var i = 0; i < snapshotTables.Count; i++)
             {
@@ -361,7 +439,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
                 _loadedDataDiffs[table.FullName] = DataComparer.Compare(currentRows, snapshotRows, false);
             }
 
-            BuildDataPreview(_loadedDataDiffs, _loadedSnapshot.Tables.Values);
+            BuildDataPreview(_loadedDataDiffs, selectedSnapshotTables);
             CompareProgress = 100;
             CompareProgressText = "比对完成";
             CompareSummaryText = BuildCompareSummary(_loadedSchemaDiff, _loadedDataDiffs);
@@ -378,6 +456,13 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
             LogSummary = ex.Message;
             Log.Error(ex, "执行比对失败");
         }
+    }
+
+    private async Task<IReadOnlyList<TableModel>> LoadAndRefreshDatabaseCompareTablesAsync(DatabaseConnection connection)
+    {
+        var currentTables = await _schemaReader.ReadAllTablesAsync(connection);
+        RefreshDatabaseCompareTables(currentTables);
+        return currentTables;
     }
 
     /// <summary>
@@ -400,7 +485,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
         {
             StatusText = "正在生成脚本...";
             var dbType = SelectedCompareConnection?.ToDatabaseConnection()?.DbType ?? _loadedSnapshot!.Manifest.DbType;
-            var script = _sqlGenerator.GenerateUpgradeScript(dbType, _loadedSchemaDiff!, _loadedDataDiffs, _loadedSnapshot!.FullData);
+            var script = _sqlGenerator.GenerateUpgradeScript(dbType, _loadedSchemaDiff!, _loadedDataDiffs, _loadedSnapshot!.FullData, UseTransaction);
             var lines = script.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
             var ddlCount = lines.Count(line =>
                 line.StartsWith("CREATE ", StringComparison.OrdinalIgnoreCase) ||
@@ -472,6 +557,73 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
             ?? CompareConnections.FirstOrDefault();
     }
 
+    partial void OnSelectedCompareConnectionChanged(ConnectionItemViewModel? value)
+    {
+        DatabaseCompareTables.Clear();
+        CompareSchemaNodes.Clear();
+        CompareDataSummaries.Clear();
+        _loadedSchemaDiff = null;
+        _loadedDataDiffs.Clear();
+        _comparedSnapshotTables = [];
+    }
+
+    [RelayCommand]
+    private void SelectAllSnapshotTables()
+    {
+        foreach (var table in SnapshotCompareTables)
+            table.IsSelected = true;
+    }
+
+    [RelayCommand]
+    private void InvertSnapshotTables()
+    {
+        foreach (var table in SnapshotCompareTables)
+            table.IsSelected = !table.IsSelected;
+    }
+
+    [RelayCommand]
+    private void SelectAllDatabaseTables()
+    {
+        foreach (var table in DatabaseCompareTables)
+            table.IsSelected = true;
+    }
+
+    [RelayCommand]
+    private void InvertDatabaseTables()
+    {
+        foreach (var table in DatabaseCompareTables)
+            table.IsSelected = !table.IsSelected;
+    }
+
+    private void RefreshSnapshotCompareTables()
+    {
+        SnapshotCompareTables.Clear();
+        if (_loadedSnapshot is null)
+            return;
+
+        foreach (var table in _loadedSnapshot.Tables.Values.OrderBy(t => t.FullName))
+        {
+            SnapshotCompareTables.Add(new CompareTableSelectionViewModel
+            {
+                Table = table,
+                IsSelected = true
+            });
+        }
+    }
+
+    private void RefreshDatabaseCompareTables(IEnumerable<TableModel> tables)
+    {
+        DatabaseCompareTables.Clear();
+        foreach (var table in tables.OrderBy(t => t.FullName))
+        {
+            DatabaseCompareTables.Add(new CompareTableSelectionViewModel
+            {
+                Table = table,
+                IsSelected = true
+            });
+        }
+    }
+
     /// <summary>
     /// 根据结构差异构建预览树节点，包括新增表、删除表、修改表和循环依赖
     ///</summary>
@@ -485,14 +637,14 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         foreach (var table in schemaDiff.AddedTables.OrderBy(t => t.FullName))
-            CompareSchemaNodes.Add(CreateSchemaNode(table.FullName, "新增表", true, false, table.Columns.Select(c => CreateLeafNode($"列 {c.Name}", "将随表一起创建")).ToList()));
+            CompareSchemaNodes.Add(CreateSchemaNode(FormatTableTitle(table), "新增表", true, false, table.Columns.Select(c => CreateLeafNode($"列 {FormatColumnTitle(c)}", "将随表一起创建")).ToList()));
 
         foreach (var table in schemaDiff.RemovedTables.OrderBy(t => t.FullName))
-            CompareSchemaNodes.Add(CreateSchemaNode(table.FullName, "删除表，默认未勾选", false, true));
+            CompareSchemaNodes.Add(CreateSchemaNode(FormatTableTitle(table), "删除表，默认未勾选", false, true));
 
         foreach (var diff in schemaDiff.ModifiedTables.OrderBy(t => t.SourceTable.FullName))
         {
-            var node = CreateSchemaNode(diff.SourceTable.FullName, "结构变更", true, cyclicTables.Contains(diff.SourceTable.FullName));
+            var node = CreateSchemaNode(FormatTableTitle(diff.SourceTable), "结构变更", true, cyclicTables.Contains(diff.SourceTable.FullName));
 
             foreach (var columnDiff in diff.ColumnDiffs)
             {
@@ -502,7 +654,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
                     ColumnDiffType.Removed => "列删除",
                     _ => "列修改"
                 };
-                var title = columnDiff.After?.Name ?? columnDiff.Before?.Name ?? "未命名列";
+                var title = FormatColumnTitle(columnDiff.After ?? columnDiff.Before);
                 node.Children.Add(CreateLeafNode(title, status));
             }
 
@@ -520,6 +672,9 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
 
             if (diff.PrimaryKeyChanged)
                 node.Children.Add(CreateLeafNode("主键", "主键定义已变更"));
+
+            if (diff.CommentChanged)
+                node.Children.Add(CreateLeafNode("表注释", "注释已变更"));
 
             CompareSchemaNodes.Add(node);
         }
@@ -551,6 +706,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
             var summary = diff.Skipped
                 ? "⚠ 已跳过数据比对"
                 : $"新增 {diff.RowsToInsert.Count} 行，删除 {diff.DeletedRows.Count} 行，变更 {diff.ChangedRows.Count} 行";
+            var sqlPreview = BuildDataSqlPreview(table, diff);
 
             CompareDataSummaries.Add(new CompareDataSummaryViewModel
             {
@@ -560,9 +716,21 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
                 RowsToInsert = diff.RowsToInsert.Count,
                 DeletedRows = diff.DeletedRows.Count,
                 ChangedRows = diff.ChangedRows.Count,
-                SummaryBrush = ResolveDataBrush(diff)
+                SummaryBrush = ResolveDataBrush(diff),
+                SqlPreviewText = sqlPreview,
+                HasSqlPreview = !string.IsNullOrWhiteSpace(sqlPreview)
             });
         }
+    }
+
+    private string BuildDataSqlPreview(TableModel table, DataDiff diff)
+    {
+        if (_loadedSnapshot is null || diff.Skipped || diff.RowsToInsert.Count == 0)
+            return string.Empty;
+
+        var dbType = SelectedCompareConnection?.ToDatabaseConnection()?.DbType ?? _loadedSnapshot.Manifest.DbType;
+        var rows = SqlGeneratorRows.ResolveRowsToInsert(table, diff, _loadedSnapshot.FullData);
+        return string.Join(Environment.NewLine, _sqlGenerator.GenerateInsertStatements(dbType, table, rows));
     }
 
     /// <summary>
@@ -587,7 +755,8 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
             StatusText = hasWarning ? $"⚠ {statusText}" : statusText,
             IsSelected = isSelected,
             HasWarning = hasWarning,
-            StatusBrush = ResolveSchemaBrush(statusText, hasWarning)
+            StatusBrush = ResolveSchemaBrush(statusText, hasWarning),
+            IsExpanded = hasWarning
         };
 
         if (children is not null)
@@ -614,6 +783,23 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
             IsSelected = true,
             StatusBrush = ResolveSchemaBrush(statusText, false)
         };
+    }
+
+    private static string FormatTableTitle(TableModel table)
+    {
+        return string.IsNullOrWhiteSpace(table.Comment)
+            ? table.FullName
+            : $"{table.FullName}（{table.Comment}）";
+    }
+
+    private static string FormatColumnTitle(ColumnModel? column)
+    {
+        if (column is null)
+            return "未命名列";
+
+        return string.IsNullOrWhiteSpace(column.Comment)
+            ? column.Name
+            : $"{column.Name}（{column.Comment}）";
     }
 
     /// <summary>
@@ -712,9 +898,10 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
         try
         {
             StatusText = isHtml ? "正在导出 HTML 报告..." : "正在导出 Markdown 报告...";
+            var reportSnapshot = BuildReportSnapshot();
             var content = isHtml
-                ? _reportExporter.BuildHtmlReport(_loadedSnapshot!, _loadedSchemaDiff!, _loadedDataDiffs, SelectedCompareConnection?.ToDatabaseConnection()?.Name)
-                : _reportExporter.BuildMarkdownReport(_loadedSnapshot!, _loadedSchemaDiff!, _loadedDataDiffs, SelectedCompareConnection?.ToDatabaseConnection()?.Name);
+                ? _reportExporter.BuildHtmlReport(reportSnapshot, _loadedSchemaDiff!, _loadedDataDiffs, SelectedCompareConnection?.ToDatabaseConnection()?.Name)
+                : _reportExporter.BuildMarkdownReport(reportSnapshot, _loadedSchemaDiff!, _loadedDataDiffs, SelectedCompareConnection?.ToDatabaseConnection()?.Name);
 
             await File.WriteAllTextAsync(path, content, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
             SaveRecentHistory(isHtml ? "报告" : "报告", Path.GetFileName(path), path, SelectedCompareConnection?.ToDatabaseConnection()?.Name);
@@ -727,6 +914,37 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
             LogSummary = ex.Message;
             Log.Error(ex, isHtml ? "导出 HTML 报告失败" : "导出 Markdown 报告失败");
         }
+    }
+
+    /// <summary>
+    /// 生成只包含本次勾选快照表的报告快照
+    ///</summary>
+    /// <returns>报告使用的快照</returns>
+    private Snapshot BuildReportSnapshot()
+    {
+        if (_loadedSnapshot is null || _comparedSnapshotTables.Count == 0)
+            return _loadedSnapshot!;
+
+        var tableNames = _comparedSnapshotTables
+            .Select(t => t.FullName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return _loadedSnapshot with
+        {
+            Manifest = _loadedSnapshot.Manifest with
+            {
+                TableNames = _loadedSnapshot.Manifest.TableNames.Where(tableNames.Contains).ToList()
+            },
+            Tables = _loadedSnapshot.Tables
+                .Where(kv => tableNames.Contains(kv.Key))
+                .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase),
+            DataFingerprints = _loadedSnapshot.DataFingerprints
+                .Where(kv => tableNames.Contains(kv.Key))
+                .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase),
+            FullData = _loadedSnapshot.FullData
+                .Where(kv => tableNames.Contains(kv.Key))
+                .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase)
+        };
     }
 
     /// <summary>

@@ -14,12 +14,14 @@ public interface ISqlGenerator
     /// <param name="schemaDiff">结构差异</param>
     /// <param name="dataDiffs">各表的数据差异（表名 → DataDiff）</param>
     /// <param name="fullData">新增表的完整数据（表名 → 行数据列表），可为空</param>
+    /// <param name="useTransaction">是否在脚本外层包裹事务</param>
     /// <returns>完整的 Upgrade.sql 脚本字符串</returns>
     string GenerateUpgradeScript(
         DatabaseType dbType,
         SchemaDiff schemaDiff,
         IReadOnlyDictionary<string, DataDiff> dataDiffs,
-        IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, string?>>>? fullData = null);
+        IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, string?>>>? fullData = null,
+        bool useTransaction = true);
 
     /// <summary>
     /// 生成单张表的 CREATE TABLE 语句

@@ -74,6 +74,7 @@ public sealed class PostgresSchemaReader : ISchemaReader
         {
             Name = table.Name,
             Schema = table.SchemaName,
+            Comment = table.Comment,
             EstimatedRowCount = table.EstimatedRowCount,
             EstimatedDataSizeMb = table.EstimatedDataSizeMb,
             Columns = columns
@@ -116,6 +117,7 @@ public sealed class PostgresSchemaReader : ISchemaReader
             Scale = row.Scale,
             IsNullable = row.IsNullable,
             DefaultValue = row.DefaultValue,
+            Comment = row.Comment,
             IsIdentity = row.IsIdentity,
             IsAutoIncrement = row.IsIdentity,
             OrdinalPosition = row.OrdinalPosition
@@ -205,6 +207,7 @@ public sealed class PostgresSchemaReader : ISchemaReader
     {
         public string SchemaName { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
+        public string? Comment { get; set; }
         public long EstimatedRowCount { get; set; }
         public decimal EstimatedDataSizeMb { get; set; }
     }
@@ -221,6 +224,7 @@ public sealed class PostgresSchemaReader : ISchemaReader
         public int? Scale { get; set; }
         public bool IsNullable { get; set; }
         public string? DefaultValue { get; set; }
+        public string? Comment { get; set; }
         public bool IsIdentity { get; set; }
         public int OrdinalPosition { get; set; }
     }
@@ -260,6 +264,7 @@ public sealed class PostgresSchemaReader : ISchemaReader
 SELECT
     n.nspname AS SchemaName,
     c.relname AS Name,
+    obj_description(c.oid, 'pg_class') AS Comment,
     COALESCE(c.reltuples::bigint, 0) AS EstimatedRowCount,
     COALESCE(ROUND(pg_total_relation_size(c.oid) / 1024.0 / 1024.0, 2), 0) AS EstimatedDataSizeMb
 FROM pg_class c
@@ -281,6 +286,7 @@ SELECT
     numeric_scale AS Scale,
     is_nullable = 'YES' AS IsNullable,
     column_default AS DefaultValue,
+    col_description(format('%I.%I', table_schema, table_name)::regclass::oid, ordinal_position) AS Comment,
     is_identity = 'YES' AS IsIdentity,
     ordinal_position AS OrdinalPosition
 FROM information_schema.columns
