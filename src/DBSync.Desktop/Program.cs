@@ -1,19 +1,18 @@
 using Avalonia;
-using DBSync.Core.Schema;
-using DBSync.Desktop.Services;
-using DBSync.Desktop.Storage;
-using DBSync.Desktop.ViewModels;
-using DBSync.Desktop.Views;
 using DBSync.Desktop.Extensions;
 using Easy.Serilog.Core;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using WBC66.Autofac.Core;
 
 namespace DBSync.Desktop;
 
+/// <summary>
+/// 应用程序入口
+///</summary>
 internal static class Program
 {
+    /// <summary>
+    /// 主入口方法
+    ///</summary>
     [STAThread]
     public static void Main(string[] args)
     {
@@ -22,9 +21,6 @@ internal static class Program
         hostBuilder.ConfigureServices((_, services) =>
         {
             services.AddRegisterDependencies();
-            services.AddSingleton<MainWindowViewModel>();
-            services.AddSingleton<MainWindow>();
-            //hostBuilder.AddAutofacHostSetup(services, AutofacSetup.AddAutofacModule);//上边已经注入了
         });
 
         var host = hostBuilder.Build();
@@ -33,6 +29,9 @@ internal static class Program
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 
+    /// <summary>
+    /// 构建 Avalonia 应用
+    ///</summary>
     public static AppBuilder BuildAvaloniaApp()
     {
         return AppBuilder.Configure<App>()

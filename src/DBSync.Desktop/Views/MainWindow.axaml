@@ -3,229 +3,58 @@
         xmlns:vm="using:DBSync.Desktop.ViewModels"
         x:Class="DBSync.Desktop.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
+        x:CompileBindings="True"
         Title="DBSyncTool"
         Width="1100"
         Height="760">
-  <Grid RowDefinitions="Auto,*,Auto" Margin="16">
+  <Grid RowDefinitions="Auto,*,Auto">
+    <!-- 顶部状态栏 -->
     <Border Padding="12" Background="#1F2937">
       <DockPanel>
-        <TextBlock Text="DBSyncTool" FontSize="24" FontWeight="Bold" Foreground="White" />
-        <TextBlock DockPanel.Dock="Right" Text="{Binding StatusText}" Foreground="White" />
+        <TextBlock Text="DBSyncTool" FontSize="24" FontWeight="Bold" Foreground="White"/>
+        <TextBlock DockPanel.Dock="Right" Text="{Binding StatusText}" Foreground="White"/>
       </DockPanel>
     </Border>
 
-    <Grid Grid.Row="1" ColumnDefinitions="2*,3*" Margin="0,16,0,16">
-      <ScrollViewer>
-        <StackPanel Spacing="12">
-          <Button Content="导出快照 - 在生产机运行" Command="{Binding OpenExportCommand}" Height="48" />
-          <Button Content="加载快照并比对 - 在测试机运行" Command="{Binding OpenCompareCommand}" Height="48" />
-
-          <Border Padding="12" Background="#F9FAFB" BorderBrush="#E5E7EB" BorderThickness="1">
-            <StackPanel Spacing="10">
-              <TextBlock Text="导出向导" FontSize="18" FontWeight="SemiBold" />
-
-              <TextBlock Text="1. 选择连接" FontWeight="SemiBold" />
-              <ComboBox ItemsSource="{Binding Connections}"
-                        SelectedItem="{Binding SelectedConnection}"
-                        DisplayMemberBinding="{Binding Name}" />
-              <Button Content="加载表" Command="{Binding LoadTablesCommand}" />
-
-              <TextBlock Text="2. 选择表" FontWeight="SemiBold" />
-              <TextBox PlaceholderText="按表名过滤" Text="{Binding TableFilter, Mode=TwoWay}" />
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Content="全选" Command="{Binding SelectAllTablesCommand}" />
-                <Button Content="反选" Command="{Binding InvertTableSelectionCommand}" />
-              </StackPanel>
-
-              <TextBlock Text="3. 密码和路径" FontWeight="SemiBold" />
-              <TextBox PlaceholderText="加密密码" Text="{Binding ExportPassword, Mode=TwoWay}" />
-              <TextBox PlaceholderText="确认密码" Text="{Binding ExportPasswordConfirm, Mode=TwoWay}" />
-              <TextBox PlaceholderText="密码提示（明文写入快照文件）" Text="{Binding PasswordHint, Mode=TwoWay}" />
-              <TextBox PlaceholderText="导出路径" Text="{Binding ExportPath, Mode=TwoWay}" />
-              <Button Content="使用默认路径" Command="{Binding UseDefaultExportPathCommand}" />
-
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Content="开始导出" Command="{Binding ExportSnapshotCommand}" />
-                <Button Content="取消" Command="{Binding CancelExportCommand}" />
-              </StackPanel>
-              <ProgressBar Minimum="0" Maximum="100" Value="{Binding ExportProgress}" />
-              <TextBlock Text="{Binding ExportProgressText}" TextWrapping="Wrap" />
-              <TextBlock Text="{Binding ExportSummary}" TextWrapping="Wrap" />
-            </StackPanel>
-          </Border>
-
-          <Border Padding="12" Background="#F9FAFB" BorderBrush="#E5E7EB" BorderThickness="1">
-            <StackPanel Spacing="10">
-              <TextBlock Text="阶段二：加载快照并比对" FontSize="18" FontWeight="SemiBold" />
-
-              <TextBlock Text="1. 加载快照文件" FontWeight="SemiBold" />
-              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                <TextBox PlaceholderText="快照路径" Text="{Binding CompareSnapshotPath, Mode=TwoWay}" />
-                <Button Grid.Column="1" Content="浏览" Command="{Binding BrowseSnapshotCommand}" />
-              </Grid>
-              <TextBlock Text="{Binding ComparePasswordHint}" TextWrapping="Wrap" />
-              <TextBox PlaceholderText="快照密码" Text="{Binding ComparePassword, Mode=TwoWay}" />
-              <Button Content="加载快照" Command="{Binding LoadSnapshotCommand}" />
-              <TextBlock Text="{Binding CompareSnapshotMetaText}" TextWrapping="Wrap" />
-
-              <TextBlock Text="2. 选择数据库连接" FontWeight="SemiBold" />
-              <ComboBox ItemsSource="{Binding CompareConnections}"
-                        SelectedItem="{Binding SelectedCompareConnection}"
-                        DisplayMemberBinding="{Binding Name}" />
-              <Button Content="开始比对" Command="{Binding RunCompareCommand}" />
-              <ProgressBar Minimum="0" Maximum="100" Value="{Binding CompareProgress}" />
-              <TextBlock Text="{Binding CompareProgressText}" TextWrapping="Wrap" />
-              <TextBlock Text="{Binding CompareSummaryText}" TextWrapping="Wrap" />
-
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Content="生成脚本" Command="{Binding GenerateUpgradeScriptCommand}" />
-                <Button Content="导出 Markdown" Command="{Binding ExportMarkdownReportCommand}" />
-                <Button Content="导出 HTML" Command="{Binding ExportHtmlReportCommand}" />
-              </StackPanel>
-
-              <TextBlock Text="3. 结构差异预览" FontWeight="SemiBold" />
-              <ItemsControl ItemsSource="{Binding CompareSchemaNodes}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate>
-                    <Border Margin="0,0,0,8" Padding="8" Background="#FFFFFF" BorderBrush="#E5E7EB" BorderThickness="1">
-                      <StackPanel Spacing="4">
-                        <Grid ColumnDefinitions="Auto,*,Auto">
-                          <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" VerticalAlignment="Center" />
-                          <TextBlock Grid.Column="1" Text="{Binding Title}" FontWeight="SemiBold" Margin="6,0,0,0" />
-                          <TextBlock Grid.Column="2" Text="{Binding StatusText}" Foreground="{Binding StatusBrush}" VerticalAlignment="Center" />
-                        </Grid>
-                        <ItemsControl ItemsSource="{Binding Children}">
-                          <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                              <Grid Margin="20,2,0,0" ColumnDefinitions="Auto,*,Auto">
-                                <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="1" Text="{Binding Title}" Margin="6,0,0,0" />
-                                <TextBlock Grid.Column="2" Text="{Binding StatusText}" Foreground="{Binding StatusBrush}" VerticalAlignment="Center" />
-                              </Grid>
-                            </DataTemplate>
-                          </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                      </StackPanel>
-                    </Border>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-
-              <TextBlock Text="4. 数据差异预览" FontWeight="SemiBold" />
-              <ListBox ItemsSource="{Binding CompareDataSummaries}" Height="220">
-                <ListBox.ItemTemplate>
-                  <DataTemplate>
-                    <Border Margin="0,0,0,8" Padding="8" Background="#FFFFFF" BorderBrush="#E5E7EB" BorderThickness="1">
-                      <StackPanel Spacing="2">
-                        <TextBlock Text="{Binding TableName}" FontWeight="SemiBold" />
-                        <TextBlock Text="{Binding SummaryText}" Foreground="{Binding SummaryBrush}" TextWrapping="Wrap" />
-                      </StackPanel>
-                    </Border>
-                  </DataTemplate>
-                </ListBox.ItemTemplate>
-              </ListBox>
-            </StackPanel>
-          </Border>
-        </StackPanel>
-      </ScrollViewer>
-
-      <Border Grid.Column="1" Padding="16" Background="#F3F4F6">
-        <TabControl>
-          <TabItem Header="连接管理">
-            <StackPanel Spacing="12">
-              <ListBox ItemsSource="{Binding Connections}"
-                       SelectedItem="{Binding SelectedConnection}"
-                       Height="420">
-                <ListBox.ItemTemplate>
-                  <DataTemplate>
-                    <Grid ColumnDefinitions="2*,*,3*" Margin="4">
-                      <TextBlock Text="{Binding Name}" />
-                      <TextBlock Grid.Column="1" Text="{Binding DbType}" />
-                      <TextBlock Grid.Column="2" Text="{Binding ServerAddress}" />
-                    </Grid>
-                  </DataTemplate>
-                </ListBox.ItemTemplate>
-              </ListBox>
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Content="新增" Command="{Binding AddConnectionCommand}" />
-                <Button Content="编辑" Command="{Binding EditConnectionCommand}" />
-                <Button Content="删除" Command="{Binding DeleteConnectionCommand}" />
-                <Button Content="测试连接" Command="{Binding TestConnectionCommand}" />
-              </StackPanel>
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock VerticalAlignment="Center" Text="行数阈值" />
-                <TextBox Width="140" Text="{Binding RowCountWarningThresholdText, Mode=TwoWay}" />
-                <Button Content="保存设置" Command="{Binding SaveSettingsCommand}" />
-              </StackPanel>
-
-              <Border Padding="8" Background="#FFFFFF" BorderBrush="#E5E7EB" BorderThickness="1">
-                <Grid RowDefinitions="Auto,*">
-                  <Grid ColumnDefinitions="40,2*,*,*,*,2*" Margin="4">
-                    <TextBlock Text="选" FontWeight="SemiBold" />
-                    <TextBlock Grid.Column="1" Text="表名" FontWeight="SemiBold" />
-                    <TextBlock Grid.Column="2" Text="预估行数" FontWeight="SemiBold" />
-                    <TextBlock Grid.Column="3" Text="大小" FontWeight="SemiBold" />
-                    <TextBlock Grid.Column="4" Text="模式" FontWeight="SemiBold" />
-                    <TextBlock Grid.Column="5" Text="WHERE 条件" FontWeight="SemiBold" />
-                  </Grid>
-                  <ListBox Grid.Row="1"
-                           ItemsSource="{Binding FilteredExportTables}"
-                           Height="250">
-                    <ListBox.ItemTemplate>
-                      <DataTemplate>
-                        <Grid ColumnDefinitions="40,2*,*,*,*,2*" Margin="4">
-                          <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" />
-                          <TextBlock Grid.Column="1" Text="{Binding FullName}" VerticalAlignment="Center" />
-                          <TextBlock Grid.Column="2" Text="{Binding EstimatedRowCountText}" VerticalAlignment="Center" />
-                          <TextBlock Grid.Column="3" Text="{Binding DataSizeText}" VerticalAlignment="Center" />
-                          <StackPanel Grid.Column="4" Spacing="2">
-                            <CheckBox Content="结构+数据"
-                                      IsChecked="{Binding SyncData, Mode=TwoWay}"
-                                      IsEnabled="{Binding HasPrimaryKey}" />
-                            <TextBlock Text="{Binding SyncModeText}" FontSize="12" />
-                          </StackPanel>
-                          <TextBox Grid.Column="5"
-                                   PlaceholderText="不含 WHERE"
-                                   Text="{Binding WhereClause, Mode=TwoWay}" />
-                        </Grid>
-                      </DataTemplate>
-                    </ListBox.ItemTemplate>
-                  </ListBox>
-                </Grid>
-              </Border>
-            </StackPanel>
-          </TabItem>
-
-          <TabItem Header="历史记录">
-            <StackPanel Spacing="8">
-              <TextBlock Text="最近使用的连接、快照和导出文件" FontWeight="SemiBold" />
-              <ListBox ItemsSource="{Binding RecentHistoryEntries}" Height="520">
-                <ListBox.ItemTemplate>
-                  <DataTemplate>
-                    <Border Margin="0,0,0,8" Padding="8" Background="#FFFFFF" BorderBrush="#E5E7EB" BorderThickness="1">
-                      <Grid ColumnDefinitions="*,Auto">
-                        <StackPanel Spacing="2">
-                          <TextBlock Text="{Binding DisplayText}" FontWeight="SemiBold" />
-                          <TextBlock Text="{Binding PathText}" TextWrapping="Wrap" FontSize="12" Foreground="#6B7280" />
-                        </StackPanel>
-                        <Button Grid.Column="1"
-                                x:CompileBindings="False"
-                                Content="使用"
-                                Command="{Binding DataContext.OpenHistoryEntryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                CommandParameter="{Binding}" />
-                      </Grid>
-                    </Border>
-                  </DataTemplate>
-                </ListBox.ItemTemplate>
-              </ListBox>
-            </StackPanel>
-          </TabItem>
-        </TabControl>
+    <!-- 主体：侧边栏 + 内容区 -->
+    <Grid Grid.Row="1" ColumnDefinitions="200,*">
+      <!-- 左侧导航栏 -->
+      <Border Background="#1F2937" Padding="0,8">
+        <ListBox ItemsSource="{Binding NavigationItems}"
+                 SelectedItem="{Binding SelectedNavigationItem}"
+                 Background="Transparent">
+          <ListBox.Styles>
+            <Style Selector="ListBoxItem">
+              <Setter Property="Padding" Value="16,12"/>
+              <Setter Property="Foreground" Value="#D1D5DB"/>
+              <Setter Property="FontSize" Value="15"/>
+            </Style>
+            <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+              <Setter Property="Foreground" Value="White"/>
+            </Style>
+            <Style Selector="ListBoxItem:selected">
+              <Setter Property="Background" Value="#374151"/>
+              <Setter Property="Foreground" Value="White"/>
+            </Style>
+            <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+              <Setter Property="Foreground" Value="White"/>
+            </Style>
+          </ListBox.Styles>
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:NavigationItemViewModel">
+              <TextBlock Text="{Binding DisplayName}"/>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
       </Border>
+
+      <!-- 右侧内容区 -->
+      <ContentControl Grid.Column="1" Content="{Binding CurrentPage}" Margin="0"/>
     </Grid>
 
+    <!-- 底部日志栏 -->
     <Border Grid.Row="2" Padding="8" Background="#111827">
-      <TextBlock Text="{Binding LogSummary}" Foreground="White" />
+      <TextBlock Text="{Binding LogSummary}" Foreground="White"/>
     </Border>
   </Grid>
 </Window>

@@ -1,7 +1,23 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DBSync.Desktop.ViewModels"
+             xmlns:views="using:DBSync.Desktop.Views"
              x:Class="DBSync.Desktop.App">
   <Application.Styles>
-    <FluentTheme />
+    <FluentTheme/>
   </Application.Styles>
+  <Application.DataTemplates>
+    <DataTemplate DataType="vm:ConnectionListViewModel">
+      <views:ConnectionListView/>
+    </DataTemplate>
+    <DataTemplate DataType="vm:ExportViewModel">
+      <views:ExportView/>
+    </DataTemplate>
+    <DataTemplate DataType="vm:CompareViewModel">
+      <views:CompareView/>
+    </DataTemplate>
+    <DataTemplate DataType="vm:HistoryViewModel">
+      <views:HistoryView/>
+    </DataTemplate>
+  </Application.DataTemplates>
 </Application>

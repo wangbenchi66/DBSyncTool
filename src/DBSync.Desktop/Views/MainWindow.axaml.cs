@@ -1,27 +1,45 @@
 using Avalonia.Controls;
-using Avalonia.Interactivity;
+using DBSync.Desktop.Services;
 using DBSync.Desktop.ViewModels;
 
 namespace DBSync.Desktop.Views;
 
+/// <summary>
+/// 主窗口
+///</summary>
 public partial class MainWindow : Window
 {
+    /// <summary>
+    /// 允许关闭标志（确认后设置为 true）
+    ///</summary>
     private bool _allowClose;
 
+    /// <summary>
+    /// 设计器用无参构造函数
+    ///</summary>
     public MainWindow()
     {
         InitializeComponent();
         Closing += OnClosing;
     }
 
-    public MainWindow(MainWindowViewModel viewModel)
+    /// <summary>
+    /// DI 构造函数
+    ///</summary>
+    /// <param name="viewModel">主窗口 ViewModel</param>
+    /// <param name="windowProvider">窗口提供者</param>
+    public MainWindow(MainWindowViewModel viewModel, WindowProvider windowProvider)
     {
         InitializeComponent();
         DataContext = viewModel;
         viewModel.AttachOwnerWindow(this);
+        windowProvider.SetMainWindow(this);
         Closing += OnClosing;
     }
 
+    /// <summary>
+    /// 关窗拦截：有未完成操作时弹出确认对话框
+    ///</summary>
     private async void OnClosing(object? sender, WindowClosingEventArgs e)
     {
         if (_allowClose)

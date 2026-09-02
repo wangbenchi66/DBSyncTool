@@ -2,11 +2,10 @@ using System.Net;
 using System.Text;
 using DBSync.Core.Comparers;
 using DBSync.Core.Models;
-using WBC66.Autofac.Core;
 
 namespace DBSync.Desktop.Services;
 
-public sealed class DiffReportExporter : IDependency
+public sealed class DiffReportExporter
 {
     public string BuildMarkdownReport(
         Snapshot snapshot,

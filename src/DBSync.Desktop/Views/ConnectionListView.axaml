@@ -1,0 +1,46 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DBSync.Desktop.ViewModels"
+             x:Class="DBSync.Desktop.Views.ConnectionListView"
+             x:DataType="vm:ConnectionListViewModel"
+             x:CompileBindings="True">
+  <ScrollViewer>
+    <StackPanel Spacing="12" Margin="16">
+      <TextBlock Text="连接管理" FontSize="20" FontWeight="SemiBold"/>
+
+      <ListBox ItemsSource="{Binding Connections}"
+               SelectedItem="{Binding SelectedConnection}"
+               Height="320">
+        <ListBox.ItemTemplate>
+          <DataTemplate>
+            <Grid ColumnDefinitions="2*,*,3*" Margin="4">
+              <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+              <TextBlock Grid.Column="1" Text="{Binding DbType}"/>
+              <TextBlock Grid.Column="2" Text="{Binding DisplayInfo}"/>
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button Content="新增" Command="{Binding AddConnectionCommand}"/>
+        <Button Content="编辑" Command="{Binding EditConnectionCommand}"/>
+        <Button Content="删除" Command="{Binding DeleteConnectionCommand}"/>
+        <Button Content="测试连接" Command="{Binding TestConnectionCommand}"/>
+      </StackPanel>
+
+      <Border Padding="12" Background="#F9FAFB" BorderBrush="#E5E7EB" BorderThickness="1" Margin="0,8,0,0">
+        <StackPanel Spacing="8">
+          <TextBlock Text="全局设置" FontWeight="SemiBold"/>
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock VerticalAlignment="Center" Text="行数警告阈值"/>
+            <TextBox Width="140" Text="{Binding RowCountWarningThresholdText, Mode=TwoWay}"/>
+            <Button Content="保存设置" Command="{Binding SaveSettingsCommand}"/>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <TextBlock Text="{Binding StatusText}" Margin="0,8,0,0" Foreground="#6B7280"/>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

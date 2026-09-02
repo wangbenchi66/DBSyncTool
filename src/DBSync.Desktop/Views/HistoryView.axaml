@@ -1,0 +1,31 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DBSync.Desktop.ViewModels"
+             x:Class="DBSync.Desktop.Views.HistoryView"
+             x:DataType="vm:HistoryViewModel"
+             x:CompileBindings="True">
+  <StackPanel Spacing="12" Margin="16">
+    <TextBlock Text="历史记录" FontSize="20" FontWeight="SemiBold"/>
+    <TextBlock Text="最近使用的连接、快照和导出文件"/>
+
+    <ListBox ItemsSource="{Binding RecentHistoryEntries}" Height="520">
+      <ListBox.ItemTemplate>
+        <DataTemplate>
+          <Border Margin="0,0,0,8" Padding="8" Background="#FFFFFF" BorderBrush="#E5E7EB" BorderThickness="1">
+            <Grid ColumnDefinitions="*,Auto">
+              <StackPanel Spacing="2">
+                <TextBlock Text="{Binding DisplayText}" FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding PathText}" TextWrapping="Wrap" FontSize="12" Foreground="#6B7280"/>
+              </StackPanel>
+              <Button Grid.Column="1"
+                      Content="使用"
+                      Command="{Binding $parent[UserControl].((vm:HistoryViewModel)DataContext).OpenHistoryEntryCommand}"
+                      CommandParameter="{Binding}"
+                      VerticalAlignment="Center"/>
+            </Grid>
+          </Border>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </StackPanel>
+</UserControl>
