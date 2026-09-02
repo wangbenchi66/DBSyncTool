@@ -9,6 +9,53 @@ namespace DBSync.Core.SqlGenerators;
 ///</summary>
 public sealed class SqlServerSqlGenerator : ISqlGenerator
 {
+    public string GenerateUpgradeScript(
+        DatabaseType dbType,
+        SchemaDiff schemaDiff,
+        IReadOnlyDictionary<string, DataDiff> dataDiffs,
+        IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, string?>>>? fullData = null)
+    {
+        if (dbType != DatabaseType.SqlServer)
+            throw new ArgumentException("SqlServerSqlGenerator 只支持 SQL Server。", nameof(dbType));
+
+        return GenerateUpgradeScript(schemaDiff, dataDiffs, fullData);
+    }
+
+    public string GenerateCreateTable(DatabaseType dbType, TableModel table)
+    {
+        if (dbType != DatabaseType.SqlServer)
+            throw new ArgumentException("SqlServerSqlGenerator 只支持 SQL Server。", nameof(dbType));
+
+        return GenerateCreateTable(table);
+    }
+
+    public string GenerateDropTable(DatabaseType dbType, TableModel table)
+    {
+        if (dbType != DatabaseType.SqlServer)
+            throw new ArgumentException("SqlServerSqlGenerator 只支持 SQL Server。", nameof(dbType));
+
+        return GenerateDropTable(table);
+    }
+
+    public IReadOnlyList<string> GenerateAlterTable(DatabaseType dbType, TableDiff diff)
+    {
+        if (dbType != DatabaseType.SqlServer)
+            throw new ArgumentException("SqlServerSqlGenerator 只支持 SQL Server。", nameof(dbType));
+
+        return GenerateAlterTable(diff);
+    }
+
+    public IReadOnlyList<string> GenerateInsertStatements(
+        DatabaseType dbType,
+        TableModel table,
+        IReadOnlyList<IReadOnlyDictionary<string, string?>> rows)
+    {
+        if (dbType != DatabaseType.SqlServer)
+            throw new ArgumentException("SqlServerSqlGenerator 只支持 SQL Server。", nameof(dbType));
+
+        return GenerateInsertStatements(table, rows);
+    }
+
     /// <summary>
     /// 根据结构差异和数据差异生成升级脚本。
     /// </summary>

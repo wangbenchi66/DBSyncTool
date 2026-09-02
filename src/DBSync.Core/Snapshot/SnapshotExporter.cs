@@ -1,3 +1,5 @@
+using DBSync.Core;
+using System.Data.Common;
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
@@ -6,13 +8,16 @@ using DBSync.Core.Models;
 using DBSync.Core.Schema;
 using Easy.SqlSugar.Core.Common;
 using Microsoft.Data.SqlClient;
+using Microsoft.Data.Sqlite;
+using MySqlConnector;
+using Npgsql;
 
 namespace DBSync.Core.Snapshot;
 
 /// <summary>
 /// .dbsync 快照导出器。
 ///</summary>
-public sealed class SnapshotExporter(ISchemaReader schemaReader, SqlServerDataFingerprinter fingerprinter) : ISnapshotExporter
+public sealed class SnapshotExporter(ISchemaReader schemaReader, IDataFingerprinter fingerprinter) : ISnapshotExporter
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -144,10 +149,10 @@ public sealed class SnapshotExporter(ISchemaReader schemaReader, SqlServerDataFi
 
         await writer.WriteLineAsync(string.Join(",", columns.Select(c => EscapeCsv(c.Name))));
 
-        await using var sqlConnection = new SqlConnection(connection.ConnectionString.CheckTrustServerCertificate().CheckEncrypt());
+        await using var sqlConnection = CreateConnection(connection);
         await sqlConnection.OpenAsync(cancellationToken);
         await using var command = sqlConnection.CreateCommand();
-        command.CommandText = BuildFullDataSql(table, whereClause);
+        command.CommandText = BuildFullDataSql(connection.DbType, table, whereClause);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         var currentRow = 0L;
@@ -172,11 +177,11 @@ public sealed class SnapshotExporter(ISchemaReader schemaReader, SqlServerDataFi
     /// <param name="table">表模型</param>
     /// <param name="whereClause">WHERE 子句</param>
     /// <returns>完整数据查询 SQL</returns>
-    private static string BuildFullDataSql(TableModel table, string? whereClause)
+    private static string BuildFullDataSql(DatabaseType dbType, TableModel table, string? whereClause)
     {
         var cleanedWhere = SqlServerDataFingerprinter.SanitizeWhereClause(whereClause);
-        var columns = string.Join(", ", table.Columns.OrderBy(c => c.OrdinalPosition).Select(c => QuoteIdentifier(c.Name)));
-        var sql = $"SELECT {columns} FROM {QuoteName(table)}";
+        var columns = string.Join(", ", table.Columns.OrderBy(c => c.OrdinalPosition).Select(c => QuoteIdentifier(dbType, c.Name)));
+        var sql = $"SELECT {columns} FROM {QuoteName(dbType, table)}";
 
         return string.IsNullOrWhiteSpace(cleanedWhere)
             ? sql
@@ -238,11 +243,9 @@ public sealed class SnapshotExporter(ISchemaReader schemaReader, SqlServerDataFi
     /// </summary>
     /// <param name="table">表模型</param>
     /// <returns>带方括号的表名</returns>
-    private static string QuoteName(TableModel table)
+    private static string QuoteName(DatabaseType dbType, TableModel table)
     {
-        return string.IsNullOrWhiteSpace(table.Schema)
-            ? QuoteIdentifier(table.Name)
-            : $"{QuoteIdentifier(table.Schema)}.{QuoteIdentifier(table.Name)}";
+        return DbDialectSupport.QuoteTableName(dbType, table.Schema, table.Name);
     }
 
     /// <summary>
@@ -250,8 +253,20 @@ public sealed class SnapshotExporter(ISchemaReader schemaReader, SqlServerDataFi
     /// </summary>
     /// <param name="name">标识符名称</param>
     /// <returns>带方括号的标识符</returns>
-    private static string QuoteIdentifier(string name)
+    private static string QuoteIdentifier(DatabaseType dbType, string name)
     {
-        return $"[{name.Replace("]", "]]")}]";
+        return DbDialectSupport.QuoteIdentifier(dbType, name);
+    }
+
+    private static DbConnection CreateConnection(DatabaseConnection connection)
+    {
+        return connection.DbType switch
+        {
+            DatabaseType.SqlServer => new SqlConnection(connection.ConnectionString.CheckTrustServerCertificate().CheckEncrypt()),
+            DatabaseType.MySql => new MySqlConnection(connection.ConnectionString),
+            DatabaseType.PostgreSql => new NpgsqlConnection(connection.ConnectionString),
+            DatabaseType.Sqlite => new SqliteConnection(connection.ConnectionString),
+            _ => throw new NotSupportedException($"不支持的数据库类型：{connection.DbType}")
+        };
     }
 }

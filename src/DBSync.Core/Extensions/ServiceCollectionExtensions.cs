@@ -18,9 +18,24 @@ public static class ServiceCollectionExtensions
     /// <returns>服务集合（用于链式调用）</returns>
     public static IServiceCollection AddDbSyncCore(this IServiceCollection services)
     {
-        services.AddSingleton<ISchemaReader, SqlServerSchemaReader>();
-        services.AddSingleton<ISqlGenerator, SqlServerSqlGenerator>();
+        services.AddSingleton<SqlServerSchemaReader>();
+        services.AddSingleton<MySqlSchemaReader>();
+        services.AddSingleton<PostgresSchemaReader>();
+        services.AddSingleton<SqliteSchemaReader>();
+        services.AddSingleton<ISchemaReader, DatabaseSchemaReader>();
+
         services.AddSingleton<SqlServerDataFingerprinter>();
+        services.AddSingleton<MySqlDataFingerprinter>();
+        services.AddSingleton<PostgresDataFingerprinter>();
+        services.AddSingleton<SqliteDataFingerprinter>();
+        services.AddSingleton<IDataFingerprinter, DatabaseDataFingerprinter>();
+
+        services.AddSingleton<SqlServerSqlGenerator>();
+        services.AddSingleton<MySqlSqlGenerator>();
+        services.AddSingleton<PostgresSqlGenerator>();
+        services.AddSingleton<SqliteSqlGenerator>();
+        services.AddSingleton<ISqlGenerator, DatabaseSqlGenerator>();
+
         services.AddSingleton<ISnapshotExporter, SnapshotExporter>();
         services.AddSingleton<ISnapshotLoader, SnapshotLoader>();
 

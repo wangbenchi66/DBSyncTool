@@ -29,7 +29,7 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly ISnapshotLoader _snapshotLoader;
     private readonly ISqlGenerator _sqlGenerator;
     private readonly DiffReportExporter _reportExporter;
-    private readonly SqlServerDataFingerprinter _fingerprinter;
+    private readonly IDataFingerprinter _fingerprinter;
     private Window? _ownerWindow;
     private CancellationTokenSource? _exportCancellation;
     private AppSettings _settings;
@@ -125,7 +125,7 @@ public partial class MainWindowViewModel : ObservableObject
         ISnapshotLoader snapshotLoader,
         ISqlGenerator sqlGenerator,
         DiffReportExporter reportExporter,
-        SqlServerDataFingerprinter fingerprinter)
+        IDataFingerprinter fingerprinter)
     {
         _connectionStore = connectionStore;
         _appSettingsStore = appSettingsStore;
@@ -585,7 +585,8 @@ public partial class MainWindowViewModel : ObservableObject
         try
         {
             StatusText = "正在生成脚本...";
-            var script = _sqlGenerator.GenerateUpgradeScript(_loadedSchemaDiff!, _loadedDataDiffs, _loadedSnapshot!.FullData);
+            var dbType = CreateSelectedCompareConnection()?.DbType ?? _loadedSnapshot!.Manifest.DbType;
+            var script = _sqlGenerator.GenerateUpgradeScript(dbType, _loadedSchemaDiff!, _loadedDataDiffs, _loadedSnapshot!.FullData);
             var lines = script.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
             var ddlCount = lines.Count(line =>
                 line.StartsWith("CREATE ", StringComparison.OrdinalIgnoreCase) ||

@@ -9,7 +9,7 @@ namespace DBSync.Core.Data;
 /// <summary>
 /// SQL Server 行哈希指纹计算器。
 ///</summary>
-public sealed class SqlServerDataFingerprinter
+public sealed class SqlServerDataFingerprinter : IDataFingerprinter
 {
     private const string HashColumnName = "__DBSYNC_HASH";
 
