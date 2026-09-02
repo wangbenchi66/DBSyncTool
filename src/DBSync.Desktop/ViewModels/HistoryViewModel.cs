@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using DBSync.Desktop.Helpers;
 using DBSync.Desktop.Models;
 using DBSync.Desktop.Services;
 using System.Collections.ObjectModel;
@@ -10,7 +11,7 @@ namespace DBSync.Desktop.ViewModels;
 /// <summary>
 /// 历史记录页面的 ViewModel
 ///</summary>
-public sealed partial class HistoryViewModel : ObservableObject
+public sealed partial class HistoryViewModel : ObservableObject, IPageViewModel
 {
     /// <summary>
     /// 应用设置存储
@@ -111,16 +112,6 @@ public sealed partial class HistoryViewModel : ObservableObject
     /// <param name="path">文件路径</param>
     private static void OpenFile(string path)
     {
-        try
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = path,
-                UseShellExecute = true
-            });
-        }
-        catch
-        {
-        }
+        ViewModelHelpers.OpenFile(path);
     }
 }

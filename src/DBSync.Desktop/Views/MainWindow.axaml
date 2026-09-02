@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:DBSync.Desktop.ViewModels"
+        xmlns:views="using:DBSync.Desktop.Views"
         x:Class="DBSync.Desktop.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         x:CompileBindings="True"
@@ -12,7 +13,8 @@
     <Border Padding="12" Background="#1F2937">
       <DockPanel>
         <TextBlock Text="DBSyncTool" FontSize="24" FontWeight="Bold" Foreground="White"/>
-        <TextBlock DockPanel.Dock="Right" Text="{Binding StatusText}" Foreground="White"/>
+        <TextBlock DockPanel.Dock="Right" Text="{Binding StatusText}"
+                   Foreground="{Binding StatusIsError, Converter={x:Static views:MainWindow.ErrorForegroundConverter}}"/>
       </DockPanel>
     </Border>
 

@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using DBSync.Core.Models;
 using DBSync.Core.Schema;
 using DBSync.Core.Snapshot;
+using DBSync.Desktop.Helpers;
 using DBSync.Desktop.Models;
 using DBSync.Desktop.Services;
 using DBSync.Desktop.Views;
@@ -15,7 +16,7 @@ namespace DBSync.Desktop.ViewModels;
 /// 导出快照功能的视图模型，从 MainWindowViewModel 提取而来，
 /// 负责表结构读取、表筛选、快照导出及进度跟踪
 ///</summary>
-public partial class ExportViewModel : ObservableObject
+public partial class ExportViewModel : ObservableObject, IPageViewModel
 {
     /// <summary>
     /// 连接存储服务，用于加载和保存数据库连接列表
@@ -435,9 +436,7 @@ public partial class ExportViewModel : ObservableObject
     /// <returns>格式化后的大小字符串</returns>
     private static string FormatFileSize(long bytes)
     {
-        return bytes < 1024 * 1024
-            ? $"{bytes / 1024.0:F1} KB"
-            : $"{bytes / 1024.0 / 1024.0:F1} MB";
+        return ViewModelHelpers.FormatFileSize(bytes);
     }
 
     /// <summary>
@@ -480,25 +479,7 @@ public partial class ExportViewModel : ObservableObject
     /// <param name="connectionName">关联的连接名称（可选）</param>
     private void SaveRecentHistory(string kind, string title, string path, string? connectionName = null)
     {
-        var record = new RecentHistoryItem
-        {
-            Kind = kind,
-            Title = title,
-            Path = path,
-            ConnectionName = connectionName,
-            CreatedAt = DateTimeOffset.Now
-        };
-
-        var items = _settings.RecentHistoryItems
-            .Where(item => !string.Equals(item.Kind, kind, StringComparison.OrdinalIgnoreCase) ||
-                           !string.Equals(item.Path, path, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(item => item.CreatedAt)
-            .Take(19)
-            .ToList();
-        items.Insert(0, record);
-
-        _settings = _settings with { RecentHistoryItems = items };
-        _appSettingsStore.Save(_settings);
+        _settings = ViewModelHelpers.SaveRecentHistory(_appSettingsStore, _settings, kind, title, path, connectionName);
     }
 
     /// <summary>

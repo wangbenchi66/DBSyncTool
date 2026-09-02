@@ -66,6 +66,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private string logSummary = "未记录操作";
 
     /// <summary>
+    /// 状态文本是否表示错误（用于红色高亮）
+    ///</summary>
+    [ObservableProperty]
+    private bool statusIsError;
+
+    /// <summary>
     /// 是否有未完成的操作（关窗确认用）
     ///</summary>
     [ObservableProperty]
@@ -126,12 +132,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
         // 设置历史记录的导航回调
         history.NavigateAndApplyHistory = OnNavigateFromHistory;
 
-        // 恢复上次使用的页面
+        // 恢复上次使用的页面（直接赋值 backing field 避免触发 OnChanged 回调写入 settings）
         var settings = appSettingsStore.Load();
         var lastPage = settings.LastPageName ?? "connections";
         var targetNav = NavigationItems.FirstOrDefault(n => n.Key == lastPage) ?? NavigationItems[0];
-        SelectedNavigationItem = targetNav;
-        CurrentPage = targetNav.PageViewModel;
+        selectedNavigationItem = targetNav;
+        currentPage = targetNav.PageViewModel;
+        OnPropertyChanged(nameof(SelectedNavigationItem));
+        OnPropertyChanged(nameof(CurrentPage));
     }
 
     /// <summary>
@@ -180,13 +188,29 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         SelectedNavigationItem = nav;
 
-        if (pageKey == "export" && !string.IsNullOrWhiteSpace(entry.Path))
+        if (pageKey == "export")
         {
-            Export.ExportPath = entry.Path;
+            if (!string.IsNullOrWhiteSpace(entry.Path))
+                Export.ExportPath = entry.Path;
+            if (!string.IsNullOrWhiteSpace(entry.ConnectionName))
+            {
+                var conn = Export.Connections.FirstOrDefault(c =>
+                    string.Equals(c.Name, entry.ConnectionName, StringComparison.OrdinalIgnoreCase));
+                if (conn is not null)
+                    Export.SelectedConnection = conn;
+            }
         }
-        else if (pageKey == "compare" && !string.IsNullOrWhiteSpace(entry.Path))
+        else if (pageKey == "compare")
         {
-            Compare.CompareSnapshotPath = entry.Path;
+            if (!string.IsNullOrWhiteSpace(entry.Path))
+                Compare.CompareSnapshotPath = entry.Path;
+            if (!string.IsNullOrWhiteSpace(entry.ConnectionName))
+            {
+                var conn = Compare.CompareConnections.FirstOrDefault(c =>
+                    string.Equals(c.Name, entry.ConnectionName, StringComparison.OrdinalIgnoreCase));
+                if (conn is not null)
+                    Compare.SelectedCompareConnection = conn;
+            }
         }
     }
 
@@ -195,30 +219,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
     ///</summary>
     private void ForwardStatus(ObservableObject source, string? propertyName)
     {
-        if (source != CurrentPage)
+        if (source != CurrentPage || source is not IPageViewModel page)
             return;
 
-        if (propertyName == "StatusText")
+        if (propertyName == nameof(IPageViewModel.StatusText))
         {
-            StatusText = source switch
-            {
-                ConnectionListViewModel vm => vm.StatusText,
-                ExportViewModel vm => vm.StatusText,
-                CompareViewModel vm => vm.StatusText,
-                HistoryViewModel vm => vm.StatusText,
-                _ => StatusText
-            };
+            StatusText = page.StatusText;
+            StatusIsError = StatusText.Contains("失败", StringComparison.Ordinal);
         }
-        else if (propertyName == "LogSummary")
+        else if (propertyName == nameof(IPageViewModel.LogSummary))
         {
-            LogSummary = source switch
-            {
-                ConnectionListViewModel vm => vm.LogSummary,
-                ExportViewModel vm => vm.LogSummary,
-                CompareViewModel vm => vm.LogSummary,
-                HistoryViewModel vm => vm.LogSummary,
-                _ => LogSummary
-            };
+            LogSummary = page.LogSummary;
         }
     }
 }
@@ -226,6 +237,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 /// <summary>
 /// 导航项 ViewModel
 ///</summary>
+/// <param name="Key">页面标识键（如 connections、export）</param>
+/// <param name="DisplayName">侧边栏显示名称</param>
+/// <param name="PageViewModel">对应的页面 ViewModel 实例</param>
 public sealed record NavigationItemViewModel(
     string Key,
     string DisplayName,

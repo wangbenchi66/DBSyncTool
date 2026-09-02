@@ -69,7 +69,7 @@
             <!-- 密码（非 SQLite） -->
             <StackPanel IsVisible="{Binding DbType, Converter={x:Static views:ConnectionEditWindow.NotSqliteConverter}}">
               <TextBlock Text="密码"/>
-              <TextBox Text="{Binding Password, Mode=TwoWay}" PasswordChar="●" PlaceholderText="输入密码"/>
+              <TextBox Text="{Binding Password, Mode=TwoWay}" PasswordChar="●" PlaceholderText="输入密码" ContextMenu="{x:Null}"/>
             </StackPanel>
 
             <!-- Schema（仅 PostgreSQL） -->

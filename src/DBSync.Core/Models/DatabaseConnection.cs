@@ -204,7 +204,7 @@ public sealed record DatabaseConnection
         var parts = new List<string>();
 
         parts.Add($"Server={Server}");
-        if (Port.HasValue && Port.Value != 3306)
+        if (Port.HasValue)
             parts.Add($"Port={Port.Value}");
         if (!string.IsNullOrEmpty(Database))
             parts.Add($"Database={Database}");
@@ -229,7 +229,7 @@ public sealed record DatabaseConnection
         var parts = new List<string>();
 
         parts.Add($"Host={Server}");
-        if (Port.HasValue && Port.Value != 5432)
+        if (Port.HasValue)
             parts.Add($"Port={Port.Value}");
         if (!string.IsNullOrEmpty(Database))
             parts.Add($"Database={Database}");

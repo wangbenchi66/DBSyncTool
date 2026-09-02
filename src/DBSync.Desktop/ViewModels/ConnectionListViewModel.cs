@@ -11,7 +11,7 @@ namespace DBSync.Desktop.ViewModels;
 /// <summary>
 /// 连接管理页面的 ViewModel
 ///</summary>
-public sealed partial class ConnectionListViewModel : ObservableObject
+public sealed partial class ConnectionListViewModel : ObservableObject, IPageViewModel
 {
     /// <summary>
     /// 连接配置持久化存储
@@ -144,14 +144,53 @@ public sealed partial class ConnectionListViewModel : ObservableObject
     }
 
     /// <summary>
-    /// 删除选中的连接
+    /// 删除选中的连接（弹出确认对话框后执行）
     ///</summary>
     [RelayCommand]
-    private void DeleteConnection()
+    private async Task DeleteConnectionAsync()
     {
         var target = SelectedConnection;
         if (target is null)
             return;
+
+        var window = _windowProvider.GetMainWindow();
+        if (window is not null)
+        {
+            var dialog = new Avalonia.Controls.Window
+            {
+                Title = "确认删除",
+                Width = 360,
+                Height = 160,
+                WindowStartupLocation = Avalonia.Controls.WindowStartupLocation.CenterOwner,
+                CanResize = false,
+                Content = new Avalonia.Controls.StackPanel
+                {
+                    Margin = new Avalonia.Thickness(20),
+                    Spacing = 16,
+                    Children =
+                    {
+                        new Avalonia.Controls.TextBlock { Text = $"确定要删除连接 \"{target.Name}\" 吗？", TextWrapping = Avalonia.Media.TextWrapping.Wrap },
+                        new Avalonia.Controls.StackPanel
+                        {
+                            Orientation = Avalonia.Layout.Orientation.Horizontal,
+                            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+                            Spacing = 8,
+                            Children =
+                            {
+                                new Avalonia.Controls.Button { Content = "删除" },
+                                new Avalonia.Controls.Button { Content = "取消" }
+                            }
+                        }
+                    }
+                }
+            };
+            var buttons = ((Avalonia.Controls.StackPanel)((Avalonia.Controls.StackPanel)dialog.Content).Children[1]);
+            ((Avalonia.Controls.Button)buttons.Children[0]).Click += (_, _) => dialog.Close(true);
+            ((Avalonia.Controls.Button)buttons.Children[1]).Click += (_, _) => dialog.Close(false);
+            var confirmed = await dialog.ShowDialog<bool>(window);
+            if (!confirmed)
+                return;
+        }
 
         Connections.Remove(target);
         SelectedConnection = Connections.FirstOrDefault();

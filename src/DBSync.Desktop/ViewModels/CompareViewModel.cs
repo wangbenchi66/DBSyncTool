@@ -9,6 +9,7 @@ using DBSync.Core.Models;
 using DBSync.Core.Schema;
 using DBSync.Core.Snapshot;
 using DBSync.Core.SqlGenerators;
+using DBSync.Desktop.Helpers;
 using DBSync.Desktop.Services;
 using DBSync.Desktop.Storage;
 using DBSync.Desktop.Models;
@@ -23,7 +24,7 @@ namespace DBSync.Desktop.ViewModels;
 /// 比对功能的视图模型，从 MainWindowViewModel 中提取，
 /// 负责快照加载、结构/数据比对、脚本生成和报告导出
 ///</summary>
-public partial class CompareViewModel : ObservableObject
+public partial class CompareViewModel : ObservableObject, IPageViewModel
 {
     /// <summary>
     /// 连接存储服务，用于读取已保存的数据库连接
@@ -759,18 +760,7 @@ public partial class CompareViewModel : ObservableObject
     /// <returns>异步任务</returns>
     private static Task OpenFileAsync(string path)
     {
-        try
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = path,
-                UseShellExecute = true
-            });
-        }
-        catch
-        {
-        }
-
+        ViewModelHelpers.OpenFile(path);
         return Task.CompletedTask;
     }
 
@@ -781,9 +771,7 @@ public partial class CompareViewModel : ObservableObject
     /// <returns>格式化后的文件大小字符串</returns>
     private static string FormatFileSize(long bytes)
     {
-        return bytes < 1024 * 1024
-            ? $"{bytes / 1024.0:F1} KB"
-            : $"{bytes / 1024.0 / 1024.0:F1} MB";
+        return ViewModelHelpers.FormatFileSize(bytes);
     }
 
     /// <summary>
@@ -809,24 +797,6 @@ public partial class CompareViewModel : ObservableObject
     /// <param name="connectionName">关联的连接名称，可选</param>
     private void SaveRecentHistory(string kind, string title, string path, string? connectionName = null)
     {
-        var record = new RecentHistoryItem
-        {
-            Kind = kind,
-            Title = title,
-            Path = path,
-            ConnectionName = connectionName,
-            CreatedAt = DateTimeOffset.Now
-        };
-
-        var items = _settings.RecentHistoryItems
-            .Where(item => !string.Equals(item.Kind, kind, StringComparison.OrdinalIgnoreCase) ||
-                           !string.Equals(item.Path, path, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(item => item.CreatedAt)
-            .Take(19)
-            .ToList();
-        items.Insert(0, record);
-
-        _settings = _settings with { RecentHistoryItems = items };
-        _appSettingsStore.Save(_settings);
+        _settings = ViewModelHelpers.SaveRecentHistory(_appSettingsStore, _settings, kind, title, path, connectionName);
     }
 }

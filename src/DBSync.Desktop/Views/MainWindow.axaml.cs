@@ -1,4 +1,6 @@
 using Avalonia.Controls;
+using Avalonia.Data.Converters;
+using Avalonia.Media;
 using DBSync.Desktop.Services;
 using DBSync.Desktop.ViewModels;
 
@@ -9,6 +11,12 @@ namespace DBSync.Desktop.Views;
 ///</summary>
 public partial class MainWindow : Window
 {
+    /// <summary>
+    /// 状态文本前景色转换器：错误时红色，正常时白色
+    ///</summary>
+    public static FuncValueConverter<bool, IBrush> ErrorForegroundConverter { get; } =
+        new(isError => isError ? Brushes.OrangeRed : Brushes.White);
+
     /// <summary>
     /// 允许关闭标志（确认后设置为 true）
     ///</summary>
