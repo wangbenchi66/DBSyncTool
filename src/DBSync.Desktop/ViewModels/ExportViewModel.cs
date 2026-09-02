@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DBSync.Core.Models;
@@ -9,6 +10,7 @@ using DBSync.Desktop.Models;
 using DBSync.Desktop.Services;
 using DBSync.Desktop.Views;
 using System.Collections.ObjectModel;
+using Serilog;
 
 namespace DBSync.Desktop.ViewModels;
 
@@ -53,6 +55,8 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
     ///</summary>
     private AppSettings _settings;
 
+    private bool _suppressDefaultFileNameUpdate;
+
     /// <summary>
     /// 当前状态栏文本
     ///</summary>
@@ -94,6 +98,18 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
     ///</summary>
     [ObservableProperty]
     private string passwordHint = string.Empty;
+
+    /// <summary>
+    /// 导出目录，通过系统目录选择器设置
+    ///</summary>
+    [ObservableProperty]
+    private string exportDirectory = string.Empty;
+
+    /// <summary>
+    /// 导出文件名
+    ///</summary>
+    [ObservableProperty]
+    private string exportFileName = string.Empty;
 
     /// <summary>
     /// 导出文件的完整路径
@@ -175,8 +191,16 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
 
         _settings = _appSettingsStore.Load();
         RowCountWarningThresholdText = _settings.RowCountWarningThreshold.ToString();
-        ExportPath = _settings.LastExportPath ?? CreateDefaultExportPath();
-        RefreshConnections();
+        _suppressDefaultFileNameUpdate = true;
+        try
+        {
+            RefreshConnections();
+            SetExportPath(_settings.LastExportPath ?? CreateDefaultExportPath(SelectedConnection?.Name));
+        }
+        finally
+        {
+            _suppressDefaultFileNameUpdate = false;
+        }
     }
 
     /// <summary>
@@ -217,6 +241,7 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
         {
             StatusText = "读取表结构失败";
             LogSummary = ex.Message;
+            Log.Error(ex, "加载表失败");
         }
     }
 
@@ -241,12 +266,24 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
     }
 
     /// <summary>
-    /// 将导出路径重置为默认值（桌面路径 + 时间戳）
+    /// 选择快照导出目录
     ///</summary>
     [RelayCommand]
-    private void UseDefaultExportPath()
+    private async Task BrowseExportDirectoryAsync()
     {
-        ExportPath = CreateDefaultExportPath();
+        var window = _windowProvider.GetMainWindow();
+        if (window is null)
+            return;
+
+        var folders = await window.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = "选择导出目录",
+            AllowMultiple = false
+        });
+
+        var path = folders.FirstOrDefault()?.TryGetLocalPath();
+        if (!string.IsNullOrWhiteSpace(path))
+            ExportDirectory = path;
     }
 
     /// <summary>
@@ -256,7 +293,8 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
     private async Task ExportSnapshotAsync()
     {
         var connection = SelectedConnection?.ToDatabaseConnection();
-        var selectedTables = ExportTables.Where(t => t.IsSelected).ToList();
+        var exportSource = string.IsNullOrWhiteSpace(TableFilter) ? ExportTables : FilteredExportTables;
+        var selectedTables = exportSource.Where(t => t.IsSelected).ToList();
 
         if (connection is null)
         {
@@ -270,25 +308,22 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(ExportPassword))
-        {
-            StatusText = "请输入快照加密密码";
-            return;
-        }
-
         if (!string.Equals(ExportPassword, ExportPasswordConfirm, StringComparison.Ordinal))
         {
             StatusText = "两次输入的密码不一致";
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(ExportPath))
+        var exportPath = BuildExportPath();
+        if (exportPath is null)
         {
-            StatusText = "请输入导出路径";
+            StatusText = "请选择导出目录并填写文件名";
             return;
         }
 
-        var directory = Path.GetDirectoryName(ExportPath);
+        ExportPath = exportPath;
+
+        var directory = Path.GetDirectoryName(exportPath);
         if (!string.IsNullOrWhiteSpace(directory))
             Directory.CreateDirectory(directory);
 
@@ -303,7 +338,7 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
         {
             var options = new ExportOptions
             {
-                Password = ExportPassword,
+                Password = ExportPassword ?? string.Empty,
                 PasswordHint = string.IsNullOrWhiteSpace(PasswordHint) ? null : PasswordHint,
                 RowCountWarningThreshold = ParseRowCountWarningThreshold(),
                 Tables = selectedTables.Select(t => new TableExportOptions
@@ -321,17 +356,17 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
                 ExportProgressText = $"正在导出 {p.currentTable}/{p.totalTables}：{p.tableName}，当前行 {p.currentRow}";
             });
 
-            await using var stream = File.Create(ExportPath);
+            await using var stream = File.Create(exportPath);
             await _snapshotExporter.ExportAsync(connection, options, stream, progress, _exportCancellation.Token);
 
-            var fileSize = new FileInfo(ExportPath).Length;
+            var fileSize = new FileInfo(exportPath).Length;
             ExportProgress = 100;
             ExportProgressText = "导出完成";
-            ExportSummary = $"文件：{ExportPath}；大小：{FormatFileSize(fileSize)}；表数量：{selectedTables.Count}";
+            ExportSummary = $"文件：{exportPath}；大小：{FormatFileSize(fileSize)}；表数量：{selectedTables.Count}";
             StatusText = "导出完成";
             LogSummary = ExportSummary;
-            SaveExportHistory(connection.Name, ExportPath);
-            SaveRecentHistory("导出快照", Path.GetFileName(ExportPath), ExportPath, connection.Name);
+            SaveExportHistory(connection.Name, exportPath);
+            SaveRecentHistory("导出快照", Path.GetFileName(exportPath), exportPath, connection.Name);
             HasPendingOperation = false;
         }
         catch (OperationCanceledException)
@@ -345,6 +380,7 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
             StatusText = "导出失败";
             ExportProgressText = "导出失败";
             LogSummary = ex.Message;
+            Log.Error(ex, "导出快照失败");
         }
         finally
         {
@@ -405,6 +441,24 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
         ApplyTableFilter();
     }
 
+    partial void OnSelectedConnectionChanged(ConnectionItemViewModel? value)
+    {
+        if (_suppressDefaultFileNameUpdate)
+            return;
+
+        ExportFileName = CreateDefaultFileName(value?.Name);
+    }
+
+    partial void OnExportDirectoryChanged(string value)
+    {
+        UpdateExportPath();
+    }
+
+    partial void OnExportFileNameChanged(string value)
+    {
+        UpdateExportPath();
+    }
+
     /// <summary>
     /// 解析行数警告阈值文本为整数，解析失败时返回默认值 100000
     ///</summary>
@@ -420,13 +474,51 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
     /// 生成默认的导出文件路径（桌面目录 + 时间戳文件名）
     ///</summary>
     /// <returns>默认导出文件的完整路径</returns>
-    private static string CreateDefaultExportPath()
+    private static string CreateDefaultExportPath(string? connectionName)
     {
         var folder = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
         if (string.IsNullOrWhiteSpace(folder))
             folder = Environment.CurrentDirectory;
 
-        return Path.Combine(folder, $"baseline-{DateTime.Now:yyyyMMdd-HHmmss}.dbsync");
+        return Path.Combine(folder, CreateDefaultFileName(connectionName));
+    }
+
+    private static string CreateDefaultFileName(string? connectionName)
+    {
+        var prefix = string.IsNullOrWhiteSpace(connectionName) ? "snapshot" : SanitizeFileName(connectionName);
+        return $"{prefix}-{DateTime.Now:yyyyMMddHHmmssfff}.dbsync";
+    }
+
+    private static string SanitizeFileName(string value)
+    {
+        var invalidChars = Path.GetInvalidFileNameChars();
+        return string.Join("_", value.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries)).Trim();
+    }
+
+    public void SetExportPath(string path)
+    {
+        ExportPath = path;
+        ExportDirectory = Path.GetDirectoryName(path) ?? string.Empty;
+        ExportFileName = Path.GetFileName(path);
+    }
+
+    private string? BuildExportPath()
+    {
+        if (string.IsNullOrWhiteSpace(ExportDirectory) || string.IsNullOrWhiteSpace(ExportFileName))
+            return null;
+
+        var fileName = Path.GetExtension(ExportFileName).Equals(".dbsync", StringComparison.OrdinalIgnoreCase)
+            ? ExportFileName
+            : $"{ExportFileName}.dbsync";
+
+        return Path.Combine(ExportDirectory, fileName);
+    }
+
+    private void UpdateExportPath()
+    {
+        var path = BuildExportPath();
+        if (path is not null)
+            ExportPath = path;
     }
 
     /// <summary>

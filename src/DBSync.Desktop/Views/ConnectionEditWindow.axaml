@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:input="using:Avalonia.Input"
         xmlns:vm="using:DBSync.Desktop.ViewModels"
         xmlns:views="using:DBSync.Desktop.Views"
         xmlns:models="using:DBSync.Core.Models"
@@ -14,7 +15,9 @@
     <!-- 顶部：名称和类型 -->
     <StackPanel Grid.Row="0" Spacing="8">
       <TextBlock Text="连接名称" FontWeight="Bold"/>
-      <TextBox Text="{Binding Name, Mode=TwoWay}" PlaceholderText="输入连接名称"/>
+      <TextBox input:InputMethod.IsInputMethodEnabled="False"
+               Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+               PlaceholderText="输入连接名称"/>
       <TextBlock Text="数据库类型" FontWeight="Bold" Margin="0,8,0,0"/>
       <ComboBox ItemsSource="{x:Static views:ConnectionEditWindow.DbTypes}"
                 SelectedItem="{Binding DbType, Mode=TwoWay}"
@@ -30,14 +33,19 @@
             <!-- SQL Server / MySQL / PostgreSQL：服务器地址 -->
             <StackPanel IsVisible="{Binding DbType, Converter={x:Static views:ConnectionEditWindow.NotSqliteConverter}}">
               <TextBlock Text="服务器地址"/>
-              <TextBox Text="{Binding Server, Mode=TwoWay}" PlaceholderText="localhost"/>
+              <TextBox input:InputMethod.IsInputMethodEnabled="False"
+                       Text="{Binding Server, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                       PlaceholderText="localhost"/>
             </StackPanel>
 
             <!-- SQLite：文件路径 -->
             <StackPanel IsVisible="{Binding DbType, Converter={x:Static views:ConnectionEditWindow.IsSqliteConverter}}">
               <TextBlock Text="数据库文件路径"/>
               <Grid ColumnDefinitions="*,Auto">
-                <TextBox Grid.Column="0" Text="{Binding Server, Mode=TwoWay}" PlaceholderText="选择 .db 文件"/>
+                <TextBox Grid.Column="0"
+                         input:InputMethod.IsInputMethodEnabled="False"
+                         Text="{Binding Server, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         PlaceholderText="选择 .db 文件"/>
                 <Button Grid.Column="1" Content="浏览" Command="{Binding BrowseSqlitePathCommand}" Margin="4,0,0,0"/>
               </Grid>
             </StackPanel>
@@ -45,13 +53,17 @@
             <!-- 端口（非 SQLite） -->
             <StackPanel IsVisible="{Binding DbType, Converter={x:Static views:ConnectionEditWindow.NotSqliteConverter}}">
               <TextBlock Text="端口"/>
-              <TextBox Text="{Binding Port, Mode=TwoWay}" PlaceholderText="默认端口"/>
+              <TextBox input:InputMethod.IsInputMethodEnabled="False"
+                       Text="{Binding Port, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                       PlaceholderText="默认端口"/>
             </StackPanel>
 
             <!-- 数据库名（非 SQLite） -->
             <StackPanel IsVisible="{Binding DbType, Converter={x:Static views:ConnectionEditWindow.NotSqliteConverter}}">
               <TextBlock Text="数据库名称"/>
-              <TextBox Text="{Binding Database, Mode=TwoWay}" PlaceholderText="输入数据库名"/>
+              <TextBox input:InputMethod.IsInputMethodEnabled="False"
+                       Text="{Binding Database, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                       PlaceholderText="输入数据库名"/>
             </StackPanel>
 
             <!-- Windows 认证（仅 SQL Server） -->
@@ -63,25 +75,35 @@
             <!-- 用户名（非 SQLite，非 Windows 认证时） -->
             <StackPanel IsVisible="{Binding DbType, Converter={x:Static views:ConnectionEditWindow.NotSqliteConverter}}">
               <TextBlock Text="用户名"/>
-              <TextBox Text="{Binding Username, Mode=TwoWay}" PlaceholderText="输入用户名"/>
+              <TextBox input:InputMethod.IsInputMethodEnabled="False"
+                       Text="{Binding Username, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                       PlaceholderText="输入用户名"/>
             </StackPanel>
 
             <!-- 密码（非 SQLite） -->
             <StackPanel IsVisible="{Binding DbType, Converter={x:Static views:ConnectionEditWindow.NotSqliteConverter}}">
               <TextBlock Text="密码"/>
-              <TextBox Text="{Binding Password, Mode=TwoWay}" PasswordChar="●" PlaceholderText="输入密码" ContextMenu="{x:Null}"/>
+              <TextBox input:InputMethod.IsInputMethodEnabled="False"
+                       Text="{Binding Password, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                       PasswordChar="●"
+                       PlaceholderText="输入密码"
+                       ContextMenu="{x:Null}"/>
             </StackPanel>
 
             <!-- Schema（仅 PostgreSQL） -->
             <StackPanel IsVisible="{Binding DbType, Converter={x:Static views:ConnectionEditWindow.IsPostgreSqlConverter}}">
               <TextBlock Text="Schema"/>
-              <TextBox Text="{Binding Schema, Mode=TwoWay}" PlaceholderText="public"/>
+              <TextBox input:InputMethod.IsInputMethodEnabled="False"
+                       Text="{Binding Schema, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                       PlaceholderText="public"/>
             </StackPanel>
 
             <!-- 字符集（仅 MySQL） -->
             <StackPanel IsVisible="{Binding DbType, Converter={x:Static views:ConnectionEditWindow.IsMySqlConverter}}">
               <TextBlock Text="字符集"/>
-              <TextBox Text="{Binding Charset, Mode=TwoWay}" PlaceholderText="utf8mb4"/>
+              <TextBox input:InputMethod.IsInputMethodEnabled="False"
+                       Text="{Binding Charset, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                       PlaceholderText="utf8mb4"/>
             </StackPanel>
           </StackPanel>
         </ScrollViewer>
@@ -91,13 +113,15 @@
       <TabItem Header="高级">
         <StackPanel Spacing="8" Margin="0,8,0,0">
           <TextBlock Text="原始连接字符串" FontWeight="Bold"/>
-          <TextBox Text="{Binding RawConnectionString, Mode=TwoWay}"
+          <TextBox Text="{Binding RawConnectionString, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                   input:InputMethod.IsInputMethodEnabled="False"
                    AcceptsReturn="True"
                    TextWrapping="Wrap"
                    Height="120"
                    PlaceholderText="编辑连接字符串"/>
           <TextBlock Text="额外参数（如 Encrypt=True;TrustServerCertificate=True;）"/>
-          <TextBox Text="{Binding AdditionalParameters, Mode=TwoWay}"
+          <TextBox Text="{Binding AdditionalParameters, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                   input:InputMethod.IsInputMethodEnabled="False"
                    PlaceholderText="key=value;key2=value2;"/>
         </StackPanel>
       </TabItem>

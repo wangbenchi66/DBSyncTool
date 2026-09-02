@@ -45,6 +45,18 @@ public class SchemaComparerTests
         Assert.Empty(result.RemovedTables);
     }
 
+    [Fact]
+    public void Compare_TargetMissingSnapshotTable_ReportsAsAdded()
+    {
+        var target = new[] { TableModelFactory.Simple("Users") };
+        var snapshot = new[] { TableModelFactory.Simple("Users"), TableModelFactory.Simple("Orders") };
+
+        var result = SchemaComparer.Compare(target, snapshot);
+
+        Assert.Equal("Orders", Assert.Single(result.AddedTables).Name);
+        Assert.Empty(result.RemovedTables);
+    }
+
     // ── 删除表 ──────────────────────────────────────────────────────────────
 
     [Fact]

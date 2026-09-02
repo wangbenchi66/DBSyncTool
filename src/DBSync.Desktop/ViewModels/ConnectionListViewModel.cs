@@ -5,6 +5,7 @@ using DBSync.Core.Schema;
 using DBSync.Desktop.Services;
 using DBSync.Desktop.Views;
 using System.Collections.ObjectModel;
+using Serilog;
 
 namespace DBSync.Desktop.ViewModels;
 
@@ -223,6 +224,7 @@ public sealed partial class ConnectionListViewModel : ObservableObject, IPageVie
         {
             StatusText = "连接测试失败";
             LogSummary = ex.Message;
+            Log.Error(ex, "连接测试失败");
         }
     }
 

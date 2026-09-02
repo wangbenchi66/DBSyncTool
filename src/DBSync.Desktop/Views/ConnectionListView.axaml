@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:input="using:Avalonia.Input"
              xmlns:vm="using:DBSync.Desktop.ViewModels"
              x:Class="DBSync.Desktop.Views.ConnectionListView"
              x:DataType="vm:ConnectionListViewModel"
@@ -34,7 +35,9 @@
           <TextBlock Text="全局设置" FontWeight="SemiBold"/>
           <StackPanel Orientation="Horizontal" Spacing="8">
             <TextBlock VerticalAlignment="Center" Text="行数警告阈值"/>
-            <TextBox Width="140" Text="{Binding RowCountWarningThresholdText, Mode=TwoWay}"/>
+            <TextBox Width="140"
+                     input:InputMethod.IsInputMethodEnabled="False"
+                     Text="{Binding RowCountWarningThresholdText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
             <Button Content="保存设置" Command="{Binding SaveSettingsCommand}"/>
           </StackPanel>
         </StackPanel>

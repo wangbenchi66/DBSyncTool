@@ -133,13 +133,59 @@ public sealed class SnapshotLoader : ISnapshotLoader
         await using var gzipStream = new GZipStream(stream, CompressionMode.Decompress);
         using var reader = new StreamReader(gzipStream);
 
-        while (await reader.ReadLineAsync(cancellationToken) is { } line)
-        {
-            if (!string.IsNullOrWhiteSpace(line))
-                rows.Add(JsonSerializer.Deserialize<RowHash>(line, JsonOptions)!);
-        }
+        var content = await reader.ReadToEndAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(content))
+            return rows;
+
+        foreach (var json in ReadJsonObjects(content))
+            rows.Add(JsonSerializer.Deserialize<RowHash>(json, JsonOptions)!);
 
         return rows;
+    }
+
+    private static IEnumerable<string> ReadJsonObjects(string content)
+    {
+        var depth = 0;
+        var start = -1;
+        var inString = false;
+        var escaped = false;
+
+        for (var i = 0; i < content.Length; i++)
+        {
+            var ch = content[i];
+            if (inString)
+            {
+                escaped = ch == '\\' && !escaped;
+                if (ch == '"' && !escaped)
+                    inString = false;
+                else if (ch != '\\')
+                    escaped = false;
+                continue;
+            }
+
+            if (ch == '"')
+            {
+                inString = true;
+                escaped = false;
+                continue;
+            }
+
+            if (ch == '{')
+            {
+                if (depth == 0)
+                    start = i;
+                depth++;
+            }
+            else if (ch == '}')
+            {
+                depth--;
+                if (depth == 0 && start >= 0)
+                {
+                    yield return content[start..(i + 1)];
+                    start = -1;
+                }
+            }
+        }
     }
 
     /// <summary>

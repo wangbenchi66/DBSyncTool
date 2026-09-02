@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using DBSync.Core.Models;
 using DBSync.Core.Schema;
 using DBSync.Desktop.Services;
+using Serilog;
 
 namespace DBSync.Desktop.ViewModels;
 
@@ -137,7 +138,7 @@ public sealed partial class ConnectionEditViewModel : ObservableObject
     {
         _schemaReader = schemaReader;
         _windowProvider = windowProvider;
-        SyncFieldsToRawString();
+        RawConnectionString = BuildConnection()?.ConnectionString ?? string.Empty;
     }
 
     /// <summary>
@@ -166,7 +167,7 @@ public sealed partial class ConnectionEditViewModel : ObservableObject
         {
             _isSyncingFromRaw = false;
         }
-        SyncFieldsToRawString();
+        RawConnectionString = BuildConnection()?.ConnectionString ?? string.Empty;
     }
 
     /// <summary>
@@ -224,51 +225,6 @@ public sealed partial class ConnectionEditViewModel : ObservableObject
     }
 
     /// <summary>
-    /// 结构化字段变更时同步到原始字符串
-    ///</summary>
-    partial void OnServerChanged(string value) => SyncFieldsToRawString();
-
-    /// <summary>
-    /// 端口变更时同步
-    ///</summary>
-    partial void OnPortChanged(int? value) => SyncFieldsToRawString();
-
-    /// <summary>
-    /// 数据库名变更时同步
-    ///</summary>
-    partial void OnDatabaseChanged(string value) => SyncFieldsToRawString();
-
-    /// <summary>
-    /// 用户名变更时同步
-    ///</summary>
-    partial void OnUsernameChanged(string value) => SyncFieldsToRawString();
-
-    /// <summary>
-    /// 密码变更时同步
-    ///</summary>
-    partial void OnPasswordChanged(string value) => SyncFieldsToRawString();
-
-    /// <summary>
-    /// Windows 认证变更时同步
-    ///</summary>
-    partial void OnUseWindowsAuthChanged(bool value) => SyncFieldsToRawString();
-
-    /// <summary>
-    /// Schema 变更时同步
-    ///</summary>
-    partial void OnSchemaChanged(string value) => SyncFieldsToRawString();
-
-    /// <summary>
-    /// 字符集变更时同步
-    ///</summary>
-    partial void OnCharsetChanged(string value) => SyncFieldsToRawString();
-
-    /// <summary>
-    /// 额外参数变更时同步
-    ///</summary>
-    partial void OnAdditionalParametersChanged(string value) => SyncFieldsToRawString();
-
-    /// <summary>
     /// 原始连接字符串变更时回填结构化字段
     ///</summary>
     partial void OnRawConnectionStringChanged(string value)
@@ -302,6 +258,7 @@ public sealed partial class ConnectionEditViewModel : ObservableObject
     [RelayCommand]
     private async Task TestConnectionAsync()
     {
+        SyncFieldsToRawString();
         var connection = BuildConnection();
         if (connection is null)
         {
@@ -318,6 +275,7 @@ public sealed partial class ConnectionEditViewModel : ObservableObject
         catch (Exception ex)
         {
             TestConnectionStatusText = $"✗ {ex.Message}";
+            Log.Error(ex, "编辑连接页测试连接失败");
         }
     }
 
@@ -339,6 +297,7 @@ public sealed partial class ConnectionEditViewModel : ObservableObject
             return;
         }
 
+        SyncFieldsToRawString();
         Result = BuildConnection();
         CloseDialog?.Invoke();
     }

@@ -13,8 +13,6 @@
     <Border Padding="12" Background="#1F2937">
       <DockPanel>
         <TextBlock Text="DBSyncTool" FontSize="24" FontWeight="Bold" Foreground="White"/>
-        <TextBlock DockPanel.Dock="Right" Text="{Binding StatusText}"
-                   Foreground="{Binding StatusIsError, Converter={x:Static views:MainWindow.ErrorForegroundConverter}}"/>
       </DockPanel>
     </Border>
 
@@ -56,7 +54,11 @@
 
     <!-- 底部日志栏 -->
     <Border Grid.Row="2" Padding="8" Background="#111827">
-      <TextBlock Text="{Binding LogSummary}" Foreground="White"/>
+      <StackPanel Spacing="2">
+        <TextBlock Text="{Binding StatusText}"
+                   Foreground="{Binding StatusIsError, Converter={x:Static views:MainWindow.ErrorForegroundConverter}}"/>
+        <TextBlock Text="{Binding LogSummary}" Foreground="White"/>
+      </StackPanel>
     </Border>
   </Grid>
 </Window>

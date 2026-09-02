@@ -61,6 +61,83 @@ public class SnapshotExporterLoaderTests
         Assert.Contains("密码错误", ex.Message);
     }
 
+    [Fact]
+    public async Task ExportAndLoadAsync_EmptyPassword_RoundTripsSnapshot()
+    {
+        var table = TableModelFactory.NoPrimaryKey("Logs");
+        var exporter = new SnapshotExporter(new FakeSchemaReader([table]), new SqlServerDataFingerprinter());
+        var loader = new SnapshotLoader();
+        await using var stream = new MemoryStream();
+
+        await exporter.ExportAsync(
+            SqlServerConnection(),
+            new ExportOptions
+            {
+                Password = "",
+                Tables = [new TableExportOptions { TableName = table.FullName }]
+            },
+            stream);
+
+        stream.Position = 0;
+        var snapshot = await loader.LoadAsync(stream, "");
+
+        Assert.Equal([table.FullName], snapshot.Manifest.TableNames);
+        Assert.True(snapshot.Tables.ContainsKey(table.FullName));
+    }
+
+    [Fact]
+    public async Task ExportAsync_OneSelectedTable_WritesOnlyThatTable()
+    {
+        var selected = TableModelFactory.NoPrimaryKey("Selected");
+        var ignored = TableModelFactory.NoPrimaryKey("Ignored");
+        var exporter = new SnapshotExporter(new FakeSchemaReader([selected, ignored]), new SqlServerDataFingerprinter());
+        var loader = new SnapshotLoader();
+        await using var stream = new MemoryStream();
+
+        await exporter.ExportAsync(
+            SqlServerConnection(),
+            new ExportOptions
+            {
+                Password = "",
+                Tables = [new TableExportOptions { TableName = selected.FullName }]
+            },
+            stream);
+
+        stream.Position = 0;
+        var snapshot = await loader.LoadAsync(stream, "");
+
+        Assert.Equal([selected.FullName], snapshot.Manifest.TableNames);
+        Assert.Equal([selected.FullName], snapshot.Tables.Keys);
+    }
+
+    [Fact]
+    public async Task ExportAndLoadAsync_RowFingerprints_RoundTripsSnapshot()
+    {
+        var table = TableModelFactory.Simple("Logs");
+        var row = new RowHash
+        {
+            PrimaryKeyValues = new Dictionary<string, string?> { ["Id"] = "1" },
+            Hash = "abc123"
+        };
+        var exporter = new SnapshotExporter(new FakeSchemaReader([table]), new FakeFingerprinter(row));
+        var loader = new SnapshotLoader();
+        await using var stream = new MemoryStream();
+
+        await exporter.ExportAsync(
+            SqlServerConnection(),
+            new ExportOptions
+            {
+                Password = "",
+                Tables = [new TableExportOptions { TableName = table.FullName }]
+            },
+            stream);
+
+        stream.Position = 0;
+        var snapshot = await loader.LoadAsync(stream, "");
+
+        Assert.Single(snapshot.DataFingerprints[table.FullName]);
+    }
+
     /// <summary>
     /// 创建测试用 SQL Server 连接配置。
     /// </summary>
@@ -118,6 +195,19 @@ public class SnapshotExporterLoaderTests
             CancellationToken cancellationToken = default)
         {
             return Task.FromResult(true);
+        }
+    }
+
+    private sealed class FakeFingerprinter(RowHash row) : IDataFingerprinter
+    {
+        public async IAsyncEnumerable<RowHash> ReadRowHashesAsync(
+            DatabaseConnection connection,
+            TableModel table,
+            string? whereClause = null,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.CompletedTask;
+            yield return row;
         }
     }
 }

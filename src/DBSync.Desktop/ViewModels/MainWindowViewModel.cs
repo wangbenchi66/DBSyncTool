@@ -191,7 +191,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         if (pageKey == "export")
         {
             if (!string.IsNullOrWhiteSpace(entry.Path))
-                Export.ExportPath = entry.Path;
+                Export.SetExportPath(entry.Path);
             if (!string.IsNullOrWhiteSpace(entry.ConnectionName))
             {
                 var conn = Export.Connections.FirstOrDefault(c =>

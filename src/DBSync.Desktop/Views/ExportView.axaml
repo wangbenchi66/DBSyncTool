@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:input="using:Avalonia.Input"
              xmlns:vm="using:DBSync.Desktop.ViewModels"
              x:Class="DBSync.Desktop.Views.ExportView"
              x:DataType="vm:ExportViewModel"
@@ -24,7 +25,9 @@
       <Border Padding="12" Background="#F9FAFB" BorderBrush="#E5E7EB" BorderThickness="1">
         <StackPanel Spacing="10">
           <TextBlock Text="2. 选择表" FontWeight="SemiBold"/>
-          <TextBox PlaceholderText="按表名过滤" Text="{Binding TableFilter, Mode=TwoWay}"/>
+          <TextBox PlaceholderText="按表名过滤"
+                   input:InputMethod.IsInputMethodEnabled="False"
+                   Text="{Binding TableFilter, Mode=TwoWay}"/>
           <StackPanel Orientation="Horizontal" Spacing="8">
             <Button Content="全选" Command="{Binding SelectAllTablesCommand}"/>
             <Button Content="反选" Command="{Binding InvertTableSelectionCommand}"/>
@@ -59,7 +62,8 @@
                       </StackPanel>
                       <TextBox Grid.Column="5"
                                PlaceholderText="不含 WHERE"
-                               Text="{Binding WhereClause, Mode=TwoWay}"/>
+                               input:InputMethod.IsInputMethodEnabled="False"
+                               Text="{Binding WhereClause, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
                     </Grid>
                   </DataTemplate>
                 </ListBox.ItemTemplate>
@@ -73,11 +77,25 @@
       <Border Padding="12" Background="#F9FAFB" BorderBrush="#E5E7EB" BorderThickness="1">
         <StackPanel Spacing="10">
           <TextBlock Text="3. 密码和路径" FontWeight="SemiBold"/>
-          <TextBox PlaceholderText="加密密码" Text="{Binding ExportPassword, Mode=TwoWay}"/>
-          <TextBox PlaceholderText="确认密码" Text="{Binding ExportPasswordConfirm, Mode=TwoWay}"/>
-          <TextBox PlaceholderText="密码提示（明文写入快照文件）" Text="{Binding PasswordHint, Mode=TwoWay}"/>
-          <TextBox PlaceholderText="导出路径" Text="{Binding ExportPath, Mode=TwoWay}"/>
-          <Button Content="使用默认路径" Command="{Binding UseDefaultExportPathCommand}"/>
+          <TextBox PlaceholderText="加密密码（可不填）"
+                   input:InputMethod.IsInputMethodEnabled="False"
+                   Text="{Binding ExportPassword, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+          <TextBox PlaceholderText="确认密码（可不填）"
+                   input:InputMethod.IsInputMethodEnabled="False"
+                   Text="{Binding ExportPasswordConfirm, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+          <TextBox PlaceholderText="密码提示（明文写入快照文件）"
+                   input:InputMethod.IsInputMethodEnabled="False"
+                   Text="{Binding PasswordHint, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <TextBox PlaceholderText="导出目录"
+                     input:InputMethod.IsInputMethodEnabled="False"
+                     Text="{Binding ExportDirectory, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                     IsReadOnly="True"/>
+            <Button Grid.Column="1" Content="选择路径" Command="{Binding BrowseExportDirectoryCommand}"/>
+          </Grid>
+          <TextBox PlaceholderText="文件名"
+                   input:InputMethod.IsInputMethodEnabled="False"
+                   Text="{Binding ExportFileName, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
 
           <StackPanel Orientation="Horizontal" Spacing="8">
             <Button Content="开始导出" Command="{Binding ExportSnapshotCommand}"/>

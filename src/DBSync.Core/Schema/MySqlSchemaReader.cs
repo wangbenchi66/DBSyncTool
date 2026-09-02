@@ -111,7 +111,7 @@ public sealed class MySqlSchemaReader : ISchemaReader
             Name = row.Name,
             DbTypeName = row.DbTypeName,
             ColumnType = DbDialectSupport.MapColumnType(row.DbTypeName, row.RawTypeName),
-            MaxLength = row.MaxLength is > 0 ? row.MaxLength : null,
+            MaxLength = ToNullableInt32(row.MaxLength),
             Precision = row.Precision,
             Scale = row.Scale,
             IsNullable = string.Equals(row.IsNullable, "YES", StringComparison.OrdinalIgnoreCase),
@@ -120,6 +120,14 @@ public sealed class MySqlSchemaReader : ISchemaReader
             IsAutoIncrement = row.Extra.Contains("auto_increment", StringComparison.OrdinalIgnoreCase),
             OrdinalPosition = row.OrdinalPosition
         };
+    }
+
+    private static int? ToNullableInt32(long? value)
+    {
+        if (value is null || value <= 0 || value > int.MaxValue)
+            return null;
+
+        return (int)value.Value;
     }
 
     private static IndexModel ToIndexModel(IGrouping<string, IndexRow> group)
@@ -219,7 +227,7 @@ public sealed class MySqlSchemaReader : ISchemaReader
         public string Name { get; set; } = string.Empty;
         public string DbTypeName { get; set; } = string.Empty;
         public string RawTypeName { get; set; } = string.Empty;
-        public int? MaxLength { get; set; }
+        public long? MaxLength { get; set; }
         public int? Precision { get; set; }
         public int? Scale { get; set; }
         public string IsNullable { get; set; } = string.Empty;
@@ -279,9 +287,9 @@ SELECT
     DATA_TYPE AS DbTypeName,
     COLUMN_TYPE AS RawTypeName,
     CHARACTER_MAXIMUM_LENGTH AS MaxLength,
-    NUMERIC_PRECISION AS Precision,
-    NUMERIC_SCALE AS Scale,
-    IS_NULLABLE AS IsNullable,
+    NUMERIC_PRECISION AS `Precision`,
+    NUMERIC_SCALE AS `Scale`,
+    IS_NULLABLE AS `IsNullable`,
     COLUMN_DEFAULT AS DefaultValue,
     EXTRA AS Extra,
     ORDINAL_POSITION AS OrdinalPosition

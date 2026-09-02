@@ -17,7 +17,7 @@ public sealed partial class ExportTableItemViewModel : ObservableObject
     /// 是否选中导出
     ///</summary>
     [ObservableProperty]
-    private bool isSelected = true;
+    private bool isSelected;
 
     /// <summary>
     /// 是否同步数据（需要有主键）

@@ -17,6 +17,7 @@ using DBSync.Desktop.Views;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Text;
+using Serilog;
 
 namespace DBSync.Desktop.ViewModels;
 
@@ -227,7 +228,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
 
         await using var stream = await file.OpenReadAsync();
         ComparePasswordHint = await _snapshotLoader.ReadPasswordHintAsync(stream) ?? string.Empty;
-        CompareSnapshotMetaText = "已选择快照，请输入密码并加载。";
+        CompareSnapshotMetaText = "已选择快照，可直接加载或输入密码后加载。";
         StatusText = "已选择快照文件";
     }
 
@@ -250,12 +251,6 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(ComparePassword))
-        {
-            StatusText = "请输入快照密码";
-            return;
-        }
-
         try
         {
             StatusText = "正在加载快照...";
@@ -265,7 +260,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
             await using var stream = File.OpenRead(CompareSnapshotPath);
             ComparePasswordHint = await _snapshotLoader.ReadPasswordHintAsync(stream) ?? string.Empty;
             stream.Position = 0;
-            _loadedSnapshot = await _snapshotLoader.LoadAsync(stream, ComparePassword);
+            _loadedSnapshot = await _snapshotLoader.LoadAsync(stream, ComparePassword ?? string.Empty);
 
             CompareSnapshotMetaText = $"导出时间：{_loadedSnapshot.Manifest.ExportedAt:yyyy-MM-dd HH:mm:ss}；" +
                                       $"数据库：{_loadedSnapshot.Manifest.DbType}；" +
@@ -289,7 +284,8 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
             RefreshCompareConnections();
             CompareSnapshotMetaText = "快照加载失败";
             StatusText = "快照加载失败";
-            LogSummary = ex.Message;
+            LogSummary = ex.InnerException?.Message ?? ex.Message;
+            Log.Error(ex, "加载快照失败，路径：{SnapshotPath}，是否空密码：{IsEmptyPassword}", CompareSnapshotPath, string.IsNullOrEmpty(ComparePassword));
         }
     }
 
@@ -323,26 +319,26 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
             _loadedDataDiffs.Clear();
 
             var currentTables = await _schemaReader.ReadAllTablesAsync(connection);
-            _loadedSchemaDiff = SchemaComparer.Compare(_loadedSnapshot.Tables.Values, currentTables);
+            _loadedSchemaDiff = SchemaComparer.Compare(currentTables, _loadedSnapshot.Tables.Values);
             BuildSchemaPreview(_loadedSchemaDiff);
 
             var currentTableMap = currentTables.ToDictionary(t => t.FullName, t => t, StringComparer.OrdinalIgnoreCase);
-            var baselineTables = _loadedSnapshot.Tables.Values.OrderBy(t => t.FullName).ToList();
+            var snapshotTables = _loadedSnapshot.Tables.Values.OrderBy(t => t.FullName).ToList();
 
-            for (var i = 0; i < baselineTables.Count; i++)
+            for (var i = 0; i < snapshotTables.Count; i++)
             {
-                var table = baselineTables[i];
-                CompareProgress = baselineTables.Count == 0 ? 0 : (i + 1) * 100 / baselineTables.Count;
-                CompareProgressText = $"正在比对 {i + 1}/{baselineTables.Count}：{table.FullName}";
+                var table = snapshotTables[i];
+                CompareProgress = snapshotTables.Count == 0 ? 0 : (i + 1) * 100 / snapshotTables.Count;
+                CompareProgressText = $"正在比对 {i + 1}/{snapshotTables.Count}：{table.FullName}";
 
-                var baselineRows = _loadedSnapshot.DataFingerprints.TryGetValue(table.FullName, out var rows)
+                var snapshotRows = _loadedSnapshot.DataFingerprints.TryGetValue(table.FullName, out var rows)
                     ? rows
                     : [];
 
                 if (!currentTableMap.TryGetValue(table.FullName, out var currentTable))
                 {
                     _loadedDataDiffs[table.FullName] = table.HasPrimaryKey
-                        ? DataComparer.Compare(baselineRows, [], false)
+                        ? DataComparer.Compare([], snapshotRows, false)
                         : DataDiff.NoPrimaryKey;
                     continue;
                 }
@@ -359,10 +355,10 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
                 {
                     currentRows.Add(row);
                     currentRow++;
-                    CompareProgressText = $"正在比对 {i + 1}/{baselineTables.Count}：{table.FullName}，当前行 {currentRow}";
+                    CompareProgressText = $"正在比对 {i + 1}/{snapshotTables.Count}：{table.FullName}，当前行 {currentRow}";
                 }
 
-                _loadedDataDiffs[table.FullName] = DataComparer.Compare(baselineRows, currentRows, false);
+                _loadedDataDiffs[table.FullName] = DataComparer.Compare(currentRows, snapshotRows, false);
             }
 
             BuildDataPreview(_loadedDataDiffs, _loadedSnapshot.Tables.Values);
@@ -380,6 +376,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
             StatusText = "比对失败";
             CompareProgressText = "比对失败";
             LogSummary = ex.Message;
+            Log.Error(ex, "执行比对失败");
         }
     }
 
@@ -422,6 +419,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
         {
             StatusText = "脚本生成失败";
             LogSummary = ex.Message;
+            Log.Error(ex, "生成升级脚本失败");
         }
     }
 
@@ -727,6 +725,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
         {
             StatusText = isHtml ? "HTML 报告导出失败" : "Markdown 报告导出失败";
             LogSummary = ex.Message;
+            Log.Error(ex, isHtml ? "导出 HTML 报告失败" : "导出 Markdown 报告失败");
         }
     }
 

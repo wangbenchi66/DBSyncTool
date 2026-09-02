@@ -24,6 +24,8 @@ public sealed class SnapshotExporter(ISchemaReader schemaReader, IDataFingerprin
         WriteIndented = true
     };
 
+    private static readonly JsonSerializerOptions JsonLineOptions = new(JsonSerializerDefaults.Web);
+
     /// <summary>
     /// 导出加密快照。
     /// </summary>
@@ -117,7 +119,7 @@ public sealed class SnapshotExporter(ISchemaReader schemaReader, IDataFingerprin
         var currentRow = 0L;
         await foreach (var row in fingerprinter.ReadRowHashesAsync(connection, table, whereClause, cancellationToken))
         {
-            await writer.WriteLineAsync(JsonSerializer.Serialize(row, JsonOptions));
+            await writer.WriteLineAsync(JsonSerializer.Serialize(row, JsonLineOptions));
             currentRow++;
             progress?.Report((currentTable, totalTables, table.FullName, currentRow));
         }
