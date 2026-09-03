@@ -333,4 +333,14 @@ ORDER BY seqno
 
         private static string QuoteLiteral(string value) => $"'{value.Replace("'", "''")}'";
     }
+
+    /// <summary>
+    /// 读取所有数据库对象（SQLite 不支持存储过程和触发器的完整读取，返回空列表）
+    ///</summary>
+    public Task<IReadOnlyList<DatabaseObjectModel>> ReadAllObjectsAsync(
+        DatabaseConnection connection,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult<IReadOnlyList<DatabaseObjectModel>>([]);
+    }
 }

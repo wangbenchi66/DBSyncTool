@@ -1,4 +1,5 @@
 using DBSync.Core.Data;
+using DBSync.Core.Execution;
 using DBSync.Core.Schema;
 using DBSync.Core.Snapshot;
 using DBSync.Core.SqlGenerators;
@@ -38,6 +39,8 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<ISnapshotExporter, SnapshotExporter>();
         services.AddSingleton<ISnapshotLoader, SnapshotLoader>();
+
+        services.AddSingleton<IScriptExecutor, ScriptExecutor>();
 
         return services;
     }

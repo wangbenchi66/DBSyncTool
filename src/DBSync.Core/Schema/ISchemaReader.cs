@@ -30,6 +30,16 @@ public interface ISchemaReader
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// 读取指定数据库中的所有数据库对象（视图、存储过程、函数、触发器）
+    /// </summary>
+    /// <param name="connection">数据库连接配置</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    /// <returns>数据库对象列表</returns>
+    Task<IReadOnlyList<DatabaseObjectModel>> ReadAllObjectsAsync(
+        DatabaseConnection connection,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 测试数据库连接是否可用
     /// </summary>
     /// <param name="connection">数据库连接配置</param>

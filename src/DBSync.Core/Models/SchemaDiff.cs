@@ -135,8 +135,13 @@ public sealed record SchemaDiff
     public required IReadOnlyList<IReadOnlyList<string>> CyclicDependencyGroups { get; init; }
 
     /// <summary>
+    /// 通用数据库对象差异（视图、存储过程、函数、触发器）
+    ///</summary>
+    public IReadOnlyList<ObjectDiff> ObjectDiffs { get; init; } = [];
+
+    /// <summary>
     /// 是否存在任何结构差异（不含删除表）
     ///</summary>
     public bool HasChanges =>
-        AddedTables.Count > 0 || ModifiedTables.Any(t => t.HasChanges);
+        AddedTables.Count > 0 || ModifiedTables.Any(t => t.HasChanges) || ObjectDiffs.Count > 0;
 }

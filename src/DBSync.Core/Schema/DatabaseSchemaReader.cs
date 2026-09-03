@@ -37,6 +37,20 @@ public sealed class DatabaseSchemaReader(
         };
     }
 
+    public Task<IReadOnlyList<DatabaseObjectModel>> ReadAllObjectsAsync(
+        DatabaseConnection connection,
+        CancellationToken cancellationToken = default)
+    {
+        return connection.DbType switch
+        {
+            DatabaseType.SqlServer => sqlServer.ReadAllObjectsAsync(connection, cancellationToken),
+            DatabaseType.MySql => mySql.ReadAllObjectsAsync(connection, cancellationToken),
+            DatabaseType.PostgreSql => postgreSql.ReadAllObjectsAsync(connection, cancellationToken),
+            DatabaseType.Sqlite => sqlite.ReadAllObjectsAsync(connection, cancellationToken),
+            _ => throw new NotSupportedException($"不支持的数据库类型：{connection.DbType}")
+        };
+    }
+
     public Task<bool> TestConnectionAsync(
         DatabaseConnection connection,
         CancellationToken cancellationToken = default)

@@ -348,4 +348,14 @@ WHERE TABLE_SCHEMA = DATABASE()
 ORDER BY TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX
 """;
     }
+
+    /// <summary>
+    /// 读取所有数据库对象（视图、存储过程、函数、触发器）
+    ///</summary>
+    public Task<IReadOnlyList<DatabaseObjectModel>> ReadAllObjectsAsync(
+        DatabaseConnection connection,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult<IReadOnlyList<DatabaseObjectModel>>([]);
+    }
 }

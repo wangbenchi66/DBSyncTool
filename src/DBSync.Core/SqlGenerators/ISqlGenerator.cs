@@ -48,6 +48,30 @@ public interface ISqlGenerator
     IReadOnlyList<string> GenerateAlterTable(DatabaseType dbType, TableDiff diff);
 
     /// <summary>
+    /// 根据变更行数据生成 UPDATE 语句组
+    /// </summary>
+    /// <param name="dbType">目标数据库类型</param>
+    /// <param name="table">表元数据</param>
+    /// <param name="rows">变更行数据列表（列名 → 字符串值）</param>
+    /// <returns>UPDATE SQL 语句列表</returns>
+    IReadOnlyList<string> GenerateUpdateStatements(
+        DatabaseType dbType,
+        TableModel table,
+        IReadOnlyList<IReadOnlyDictionary<string, string?>> rows);
+
+    /// <summary>
+    /// 根据主键值生成 DELETE 语句组
+    /// </summary>
+    /// <param name="dbType">目标数据库类型</param>
+    /// <param name="table">表元数据</param>
+    /// <param name="primaryKeyValues">待删除行的主键值列表</param>
+    /// <returns>DELETE SQL 语句列表</returns>
+    IReadOnlyList<string> GenerateDeleteStatements(
+        DatabaseType dbType,
+        TableModel table,
+        IReadOnlyList<IReadOnlyDictionary<string, string?>> primaryKeyValues);
+
+    /// <summary>
     /// 根据完整行数据生成 INSERT 语句组
     /// </summary>
     /// <param name="dbType">目标数据库类型</param>

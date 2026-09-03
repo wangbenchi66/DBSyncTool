@@ -445,4 +445,63 @@ public sealed class SqlServerSqlGenerator : ISqlGenerator
     }
 
     private static string EscapeSqlLiteral(string value) => value.Replace("'", "''");
+
+    /// <summary>
+    /// 生成 UPDATE 语句组
+    ///</summary>
+    public IReadOnlyList<string> GenerateUpdateStatements(
+        TableModel table,
+        IReadOnlyList<IReadOnlyDictionary<string, string?>> rows)
+    {
+        var result = new List<string>();
+        var tableName = QuoteTableName(table.Schema, table.Name);
+        var pkCols = table.PrimaryKeyColumns;
+
+        foreach (var row in rows)
+        {
+            var setClauses = row
+                .Where(kv => !pkCols.Contains(kv.Key, StringComparer.OrdinalIgnoreCase))
+                .Select(kv => $"{QuoteIdentifier(kv.Key)} = {FormatSqlLiteral(kv.Value)}");
+            var whereClauses = pkCols
+                .Select(pk => $"{QuoteIdentifier(pk)} = {FormatSqlLiteral(row.GetValueOrDefault(pk))}");
+            result.Add($"UPDATE {tableName} SET {string.Join(", ", setClauses)} WHERE {string.Join(" AND ", whereClauses)};");
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// 接口方法重载
+    ///</summary>
+    public IReadOnlyList<string> GenerateUpdateStatements(
+        DatabaseType dbType, TableModel table,
+        IReadOnlyList<IReadOnlyDictionary<string, string?>> rows)
+        => GenerateUpdateStatements(table, rows);
+
+    /// <summary>
+    /// 生成 DELETE 语句组
+    ///</summary>
+    public IReadOnlyList<string> GenerateDeleteStatements(
+        TableModel table,
+        IReadOnlyList<IReadOnlyDictionary<string, string?>> primaryKeyValues)
+    {
+        var result = new List<string>();
+        var tableName = QuoteTableName(table.Schema, table.Name);
+        var pkCols = table.PrimaryKeyColumns;
+
+        foreach (var row in primaryKeyValues)
+        {
+            var whereClauses = pkCols
+                .Select(pk => $"{QuoteIdentifier(pk)} = {FormatSqlLiteral(row.GetValueOrDefault(pk))}");
+            result.Add($"DELETE FROM {tableName} WHERE {string.Join(" AND ", whereClauses)};");
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// 接口方法重载
+    ///</summary>
+    public IReadOnlyList<string> GenerateDeleteStatements(
+        DatabaseType dbType, TableModel table,
+        IReadOnlyList<IReadOnlyDictionary<string, string?>> primaryKeyValues)
+        => GenerateDeleteStatements(table, primaryKeyValues);
 }

@@ -584,4 +584,15 @@ WHERE i.name IS NOT NULL
 ORDER BY s.name, t.name, i.name, ic.key_ordinal
 """;
     }
+
+    /// <summary>
+    /// 读取所有数据库对象（视图、存储过程、函数、触发器）
+    ///</summary>
+    public Task<IReadOnlyList<DatabaseObjectModel>> ReadAllObjectsAsync(
+        DatabaseConnection connection,
+        CancellationToken cancellationToken = default)
+    {
+        // v2.5 存根实现，后续填充 SQL Server 查询
+        return Task.FromResult<IReadOnlyList<DatabaseObjectModel>>([]);
+    }
 }

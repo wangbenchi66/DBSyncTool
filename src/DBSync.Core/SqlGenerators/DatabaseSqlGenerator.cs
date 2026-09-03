@@ -80,4 +80,34 @@ public sealed class DatabaseSqlGenerator(
             _ => throw new NotSupportedException($"不支持的数据库类型：{dbType}")
         };
     }
+
+    public IReadOnlyList<string> GenerateUpdateStatements(
+        DatabaseType dbType,
+        TableModel table,
+        IReadOnlyList<IReadOnlyDictionary<string, string?>> rows)
+    {
+        return dbType switch
+        {
+            DatabaseType.SqlServer => sqlServer.GenerateUpdateStatements(table, rows),
+            DatabaseType.MySql => mySql.GenerateUpdateStatements(table, rows),
+            DatabaseType.PostgreSql => postgreSql.GenerateUpdateStatements(table, rows),
+            DatabaseType.Sqlite => sqlite.GenerateUpdateStatements(table, rows),
+            _ => throw new NotSupportedException($"不支持的数据库类型：{dbType}")
+        };
+    }
+
+    public IReadOnlyList<string> GenerateDeleteStatements(
+        DatabaseType dbType,
+        TableModel table,
+        IReadOnlyList<IReadOnlyDictionary<string, string?>> primaryKeyValues)
+    {
+        return dbType switch
+        {
+            DatabaseType.SqlServer => sqlServer.GenerateDeleteStatements(table, primaryKeyValues),
+            DatabaseType.MySql => mySql.GenerateDeleteStatements(table, primaryKeyValues),
+            DatabaseType.PostgreSql => postgreSql.GenerateDeleteStatements(table, primaryKeyValues),
+            DatabaseType.Sqlite => sqlite.GenerateDeleteStatements(table, primaryKeyValues),
+            _ => throw new NotSupportedException($"不支持的数据库类型：{dbType}")
+        };
+    }
 }

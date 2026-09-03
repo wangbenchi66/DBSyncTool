@@ -309,4 +309,40 @@ public sealed class PostgresSqlGenerator : ISqlGenerator
     }
 
     private static string EscapeSqlLiteral(string value) => value.Replace("'", "''");
+
+    public IReadOnlyList<string> GenerateUpdateStatements(TableModel table,
+        IReadOnlyList<IReadOnlyDictionary<string, string?>> rows)
+    {
+        var result = new List<string>();
+        var tableName = QuoteTableName(table.Schema, table.Name);
+        var pkCols = table.PrimaryKeyColumns;
+        foreach (var row in rows)
+        {
+            var sets = row.Where(kv => !pkCols.Contains(kv.Key, StringComparer.OrdinalIgnoreCase))
+                .Select(kv => $"{QuoteIdentifier(kv.Key)} = {FormatSqlLiteral(kv.Value)}");
+            var wheres = pkCols.Select(pk => $"{QuoteIdentifier(pk)} = {FormatSqlLiteral(row.GetValueOrDefault(pk))}");
+            result.Add($"UPDATE {tableName} SET {string.Join(", ", sets)} WHERE {string.Join(" AND ", wheres)};");
+        }
+        return result;
+    }
+
+    public IReadOnlyList<string> GenerateUpdateStatements(DatabaseType dbType, TableModel table,
+        IReadOnlyList<IReadOnlyDictionary<string, string?>> rows) => GenerateUpdateStatements(table, rows);
+
+    public IReadOnlyList<string> GenerateDeleteStatements(TableModel table,
+        IReadOnlyList<IReadOnlyDictionary<string, string?>> primaryKeyValues)
+    {
+        var result = new List<string>();
+        var tableName = QuoteTableName(table.Schema, table.Name);
+        var pkCols = table.PrimaryKeyColumns;
+        foreach (var row in primaryKeyValues)
+        {
+            var wheres = pkCols.Select(pk => $"{QuoteIdentifier(pk)} = {FormatSqlLiteral(row.GetValueOrDefault(pk))}");
+            result.Add($"DELETE FROM {tableName} WHERE {string.Join(" AND ", wheres)};");
+        }
+        return result;
+    }
+
+    public IReadOnlyList<string> GenerateDeleteStatements(DatabaseType dbType, TableModel table,
+        IReadOnlyList<IReadOnlyDictionary<string, string?>> primaryKeyValues) => GenerateDeleteStatements(table, primaryKeyValues);
 }
