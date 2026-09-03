@@ -4,28 +4,89 @@
              x:Class="DBSync.Desktop.Views.HistoryView"
              x:DataType="vm:HistoryViewModel"
              x:CompileBindings="True">
-  <StackPanel Spacing="12" Margin="16">
-    <TextBlock Text="历史记录" FontSize="20" FontWeight="SemiBold"/>
-    <TextBlock Text="最近使用的连接、快照和导出文件"/>
+  <Grid RowDefinitions="Auto,*"
+        Margin="16"
+        Background="{DynamicResource PageBackgroundBrush}">
 
-    <ListBox ItemsSource="{Binding RecentHistoryEntries}" Height="520">
-      <ListBox.ItemTemplate>
-        <DataTemplate>
-          <Border Margin="0,0,0,8" Padding="8" Background="#FFFFFF" BorderBrush="#E5E7EB" BorderThickness="1">
-            <Grid ColumnDefinitions="*,Auto">
-              <StackPanel Spacing="2">
-                <TextBlock Text="{Binding DisplayText}" FontWeight="SemiBold"/>
-                <TextBlock Text="{Binding PathText}" TextWrapping="Wrap" FontSize="12" Foreground="#6B7280"/>
-              </StackPanel>
-              <Button Grid.Column="1"
-                      Content="使用"
-                      Command="{Binding $parent[UserControl].((vm:HistoryViewModel)DataContext).OpenHistoryEntryCommand}"
-                      CommandParameter="{Binding}"
-                      VerticalAlignment="Center"/>
-            </Grid>
-          </Border>
-        </DataTemplate>
-      </ListBox.ItemTemplate>
-    </ListBox>
-  </StackPanel>
+    <!-- 页头 -->
+    <StackPanel Spacing="2" Margin="0,0,0,14">
+      <TextBlock Text="历史记录" Classes="page-title"/>
+      <TextBlock Text="最近使用的连接、快照和脚本文件,支持一键复用" Classes="page-subtitle"/>
+    </StackPanel>
+
+    <!-- 历史列表卡片 -->
+    <Border Grid.Row="1" Classes="panel" Padding="0">
+      <Grid RowDefinitions="Auto,*">
+        <!-- 表头 -->
+        <Grid ColumnDefinitions="3*,*,5*,Auto"
+              Margin="16,0"
+              MinHeight="32"
+              Background="{DynamicResource Ink50}">
+          <TextBlock Text="操作" Classes="table-header" VerticalAlignment="Center" Margin="4,0"/>
+          <TextBlock Grid.Column="1" Text="类型" Classes="table-header" VerticalAlignment="Center"/>
+          <TextBlock Grid.Column="2" Text="文件路径" Classes="table-header" VerticalAlignment="Center"/>
+          <TextBlock Grid.Column="3" Text="" Width="60"/>
+        </Grid>
+
+        <!-- 历史条目列表 -->
+        <ListBox Grid.Row="1"
+                 ItemsSource="{Binding RecentHistoryEntries}"
+                 Background="Transparent"
+                 BorderThickness="0">
+          <ListBox.Styles>
+            <Style Selector="ListBoxItem">
+              <Setter Property="Padding" Value="0"/>
+              <Setter Property="Margin" Value="0"/>
+            </Style>
+            <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+              <Setter Property="Background" Value="#08366FF5"/>
+            </Style>
+          </ListBox.Styles>
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <Grid ColumnDefinitions="3*,*,5*,Auto"
+                    Margin="16,0" MinHeight="40"
+                    Background="Transparent">
+                <!-- 标题 + 时间 -->
+                <StackPanel Spacing="1" VerticalAlignment="Center" Margin="4,0">
+                  <TextBlock Text="{Binding DisplayText}"
+                             FontWeight="SemiBold" FontSize="13"
+                             Foreground="{DynamicResource Ink800}"/>
+                </StackPanel>
+
+                <!-- 类型徽章 -->
+                <Border Grid.Column="1"
+                        CornerRadius="10" Padding="8,2"
+                        Background="{DynamicResource Ink100}"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Center">
+                  <TextBlock Text="{Binding Kind}"
+                             FontSize="11" FontWeight="SemiBold"
+                             Foreground="{DynamicResource Ink600}"/>
+                </Border>
+
+                <!-- 文件路径 -->
+                <TextBlock Grid.Column="2"
+                           Text="{Binding PathText}"
+                           FontFamily="Consolas, Menlo, monospace"
+                           FontSize="11"
+                           Foreground="{DynamicResource Ink400}"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"/>
+
+                <!-- 操作按钮 -->
+                <Button Grid.Column="3"
+                        Content="使用"
+                        Classes="ghost"
+                        Command="{Binding $parent[UserControl].((vm:HistoryViewModel)DataContext).OpenHistoryEntryCommand}"
+                        CommandParameter="{Binding}"
+                        VerticalAlignment="Center"
+                        Margin="8,0,0,0"/>
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </Grid>
+    </Border>
+  </Grid>
 </UserControl>

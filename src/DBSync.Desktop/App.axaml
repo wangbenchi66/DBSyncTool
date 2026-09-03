@@ -3,21 +3,220 @@
              xmlns:vm="using:DBSync.Desktop.ViewModels"
              xmlns:views="using:DBSync.Desktop.Views"
              x:Class="DBSync.Desktop.App">
+  <Application.Resources>
+    <!-- ===== 设计令牌：Brand 色阶 ===== -->
+    <SolidColorBrush x:Key="Brand50"  Color="#EEF4FF"/>
+    <SolidColorBrush x:Key="Brand100" Color="#DAE6FF"/>
+    <SolidColorBrush x:Key="Brand200" Color="#BDD2FF"/>
+    <SolidColorBrush x:Key="Brand300" Color="#90B3FF"/>
+    <SolidColorBrush x:Key="Brand400" Color="#5E8BFF"/>
+    <SolidColorBrush x:Key="Brand600" Color="#2549E0"/>
+    <SolidColorBrush x:Key="Brand700" Color="#1D39BD"/>
+    <SolidColorBrush x:Key="Brand800" Color="#1C3197"/>
+
+    <!-- ===== 设计令牌：Ink 灰阶 ===== -->
+    <SolidColorBrush x:Key="Ink50"  Color="#F7F8FA"/>
+    <SolidColorBrush x:Key="Ink100" Color="#EEF0F3"/>
+    <SolidColorBrush x:Key="Ink200" Color="#DDE2E8"/>
+    <SolidColorBrush x:Key="Ink300" Color="#BCC4CE"/>
+    <SolidColorBrush x:Key="Ink400" Color="#8893A3"/>
+    <SolidColorBrush x:Key="Ink500" Color="#5B6678"/>
+    <SolidColorBrush x:Key="Ink600" Color="#404A5C"/>
+    <SolidColorBrush x:Key="Ink700" Color="#2D3645"/>
+    <SolidColorBrush x:Key="Ink800" Color="#1F2632"/>
+    <SolidColorBrush x:Key="Ink900" Color="#131822"/>
+
+    <!-- ===== 设计令牌：语义色 ===== -->
+    <SolidColorBrush x:Key="SuccessLightBrush" Color="#D1FAE5"/>
+    <SolidColorBrush x:Key="SuccessBrush"      Color="#047857"/>
+    <SolidColorBrush x:Key="WarningLightBrush"  Color="#FEF3C7"/>
+    <SolidColorBrush x:Key="WarningBrush"       Color="#B45309"/>
+    <SolidColorBrush x:Key="DangerLightBrush"   Color="#FFE4E6"/>
+    <SolidColorBrush x:Key="DangerBrush"        Color="#B91C1C"/>
+    <SolidColorBrush x:Key="DiffLightBrush"     Color="#EDE9FE"/>
+    <SolidColorBrush x:Key="DiffBrush"          Color="#6D28D9"/>
+
+    <!-- ===== 设计令牌：语义别名（兼容旧引用） ===== -->
+    <SolidColorBrush x:Key="PageBackgroundBrush" Color="#F7F8FA"/>
+    <SolidColorBrush x:Key="PanelBackgroundBrush" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="PanelBorderBrush" Color="#DDE2E8"/>
+    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#1F2632"/>
+    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#5B6678"/>
+    <SolidColorBrush x:Key="AccentBrush" Color="#2549E0"/>
+  </Application.Resources>
+
   <Application.Styles>
     <FluentTheme/>
+
+    <!-- ===== 面板容器 ===== -->
+    <Style Selector="Border.panel">
+      <Setter Property="Background" Value="{DynamicResource PanelBackgroundBrush}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource PanelBorderBrush}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="8"/>
+      <Setter Property="Padding" Value="12"/>
+    </Style>
+
+    <!-- ===== 工具栏 ===== -->
+    <Style Selector="Border.toolbar">
+      <Setter Property="Background" Value="{DynamicResource PanelBackgroundBrush}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource PanelBorderBrush}"/>
+      <Setter Property="BorderThickness" Value="0,0,0,1"/>
+      <Setter Property="MinHeight" Value="44"/>
+      <Setter Property="Padding" Value="12,6"/>
+    </Style>
+
+    <!-- ===== 文字层级 ===== -->
+    <Style Selector="TextBlock.page-title">
+      <Setter Property="FontSize" Value="18"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="Foreground" Value="{DynamicResource Ink900}"/>
+    </Style>
+    <Style Selector="TextBlock.page-subtitle">
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="Foreground" Value="{DynamicResource Ink500}"/>
+    </Style>
+    <Style Selector="TextBlock.section-title">
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Foreground" Value="{DynamicResource Ink800}"/>
+    </Style>
+    <Style Selector="TextBlock.muted">
+      <Setter Property="Foreground" Value="{DynamicResource Ink500}"/>
+    </Style>
+    <Style Selector="TextBlock.mono">
+      <Setter Property="FontFamily" Value="Consolas, Menlo, monospace"/>
+      <Setter Property="Foreground" Value="{DynamicResource Ink700}"/>
+    </Style>
+
+    <!-- ===== 主按钮（brand 蓝底白字） ===== -->
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="{DynamicResource Brand600}"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="Padding" Value="14,6"/>
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="FontWeight" Value="Medium"/>
+      <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+    <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Brand700}"/>
+      <Setter Property="Foreground" Value="White"/>
+    </Style>
+
+    <!-- ===== 成功按钮（emerald 绿底白字） ===== -->
+    <Style Selector="Button.success">
+      <Setter Property="Background" Value="{DynamicResource SuccessBrush}"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="Padding" Value="14,6"/>
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="FontWeight" Value="Medium"/>
+      <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+    <Style Selector="Button.success:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#065F46"/>
+      <Setter Property="Foreground" Value="White"/>
+    </Style>
+
+    <!-- ===== 次按钮（白底边框） ===== -->
+    <Style Selector="Button.secondary">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="{DynamicResource Ink700}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Ink200}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="Padding" Value="14,6"/>
+      <Setter Property="FontSize" Value="13"/>
+    </Style>
+    <Style Selector="Button.secondary:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Ink50}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Ink800}"/>
+    </Style>
+
+    <!-- ===== 幽灵按钮（透明底，文字按钮风格） ===== -->
+    <Style Selector="Button.ghost">
+      <Setter Property="Background" Value="{DynamicResource Ink100}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Ink600}"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="Padding" Value="10,6"/>
+      <Setter Property="FontSize" Value="13"/>
+    </Style>
+    <Style Selector="Button.ghost:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Ink200}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Ink800}"/>
+    </Style>
+
+    <!-- ===== 危险按钮 ===== -->
+    <Style Selector="Button.danger">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="{DynamicResource Ink600}"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="Padding" Value="10,6"/>
+      <Setter Property="FontSize" Value="13"/>
+    </Style>
+    <Style Selector="Button.danger:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource DangerLightBrush}"/>
+      <Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/>
+    </Style>
+
+    <!-- ===== 表格列表（去底色去边框） ===== -->
+    <Style Selector="ListBox.table-list">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+
+    <!-- ===== 语义徽章 ===== -->
+    <Style Selector="Border.badge">
+      <Setter Property="CornerRadius" Value="10"/>
+      <Setter Property="Padding" Value="8,2"/>
+    </Style>
+    <Style Selector="Border.badge-success">
+      <Setter Property="Background" Value="{DynamicResource SuccessLightBrush}"/>
+      <Setter Property="CornerRadius" Value="10"/>
+      <Setter Property="Padding" Value="8,2"/>
+    </Style>
+    <Style Selector="Border.badge-warning">
+      <Setter Property="Background" Value="{DynamicResource WarningLightBrush}"/>
+      <Setter Property="CornerRadius" Value="10"/>
+      <Setter Property="Padding" Value="8,2"/>
+    </Style>
+    <Style Selector="Border.badge-danger">
+      <Setter Property="Background" Value="{DynamicResource DangerLightBrush}"/>
+      <Setter Property="CornerRadius" Value="10"/>
+      <Setter Property="Padding" Value="8,2"/>
+    </Style>
+    <Style Selector="Border.badge-diff">
+      <Setter Property="Background" Value="{DynamicResource DiffLightBrush}"/>
+      <Setter Property="CornerRadius" Value="10"/>
+      <Setter Property="Padding" Value="8,2"/>
+    </Style>
+
+    <!-- ===== 表头文字（小号、大写、灰色） ===== -->
+    <Style Selector="TextBlock.table-header">
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Foreground" Value="{DynamicResource Ink400}"/>
+    </Style>
   </Application.Styles>
+
   <Application.DataTemplates>
+    <DataTemplate DataType="vm:DashboardViewModel">
+      <views:DashboardView/>
+    </DataTemplate>
     <DataTemplate DataType="vm:ConnectionListViewModel">
       <views:ConnectionListView/>
     </DataTemplate>
-    <DataTemplate DataType="vm:ExportViewModel">
-      <views:ExportView/>
-    </DataTemplate>
-    <DataTemplate DataType="vm:CompareViewModel">
-      <views:CompareView/>
+    <DataTemplate DataType="vm:SyncWorkflowViewModel">
+      <views:SyncWorkflowView/>
     </DataTemplate>
     <DataTemplate DataType="vm:HistoryViewModel">
       <views:HistoryView/>
+    </DataTemplate>
+    <DataTemplate DataType="vm:SettingsViewModel">
+      <views:SettingsView/>
     </DataTemplate>
   </Application.DataTemplates>
 </Application>

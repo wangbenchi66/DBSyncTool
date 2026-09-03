@@ -12,10 +12,12 @@ namespace DBSync.Desktop.Views;
 public partial class MainWindow : Window
 {
     /// <summary>
-    /// 状态文本前景色转换器：错误时红色，正常时白色
+    /// 状态文本前景色转换器：错误时玫红，正常时深灰
     ///</summary>
     public static FuncValueConverter<bool, IBrush> ErrorForegroundConverter { get; } =
-        new(isError => isError ? Brushes.OrangeRed : Brushes.White);
+        new(isError => isError
+            ? new SolidColorBrush(Color.Parse("#B91C1C"))
+            : new SolidColorBrush(Color.Parse("#1F2632")));
 
     /// <summary>
     /// 允许关闭标志（确认后设置为 true）

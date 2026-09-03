@@ -5,109 +5,218 @@
              x:Class="DBSync.Desktop.Views.ExportView"
              x:DataType="vm:ExportViewModel"
              x:CompileBindings="True">
-  <ScrollViewer>
-    <StackPanel Spacing="12" Margin="16">
-      <TextBlock Text="导出快照" FontSize="20" FontWeight="SemiBold"/>
+  <Grid RowDefinitions="Auto,*"
+        RowSpacing="12"
+        Margin="16"
+        Background="{DynamicResource PageBackgroundBrush}">
 
-      <!-- 1. 选择连接 -->
-      <Border Padding="12" Background="#F9FAFB" BorderBrush="#E5E7EB" BorderThickness="1">
-        <StackPanel Spacing="10">
-          <TextBlock Text="1. 选择连接" FontWeight="SemiBold"/>
+    <!-- 顶部页头 + 工具栏 -->
+    <Border Classes="panel" Padding="12">
+      <Grid RowDefinitions="Auto,Auto">
+        <!-- 页头 -->
+        <StackPanel Spacing="2" Margin="0,0,0,10">
+          <TextBlock Text="导出快照" Classes="page-title"/>
+          <TextBlock Text="将数据库结构与数据导出为可携带的快照文件,支持加密和压缩" Classes="page-subtitle"/>
+        </StackPanel>
+
+        <!-- 工具栏 -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
           <ComboBox ItemsSource="{Binding Connections}"
                     SelectedItem="{Binding SelectedConnection}"
                     DisplayMemberBinding="{Binding Name}"
-                    HorizontalAlignment="Stretch"/>
-          <Button Content="加载表" Command="{Binding LoadTablesCommand}"/>
+                    MinWidth="200"/>
+          <Button Content="加载表" Classes="secondary" Command="{Binding LoadTablesCommand}"/>
+          <Button Content="开始导出" Classes="primary" Command="{Binding ExportSnapshotCommand}"/>
+          <Button Content="取消" Classes="ghost" Command="{Binding CancelExportCommand}"/>
         </StackPanel>
-      </Border>
+      </Grid>
+    </Border>
 
-      <!-- 2. 选择表 -->
-      <Border Padding="12" Background="#F9FAFB" BorderBrush="#E5E7EB" BorderThickness="1">
-        <StackPanel Spacing="10">
-          <TextBlock Text="2. 选择表" FontWeight="SemiBold"/>
-          <TextBox PlaceholderText="按表名过滤"
-                   input:InputMethod.IsInputMethodEnabled="False"
-                   Text="{Binding TableFilter, Mode=TwoWay}"/>
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Content="全选" Command="{Binding SelectAllTablesCommand}"/>
-            <Button Content="反选" Command="{Binding InvertTableSelectionCommand}"/>
-            <Button Content="模式全选" Command="{Binding SelectAllDataModesCommand}"/>
-            <Button Content="全部仅结构" Command="{Binding SelectSchemaOnlyModesCommand}"/>
-          </StackPanel>
-
-          <!-- 表列表 -->
-          <Border Padding="8" Background="#FFFFFF" BorderBrush="#E5E7EB" BorderThickness="1">
-            <Grid RowDefinitions="Auto,*">
-              <Grid ColumnDefinitions="40,2*,*,*,*,2*" Margin="4">
-                <TextBlock Text="选" FontWeight="SemiBold"/>
-                <TextBlock Grid.Column="1" Text="表名" FontWeight="SemiBold"/>
-                <TextBlock Grid.Column="2" Text="预估行数" FontWeight="SemiBold"/>
-                <TextBlock Grid.Column="3" Text="大小" FontWeight="SemiBold"/>
-                <TextBlock Grid.Column="4" Text="模式" FontWeight="SemiBold"/>
-                <TextBlock Grid.Column="5" Text="WHERE 条件" FontWeight="SemiBold"/>
-              </Grid>
-              <ListBox Grid.Row="1"
-                       ItemsSource="{Binding FilteredExportTables}"
-                       Height="250">
-                <ListBox.ItemTemplate>
-                  <DataTemplate>
-                    <Grid ColumnDefinitions="40,2*,*,*,*,2*" Margin="4">
-                      <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"/>
-                      <TextBlock Grid.Column="1" Text="{Binding FullName}" VerticalAlignment="Center"/>
-                      <TextBlock Grid.Column="2" Text="{Binding EstimatedRowCountText}" VerticalAlignment="Center"/>
-                      <TextBlock Grid.Column="3" Text="{Binding DataSizeText}" VerticalAlignment="Center"/>
-                      <StackPanel Grid.Column="4" Spacing="2">
-                        <CheckBox Content="结构+数据"
-                                  IsChecked="{Binding SyncData, Mode=TwoWay}"
-                                  IsEnabled="{Binding HasPrimaryKey}"/>
-                        <TextBlock Text="{Binding SyncModeText}" FontSize="12"/>
-                      </StackPanel>
-                      <TextBox Grid.Column="5"
-                               PlaceholderText="不含 WHERE"
-                               input:InputMethod.IsInputMethodEnabled="False"
-                               Text="{Binding WhereClause, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
-                    </Grid>
-                  </DataTemplate>
-                </ListBox.ItemTemplate>
-              </ListBox>
+    <!-- 主体：表选择 + 输出设置 -->
+    <Grid Grid.Row="1" ColumnDefinitions="2*,*" ColumnSpacing="12">
+      <!-- 左侧：表选择 -->
+      <Border Classes="panel" Padding="0">
+        <Grid RowDefinitions="Auto,Auto,Auto,*">
+          <!-- 标题 + 操作栏 -->
+          <Border Padding="12,8"
+                  BorderBrush="{DynamicResource Ink100}"
+                  BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="表选择" Classes="section-title" VerticalAlignment="Center"/>
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                <Button Content="全选" Classes="ghost" Command="{Binding SelectAllTablesCommand}"/>
+                <Button Content="反选" Classes="ghost" Command="{Binding InvertTableSelectionCommand}"/>
+                <Button Content="结构+数据" Classes="ghost" Command="{Binding SelectAllDataModesCommand}"/>
+                <Button Content="仅结构" Classes="ghost" Command="{Binding SelectSchemaOnlyModesCommand}"/>
+              </StackPanel>
             </Grid>
           </Border>
-        </StackPanel>
-      </Border>
 
-      <!-- 3. 密码和路径 -->
-      <Border Padding="12" Background="#F9FAFB" BorderBrush="#E5E7EB" BorderThickness="1">
-        <StackPanel Spacing="10">
-          <TextBlock Text="3. 密码和路径" FontWeight="SemiBold"/>
-          <TextBox PlaceholderText="加密密码（可不填）"
-                   input:InputMethod.IsInputMethodEnabled="False"
-                   Text="{Binding ExportPassword, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
-          <TextBox PlaceholderText="确认密码（可不填）"
-                   input:InputMethod.IsInputMethodEnabled="False"
-                   Text="{Binding ExportPasswordConfirm, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
-          <TextBox PlaceholderText="密码提示（明文写入快照文件）"
-                   input:InputMethod.IsInputMethodEnabled="False"
-                   Text="{Binding PasswordHint, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
-          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-            <TextBox PlaceholderText="导出目录"
+          <!-- 搜索栏 -->
+          <Border Grid.Row="1" Padding="12,6"
+                  Background="{DynamicResource Ink50}"
+                  BorderBrush="{DynamicResource Ink100}"
+                  BorderThickness="0,0,0,1">
+            <TextBox PlaceholderText="按表名过滤..."
                      input:InputMethod.IsInputMethodEnabled="False"
-                     Text="{Binding ExportDirectory, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
-                     IsReadOnly="True"/>
-            <Button Grid.Column="1" Content="选择路径" Command="{Binding BrowseExportDirectoryCommand}"/>
-          </Grid>
-          <TextBox PlaceholderText="文件名"
-                   input:InputMethod.IsInputMethodEnabled="False"
-                   Text="{Binding ExportFileName, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+                     Text="{Binding TableFilter, Mode=TwoWay}"/>
+          </Border>
 
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Content="开始导出" Command="{Binding ExportSnapshotCommand}"/>
-            <Button Content="取消" Command="{Binding CancelExportCommand}"/>
-          </StackPanel>
-          <ProgressBar Minimum="0" Maximum="100" Value="{Binding ExportProgress}"/>
-          <TextBlock Text="{Binding ExportProgressText}" TextWrapping="Wrap"/>
-          <TextBlock Text="{Binding ExportSummary}" TextWrapping="Wrap"/>
-        </StackPanel>
+          <!-- 表头 -->
+          <Grid Grid.Row="2"
+                ColumnDefinitions="40,2*,*,*,*,2*"
+                Margin="12,0"
+                MinHeight="30"
+                Background="{DynamicResource Ink50}">
+            <TextBlock Text="" Classes="table-header" Margin="4,0"/>
+            <TextBlock Grid.Column="1" Text="表名" Classes="table-header" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="2" Text="预估行数" Classes="table-header" VerticalAlignment="Center" TextAlignment="Right"/>
+            <TextBlock Grid.Column="3" Text="大小" Classes="table-header" VerticalAlignment="Center" TextAlignment="Right"/>
+            <TextBlock Grid.Column="4" Text="模式" Classes="table-header" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="5" Text="WHERE 条件" Classes="table-header" VerticalAlignment="Center"/>
+          </Grid>
+
+          <!-- 表列表 -->
+          <ListBox Grid.Row="3"
+                   ItemsSource="{Binding FilteredExportTables}"
+                   Background="Transparent"
+                   BorderThickness="0">
+            <ListBox.Styles>
+              <Style Selector="ListBoxItem">
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Margin" Value="0"/>
+              </Style>
+              <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="#08366FF5"/>
+              </Style>
+            </ListBox.Styles>
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <Grid ColumnDefinitions="40,2*,*,*,*,2*"
+                      Margin="12,0" MinHeight="36"
+                      Background="Transparent">
+                  <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" VerticalAlignment="Center"/>
+                  <TextBlock Grid.Column="1" Text="{Binding FullName}"
+                             FontFamily="Consolas, Menlo, monospace" FontSize="12"
+                             Foreground="{DynamicResource Ink700}"
+                             VerticalAlignment="Center"/>
+                  <TextBlock Grid.Column="2" Text="{Binding EstimatedRowCountText}"
+                             FontFamily="Consolas, Menlo, monospace" FontSize="12"
+                             Foreground="{DynamicResource Ink600}"
+                             TextAlignment="Right"
+                             VerticalAlignment="Center"/>
+                  <TextBlock Grid.Column="3" Text="{Binding DataSizeText}"
+                             FontFamily="Consolas, Menlo, monospace" FontSize="12"
+                             Foreground="{DynamicResource Ink600}"
+                             TextAlignment="Right"
+                             VerticalAlignment="Center"/>
+                  <StackPanel Grid.Column="4" Spacing="1" VerticalAlignment="Center">
+                    <CheckBox Content="结构+数据"
+                              IsChecked="{Binding SyncData, Mode=TwoWay}"
+                              IsEnabled="{Binding HasPrimaryKey}"
+                              FontSize="11"/>
+                    <TextBlock Text="{Binding SyncModeText}" FontSize="11"
+                               Foreground="{DynamicResource Ink400}"/>
+                  </StackPanel>
+                  <TextBox Grid.Column="5"
+                           PlaceholderText="不含 WHERE"
+                           input:InputMethod.IsInputMethodEnabled="False"
+                           Text="{Binding WhereClause, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                           FontFamily="Consolas, Menlo, monospace" FontSize="12"
+                           Padding="6,4"/>
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Grid>
       </Border>
-    </StackPanel>
-  </ScrollViewer>
+
+      <!-- 右侧：输出设置 -->
+      <Border Grid.Column="1" Classes="panel" Padding="0">
+        <Grid RowDefinitions="Auto,*">
+          <!-- 标题 -->
+          <Border Padding="12,8"
+                  BorderBrush="{DynamicResource Ink100}"
+                  BorderThickness="0,0,0,1">
+            <TextBlock Text="输出设置" Classes="section-title"/>
+          </Border>
+
+          <!-- 表单 -->
+          <ScrollViewer Grid.Row="1">
+            <StackPanel Spacing="14" Margin="12">
+              <!-- 加密密码 -->
+              <StackPanel Spacing="4">
+                <TextBlock Text="加密密码" FontSize="12" FontWeight="Medium"
+                           Foreground="{DynamicResource Ink600}"/>
+                <TextBox PlaceholderText="留空则不加密"
+                         PasswordChar="●"
+                         input:InputMethod.IsInputMethodEnabled="False"
+                         Text="{Binding ExportPassword, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+              </StackPanel>
+
+              <!-- 确认密码 -->
+              <StackPanel Spacing="4">
+                <TextBlock Text="确认密码" FontSize="12" FontWeight="Medium"
+                           Foreground="{DynamicResource Ink600}"/>
+                <TextBox PlaceholderText="再次输入密码"
+                         PasswordChar="●"
+                         input:InputMethod.IsInputMethodEnabled="False"
+                         Text="{Binding ExportPasswordConfirm, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+              </StackPanel>
+
+              <!-- 密码提示 -->
+              <StackPanel Spacing="4">
+                <TextBlock Text="快照提示" FontSize="12" FontWeight="Medium"
+                           Foreground="{DynamicResource Ink600}"/>
+                <TextBlock Text="明文写入快照文件,帮助回忆密码" FontSize="11"
+                           Foreground="{DynamicResource Ink400}"/>
+                <TextBox PlaceholderText="例如: 9月3号验收前快照"
+                         input:InputMethod.IsInputMethodEnabled="False"
+                         Text="{Binding PasswordHint, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+              </StackPanel>
+
+              <!-- 导出路径 -->
+              <StackPanel Spacing="4">
+                <TextBlock Text="输出路径" FontSize="12" FontWeight="Medium"
+                           Foreground="{DynamicResource Ink600}"/>
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                  <TextBox input:InputMethod.IsInputMethodEnabled="False"
+                           Text="{Binding ExportDirectory, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                           IsReadOnly="True"
+                           FontFamily="Consolas, Menlo, monospace" FontSize="12"/>
+                  <Button Grid.Column="1" Content="选择" Classes="ghost"
+                          Command="{Binding BrowseExportDirectoryCommand}"/>
+                </Grid>
+              </StackPanel>
+
+              <!-- 文件名 -->
+              <StackPanel Spacing="4">
+                <TextBlock Text="文件名" FontSize="12" FontWeight="Medium"
+                           Foreground="{DynamicResource Ink600}"/>
+                <TextBox input:InputMethod.IsInputMethodEnabled="False"
+                         Text="{Binding ExportFileName, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         FontFamily="Consolas, Menlo, monospace" FontSize="12"/>
+              </StackPanel>
+
+              <!-- 分隔线 + 进度区 -->
+              <Border BorderBrush="{DynamicResource Ink100}" BorderThickness="0,1,0,0" Padding="0,12,0,0">
+                <StackPanel Spacing="6">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Text="导出状态" FontSize="12"
+                               Foreground="{DynamicResource Ink500}"/>
+                  </Grid>
+                  <ProgressBar Minimum="0" Maximum="100" Value="{Binding ExportProgress}"
+                               Height="6" CornerRadius="3"/>
+                  <TextBlock Text="{Binding ExportProgressText}" FontSize="12"
+                             Foreground="{DynamicResource Ink600}" TextWrapping="Wrap"/>
+                  <TextBlock Text="{Binding ExportSummary}" FontSize="12"
+                             Foreground="{DynamicResource Ink500}" TextWrapping="Wrap"/>
+                </StackPanel>
+              </Border>
+            </StackPanel>
+          </ScrollViewer>
+        </Grid>
+      </Border>
+    </Grid>
+  </Grid>
 </UserControl>
