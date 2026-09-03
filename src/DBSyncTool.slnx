@@ -2,4 +2,5 @@
   <Project Path="DBSync.Core/DBSync.Core.csproj" />
   <Project Path="DBSync.Desktop/DBSync.Desktop.csproj" />
   <Project Path="DBSync.Tests/DBSync.Tests.csproj" />
+  <Project Path="DBSync.CLI/DBSync.CLI.csproj" />
 </Solution>
