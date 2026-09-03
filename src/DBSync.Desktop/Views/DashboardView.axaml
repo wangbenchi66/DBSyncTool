@@ -1,0 +1,162 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DBSync.Desktop.ViewModels"
+             x:Class="DBSync.Desktop.Views.DashboardView"
+             x:DataType="vm:DashboardViewModel"
+             x:CompileBindings="True">
+  <ScrollViewer>
+    <StackPanel Spacing="16" Margin="16" Background="{DynamicResource PageBackgroundBrush}">
+
+      <!-- 页头 -->
+      <StackPanel Spacing="2">
+        <TextBlock Text="仪表盘" Classes="page-title"/>
+        <TextBlock Text="快速了解数据库同步状态,一键进入常用操作" Classes="page-subtitle"/>
+      </StackPanel>
+
+      <!-- 统计卡片行 -->
+      <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="12">
+        <!-- 连接数 -->
+        <Border Classes="panel">
+          <StackPanel Spacing="6">
+            <TextBlock Text="数据库连接" FontSize="12" Foreground="{DynamicResource Ink500}"/>
+            <TextBlock Text="{Binding ConnectionCount}" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource Ink900}"/>
+            <TextBlock Text="已配置连接" FontSize="11" Foreground="{DynamicResource Ink400}"/>
+          </StackPanel>
+        </Border>
+        <!-- 本周快照 -->
+        <Border Grid.Column="1" Classes="panel">
+          <StackPanel Spacing="6">
+            <TextBlock Text="本周快照" FontSize="12" Foreground="{DynamicResource Ink500}"/>
+            <TextBlock Text="{Binding WeeklySnapshotCount}" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource WarningBrush}"/>
+            <TextBlock Text="导出次数" FontSize="11" Foreground="{DynamicResource Ink400}"/>
+          </StackPanel>
+        </Border>
+        <!-- 本周比对 -->
+        <Border Grid.Column="2" Classes="panel">
+          <StackPanel Spacing="6">
+            <TextBlock Text="本周比对" FontSize="12" Foreground="{DynamicResource Ink500}"/>
+            <TextBlock Text="{Binding WeeklyCompareCount}" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource DiffBrush}"/>
+            <TextBlock Text="比对次数" FontSize="11" Foreground="{DynamicResource Ink400}"/>
+          </StackPanel>
+        </Border>
+        <!-- 本周脚本 -->
+        <Border Grid.Column="3" Classes="panel">
+          <StackPanel Spacing="6">
+            <TextBlock Text="本周脚本" FontSize="12" Foreground="{DynamicResource Ink500}"/>
+            <TextBlock Text="{Binding WeeklyScriptCount}" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource SuccessBrush}"/>
+            <TextBlock Text="生成次数" FontSize="11" Foreground="{DynamicResource Ink400}"/>
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <!-- 快捷操作 + 最近活动 -->
+      <Grid ColumnDefinitions="*,2*" ColumnSpacing="12">
+        <!-- 快捷操作 -->
+        <Border Classes="panel" Padding="0">
+          <Grid RowDefinitions="Auto,*">
+            <Border Padding="12,8" BorderBrush="{DynamicResource Ink100}" BorderThickness="0,0,0,1">
+              <TextBlock Text="快捷操作" Classes="section-title"/>
+            </Border>
+            <StackPanel Grid.Row="1" Spacing="4" Margin="12">
+              <Button Content="导出新快照" Classes="primary" HorizontalAlignment="Stretch"
+                      Command="{Binding GoToExportCommand}"/>
+              <Button Content="快照比对" Classes="secondary" HorizontalAlignment="Stretch"
+                      Command="{Binding GoToCompareCommand}"/>
+              <Button Content="直连比对" Classes="ghost" HorizontalAlignment="Stretch"
+                      IsEnabled="False" ToolTip.Tip="v2.3 版本开放"/>
+              <Button Content="打开项目" Classes="ghost" HorizontalAlignment="Stretch"
+                      IsEnabled="False" ToolTip.Tip="v2.2 版本开放"/>
+            </StackPanel>
+          </Grid>
+        </Border>
+
+        <!-- 最近活动 -->
+        <Border Grid.Column="1" Classes="panel" Padding="0">
+          <Grid RowDefinitions="Auto,*">
+            <Border Padding="12,8" BorderBrush="{DynamicResource Ink100}" BorderThickness="0,0,0,1">
+              <TextBlock Text="最近活动" Classes="section-title"/>
+            </Border>
+            <ListBox Grid.Row="1" ItemsSource="{Binding RecentActivities}"
+                     Background="Transparent" BorderThickness="0">
+              <ListBox.Styles>
+                <Style Selector="ListBoxItem">
+                  <Setter Property="Padding" Value="0"/>
+                  <Setter Property="Margin" Value="0"/>
+                </Style>
+                <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+                  <Setter Property="Background" Value="#08366FF5"/>
+                </Style>
+              </ListBox.Styles>
+              <ListBox.ItemTemplate>
+                <DataTemplate>
+                  <Grid ColumnDefinitions="Auto,*,Auto" Margin="12,0" MinHeight="36" ColumnSpacing="10">
+                    <!-- 类型徽章 -->
+                    <Border CornerRadius="10" Padding="8,2"
+                            Background="{DynamicResource Ink100}"
+                            VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Kind}" FontSize="10" FontWeight="SemiBold"
+                                 Foreground="{DynamicResource Ink600}"/>
+                    </Border>
+                    <!-- 标题 -->
+                    <TextBlock Grid.Column="1" Text="{Binding Title}"
+                               FontSize="12" Foreground="{DynamicResource Ink700}"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"/>
+                    <!-- 时间 -->
+                    <TextBlock Grid.Column="2"
+                               Text="{Binding CreatedAt, StringFormat='{}{0:MM-dd HH:mm}'}"
+                               FontFamily="Consolas, Menlo, monospace" FontSize="11"
+                               Foreground="{DynamicResource Ink400}"
+                               VerticalAlignment="Center"/>
+                  </Grid>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </Grid>
+        </Border>
+      </Grid>
+
+      <!-- 连接概览卡片网格 -->
+      <Border Classes="panel" Padding="0">
+        <Grid RowDefinitions="Auto,*">
+          <Border Padding="12,8" BorderBrush="{DynamicResource Ink100}" BorderThickness="0,0,0,1">
+            <TextBlock Text="连接概览" Classes="section-title"/>
+          </Border>
+          <ItemsControl Grid.Row="1" ItemsSource="{Binding Connections}" Margin="8">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel Orientation="Horizontal"/>
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Width="200" Margin="4" Padding="12" CornerRadius="8"
+                        Background="White"
+                        BorderBrush="{DynamicResource Ink200}"
+                        BorderThickness="1">
+                  <StackPanel Spacing="6">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"
+                                 Foreground="{DynamicResource Ink800}"
+                                 TextTrimming="CharacterEllipsis"/>
+                      <Border Grid.Column="1" CornerRadius="10" Padding="6,1"
+                              Background="{DynamicResource Brand50}">
+                        <TextBlock Text="{Binding DbType}" FontSize="10" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource Brand700}"/>
+                      </Border>
+                    </Grid>
+                    <TextBlock Text="{Binding DisplayInfo}"
+                               FontFamily="Consolas, Menlo, monospace" FontSize="11"
+                               Foreground="{DynamicResource Ink500}"
+                               TextTrimming="CharacterEllipsis"/>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Grid>
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

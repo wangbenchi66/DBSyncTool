@@ -34,4 +34,19 @@ public sealed record AppSettings
     /// 上次使用的导航页面标识
     ///</summary>
     public string? LastPageName { get; init; }
+
+    /// <summary>
+    /// 默认导出目录
+    ///</summary>
+    public string? DefaultExportDirectory { get; init; }
+
+    /// <summary>
+    /// 默认启用加密导出
+    ///</summary>
+    public bool DefaultEncrypt { get; init; } = true;
+
+    /// <summary>
+    /// 默认启用事务包裹
+    ///</summary>
+    public bool DefaultUseTransaction { get; init; } = true;
 }

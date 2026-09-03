@@ -165,19 +165,87 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
     private bool hasPendingOperation;
 
     /// <summary>
+    /// 当前过滤规则
+    ///</summary>
+    [ObservableProperty]
+    private FilterOptions filterOptions = new();
+
+    /// <summary>
+    /// 过滤规则：包含模式文本（每行一条正则）
+    ///</summary>
+    [ObservableProperty]
+    private string filterIncludeText = "";
+
+    /// <summary>
+    /// 过滤规则：排除模式文本（每行一条正则）
+    ///</summary>
+    [ObservableProperty]
+    private string filterExcludeText = "";
+
+    /// <summary>
+    /// 过滤规则：忽略表注释差异
+    ///</summary>
+    [ObservableProperty]
+    private bool filterIgnoreComments;
+
+    /// <summary>
+    /// 过滤规则：忽略列顺序差异
+    ///</summary>
+    [ObservableProperty]
+    private bool filterIgnoreColumnOrder;
+
+    /// <summary>
+    /// 过滤规则：忽略索引名称差异
+    ///</summary>
+    [ObservableProperty]
+    private bool filterIgnoreIndexNames;
+
+    /// <summary>
     /// 与快照数据库类型匹配的可用连接列表
     ///</summary>
     public ObservableCollection<ConnectionItemViewModel> CompareConnections { get; } = new();
 
     /// <summary>
-    /// 结构差异预览树节点集合
+    /// 结构差异预览树节点集合（全量，供脚本生成使用）
     ///</summary>
     public ObservableCollection<CompareSchemaNodeViewModel> CompareSchemaNodes { get; } = new();
 
     /// <summary>
-    /// 数据差异摘要集合
+    /// 数据差异摘要集合（全量，供脚本生成使用）
     ///</summary>
     public ObservableCollection<CompareDataSummaryViewModel> CompareDataSummaries { get; } = new();
+
+    /// <summary>
+    /// 两端都有但结构不同的节点
+    ///</summary>
+    public ObservableCollection<CompareSchemaNodeViewModel> DifferentSchemaNodes { get; } = new();
+
+    /// <summary>
+    /// 仅快照中存在的节点（基线有、目标库无）
+    ///</summary>
+    public ObservableCollection<CompareSchemaNodeViewModel> OnlySourceSchemaNodes { get; } = new();
+
+    /// <summary>
+    /// 仅目标库中存在的节点（目标库有、快照无）
+    ///</summary>
+    public ObservableCollection<CompareSchemaNodeViewModel> OnlyTargetSchemaNodes { get; } = new();
+
+    /// <summary>
+    /// 完全相同的节点
+    ///</summary>
+    public ObservableCollection<CompareSchemaNodeViewModel> IdenticalSchemaNodes { get; } = new();
+
+    /// <summary>
+    /// 当前选中的差异项（用于底部 SQL Diff 面板）
+    ///</summary>
+    [ObservableProperty]
+    private CompareSchemaNodeViewModel? selectedDiffItem;
+
+    /// <summary>
+    /// 选中项的 SQL 差异文本
+    ///</summary>
+    [ObservableProperty]
+    private string selectedDiffSqlText = string.Empty;
 
     /// <summary>
     /// 快照文件中的可选表
@@ -396,7 +464,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
                 return;
             }
 
-            _loadedSchemaDiff = SchemaComparer.Compare(selectedCurrentTables, selectedSnapshotTables);
+            _loadedSchemaDiff = SchemaComparer.Compare(selectedCurrentTables, selectedSnapshotTables, FilterOptions);
             BuildSchemaPreview(_loadedSchemaDiff);
 
             var currentTableMap = selectedCurrentTables.ToDictionary(t => t.FullName, t => t, StringComparer.OrdinalIgnoreCase);
@@ -557,11 +625,79 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
             ?? CompareConnections.FirstOrDefault();
     }
 
+    /// <summary>
+    /// 当选中的差异项变化时，生成该项的 SQL 差异文本
+    ///</summary>
+    partial void OnSelectedDiffItemChanged(CompareSchemaNodeViewModel? value)
+    {
+        if (value is null || _loadedSchemaDiff is null || _loadedSnapshot is null)
+        {
+            SelectedDiffSqlText = string.Empty;
+            return;
+        }
+
+        try
+        {
+            var dbType = SelectedCompareConnection?.ToDatabaseConnection()?.DbType ?? _loadedSnapshot.Manifest.DbType;
+            var tableName = value.Title.Split('（')[0].Trim();
+            var sb = new StringBuilder();
+
+            var modifiedTable = _loadedSchemaDiff.ModifiedTables
+                .FirstOrDefault(t => t.SourceTable.FullName.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+            if (modifiedTable is not null)
+            {
+                var alterSql = _sqlGenerator.GenerateAlterTable(dbType, modifiedTable);
+                sb.AppendLine($"-- {tableName} 结构变更");
+                sb.AppendLine(string.Join(Environment.NewLine, alterSql));
+            }
+
+            var addedTable = _loadedSchemaDiff.AddedTables
+                .FirstOrDefault(t => t.FullName.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+            if (addedTable is not null)
+            {
+                var createSql = _sqlGenerator.GenerateCreateTable(dbType, addedTable);
+                sb.AppendLine($"-- {tableName} 新增表");
+                sb.AppendLine(createSql);
+            }
+
+            var removedTable = _loadedSchemaDiff.RemovedTables
+                .FirstOrDefault(t => t.FullName.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+            if (removedTable is not null)
+            {
+                sb.AppendLine($"-- {tableName} 删除表");
+                sb.AppendLine($"DROP TABLE {tableName};");
+            }
+
+            if (_loadedDataDiffs.TryGetValue(tableName, out var dataDiff) && dataDiff.RowsToInsert.Count > 0)
+            {
+                var table = _loadedSnapshot.Tables.GetValueOrDefault(tableName);
+                if (table is not null)
+                {
+                    var rows = SqlGeneratorRows.ResolveRowsToInsert(table, dataDiff, _loadedSnapshot.FullData);
+                    var insertSql = _sqlGenerator.GenerateInsertStatements(dbType, table, rows);
+                    sb.AppendLine($"-- {tableName} 数据新增 {dataDiff.RowsToInsert.Count} 行");
+                    sb.AppendLine(string.Join(Environment.NewLine, insertSql));
+                }
+            }
+
+            SelectedDiffSqlText = sb.ToString().TrimEnd();
+        }
+        catch (Exception ex)
+        {
+            SelectedDiffSqlText = $"-- 生成 SQL 时出错: {ex.Message}";
+        }
+    }
+
     partial void OnSelectedCompareConnectionChanged(ConnectionItemViewModel? value)
     {
         DatabaseCompareTables.Clear();
         CompareSchemaNodes.Clear();
         CompareDataSummaries.Clear();
+        DifferentSchemaNodes.Clear();
+        OnlySourceSchemaNodes.Clear();
+        OnlyTargetSchemaNodes.Clear();
+        IdenticalSchemaNodes.Clear();
+        SelectedDiffItem = null;
         _loadedSchemaDiff = null;
         _loadedDataDiffs.Clear();
         _comparedSnapshotTables = [];
@@ -593,6 +729,110 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
     {
         foreach (var table in DatabaseCompareTables)
             table.IsSelected = !table.IsSelected;
+    }
+
+    /// <summary>
+    /// 从界面输入构建 FilterOptions 并应用到表列表勾选
+    ///</summary>
+    [RelayCommand]
+    private void ApplyFilter()
+    {
+        FilterOptions = new FilterOptions
+        {
+            IncludePatterns = FilterIncludeText.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList(),
+            ExcludePatterns = FilterExcludeText.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList(),
+            IgnoreTableComments = FilterIgnoreComments,
+            IgnoreColumnOrder = FilterIgnoreColumnOrder,
+            IgnoreIndexNames = FilterIgnoreIndexNames
+        };
+
+        foreach (var t in SnapshotCompareTables)
+            t.IsSelected = FilterOptions.IsTableIncluded(t.FullName);
+        foreach (var t in DatabaseCompareTables)
+            t.IsSelected = FilterOptions.IsTableIncluded(t.FullName);
+
+        StatusText = "过滤规则已应用";
+    }
+
+    /// <summary>
+    /// 保存当前配置为项目文件
+    ///</summary>
+    [RelayCommand]
+    private async Task SaveProjectAsync()
+    {
+        var window = _windowProvider.GetMainWindow();
+        if (window is null)
+            return;
+
+        var file = await window.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "保存项目文件",
+            SuggestedFileName = $"sync_{DateTime.Now:yyyyMMdd}.dbsync-project",
+            FileTypeChoices = [new FilePickerFileType("DBSync 项目") { Patterns = ["*.dbsync-project"] }]
+        });
+
+        var path = file?.TryGetLocalPath();
+        if (path is null)
+            return;
+
+        var project = new SyncProject
+        {
+            Name = Path.GetFileNameWithoutExtension(path),
+            SourceConnectionName = SelectedCompareConnection?.Name,
+            SnapshotPath = CompareSnapshotPath,
+            Filters = FilterOptions,
+            UseTransaction = UseTransaction,
+        };
+
+        await Storage.ProjectStore.SaveAsync(path, project);
+        StatusText = "项目已保存";
+        LogSummary = path;
+    }
+
+    /// <summary>
+    /// 加载项目文件并恢复配置
+    ///</summary>
+    [RelayCommand]
+    private async Task LoadProjectAsync()
+    {
+        var window = _windowProvider.GetMainWindow();
+        if (window is null)
+            return;
+
+        var files = await window.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "打开项目文件",
+            AllowMultiple = false,
+            FileTypeFilter = [new FilePickerFileType("DBSync 项目") { Patterns = ["*.dbsync-project"] }]
+        });
+
+        var localPath = files.FirstOrDefault()?.TryGetLocalPath();
+        if (localPath is null)
+            return;
+
+        var project = await Storage.ProjectStore.LoadAsync(localPath);
+
+        if (!string.IsNullOrWhiteSpace(project.SnapshotPath))
+            CompareSnapshotPath = project.SnapshotPath;
+
+        UseTransaction = project.UseTransaction;
+        FilterOptions = project.Filters;
+        FilterIncludeText = string.Join("\n", project.Filters.IncludePatterns);
+        FilterExcludeText = string.Join("\n", project.Filters.ExcludePatterns);
+        FilterIgnoreComments = project.Filters.IgnoreTableComments;
+        FilterIgnoreColumnOrder = project.Filters.IgnoreColumnOrder;
+        FilterIgnoreIndexNames = project.Filters.IgnoreIndexNames;
+
+        if (!string.IsNullOrWhiteSpace(project.SourceConnectionName))
+        {
+            var conn = CompareConnections.FirstOrDefault(c =>
+                string.Equals(c.Name, project.SourceConnectionName, StringComparison.OrdinalIgnoreCase));
+            if (conn is not null)
+                SelectedCompareConnection = conn;
+        }
+
+        StatusText = "项目已加载";
+        LogSummary = localPath;
     }
 
     private void RefreshSnapshotCompareTables()
@@ -631,20 +871,35 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
     private void BuildSchemaPreview(SchemaDiff schemaDiff)
     {
         CompareSchemaNodes.Clear();
+        DifferentSchemaNodes.Clear();
+        OnlySourceSchemaNodes.Clear();
+        OnlyTargetSchemaNodes.Clear();
+        IdenticalSchemaNodes.Clear();
 
         var cyclicTables = schemaDiff.CyclicDependencyGroups
             .SelectMany(group => group)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         foreach (var table in schemaDiff.AddedTables.OrderBy(t => t.FullName))
-            CompareSchemaNodes.Add(CreateSchemaNode(FormatTableTitle(table), "新增表", true, false, table.Columns.Select(c => CreateLeafNode($"列 {FormatColumnTitle(c)}", "将随表一起创建")).ToList()));
+        {
+            var node = CreateSchemaNode(FormatTableTitle(table), "新增表", true, false, table.Columns.Select(c => CreateLeafNode($"列 {FormatColumnTitle(c)}", "将随表一起创建")).ToList());
+            node.Category = DiffCategory.OnlyTarget;
+            CompareSchemaNodes.Add(node);
+            OnlyTargetSchemaNodes.Add(node);
+        }
 
         foreach (var table in schemaDiff.RemovedTables.OrderBy(t => t.FullName))
-            CompareSchemaNodes.Add(CreateSchemaNode(FormatTableTitle(table), "删除表，默认未勾选", false, true));
+        {
+            var node = CreateSchemaNode(FormatTableTitle(table), "删除表，默认未勾选", false, true);
+            node.Category = DiffCategory.OnlySource;
+            CompareSchemaNodes.Add(node);
+            OnlySourceSchemaNodes.Add(node);
+        }
 
         foreach (var diff in schemaDiff.ModifiedTables.OrderBy(t => t.SourceTable.FullName))
         {
             var node = CreateSchemaNode(FormatTableTitle(diff.SourceTable), "结构变更", true, cyclicTables.Contains(diff.SourceTable.FullName));
+            node.Category = DiffCategory.Different;
 
             foreach (var columnDiff in diff.ColumnDiffs)
             {
@@ -677,12 +932,16 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
                 node.Children.Add(CreateLeafNode("表注释", "注释已变更"));
 
             CompareSchemaNodes.Add(node);
+            DifferentSchemaNodes.Add(node);
         }
 
         foreach (var cycle in schemaDiff.CyclicDependencyGroups)
         {
             var title = $"循环外键依赖：{string.Join("、", cycle)}";
-            CompareSchemaNodes.Add(CreateSchemaNode(title, "需手动处理", false, true));
+            var node = CreateSchemaNode(title, "需手动处理", false, true);
+            node.Category = DiffCategory.Different;
+            CompareSchemaNodes.Add(node);
+            DifferentSchemaNodes.Add(node);
         }
     }
 
@@ -708,6 +967,9 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
                 : $"新增 {diff.RowsToInsert.Count} 行，删除 {diff.DeletedRows.Count} 行，变更 {diff.ChangedRows.Count} 行";
             var sqlPreview = BuildDataSqlPreview(table, diff);
 
+            var hasDiff = diff.RowsToInsert.Count > 0 || diff.DeletedRows.Count > 0 || diff.ChangedRows.Count > 0;
+            var dataCategory = diff.Skipped ? DiffCategory.Identical : (hasDiff ? DiffCategory.Different : DiffCategory.Identical);
+
             CompareDataSummaries.Add(new CompareDataSummaryViewModel
             {
                 TableName = table.FullName,
@@ -718,7 +980,8 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
                 ChangedRows = diff.ChangedRows.Count,
                 SummaryBrush = ResolveDataBrush(diff),
                 SqlPreviewText = sqlPreview,
-                HasSqlPreview = !string.IsNullOrWhiteSpace(sqlPreview)
+                HasSqlPreview = !string.IsNullOrWhiteSpace(sqlPreview),
+                Category = dataCategory
             });
         }
     }

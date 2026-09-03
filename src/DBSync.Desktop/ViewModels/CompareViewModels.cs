@@ -5,10 +5,30 @@ using System.Collections.ObjectModel;
 namespace DBSync.Desktop.ViewModels;
 
 /// <summary>
+/// 差异分类枚举：两端不同 / 仅快照有 / 仅目标库有 / 完全相同
+///</summary>
+public enum DiffCategory
+{
+    /// <summary>两端都有但结构不同</summary>
+    Different,
+    /// <summary>仅快照中存在（基线有、目标库无）</summary>
+    OnlySource,
+    /// <summary>仅目标库中存在（目标库有、快照无）</summary>
+    OnlyTarget,
+    /// <summary>完全相同</summary>
+    Identical
+}
+
+/// <summary>
 /// 结构差异预览树节点的视图模型
 ///</summary>
 public sealed partial class CompareSchemaNodeViewModel : ObservableObject
 {
+    /// <summary>
+    /// 差异分类
+    ///</summary>
+    [ObservableProperty]
+    private DiffCategory category;
     /// <summary>
     /// 节点标题（表名或列名）
     ///</summary>
@@ -56,6 +76,12 @@ public sealed partial class CompareSchemaNodeViewModel : ObservableObject
 ///</summary>
 public sealed partial class CompareDataSummaryViewModel : ObservableObject
 {
+    /// <summary>
+    /// 差异分类
+    ///</summary>
+    [ObservableProperty]
+    private DiffCategory category;
+
     /// <summary>
     /// 表全名
     ///</summary>

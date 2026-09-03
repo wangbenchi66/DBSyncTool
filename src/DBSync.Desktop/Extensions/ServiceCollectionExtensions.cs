@@ -31,10 +31,13 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IWindowProvider>(sp => sp.GetRequiredService<WindowProvider>());
 
         // 页面 ViewModel（Singleton）
+        services.AddSingleton<DashboardViewModel>();
         services.AddSingleton<ConnectionListViewModel>();
         services.AddSingleton<ExportViewModel>();
         services.AddSingleton<CompareViewModel>();
+        services.AddSingleton<DirectCompareViewModel>();
         services.AddSingleton<HistoryViewModel>();
+        services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<MainWindowViewModel>();
 
         // 窗口

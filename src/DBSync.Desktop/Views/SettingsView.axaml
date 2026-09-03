@@ -1,0 +1,113 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:input="using:Avalonia.Input"
+             xmlns:vm="using:DBSync.Desktop.ViewModels"
+             x:Class="DBSync.Desktop.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel"
+             x:CompileBindings="True">
+  <ScrollViewer>
+    <StackPanel Spacing="16" Margin="16" Background="{DynamicResource PageBackgroundBrush}" MaxWidth="640">
+
+      <!-- 页头 -->
+      <StackPanel Spacing="2">
+        <TextBlock Text="设置" Classes="page-title"/>
+        <TextBlock Text="全局配置项,影响导出、比对和脚本生成的默认行为" Classes="page-subtitle"/>
+      </StackPanel>
+
+      <!-- 数据安全 -->
+      <Border Classes="panel" Padding="0">
+        <Grid RowDefinitions="Auto,*">
+          <Border Padding="12,8" BorderBrush="{DynamicResource Ink100}" BorderThickness="0,0,0,1">
+            <TextBlock Text="数据安全" Classes="section-title"/>
+          </Border>
+          <StackPanel Grid.Row="1" Spacing="16" Margin="16">
+            <StackPanel Spacing="4">
+              <TextBlock Text="行数警告阈值" FontSize="12" FontWeight="Medium"
+                         Foreground="{DynamicResource Ink600}"/>
+              <TextBlock Text="单次比对数据超过该行数时弹出二次确认" FontSize="11"
+                         Foreground="{DynamicResource Ink400}"/>
+              <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="8">
+                <TextBox Width="160"
+                         input:InputMethod.IsInputMethodEnabled="False"
+                         Text="{Binding RowCountWarningThresholdText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         FontFamily="Consolas, Menlo, monospace"/>
+                <TextBlock Text="行" FontSize="13" Foreground="{DynamicResource Ink500}"
+                           VerticalAlignment="Center" Grid.Column="1"/>
+              </Grid>
+            </StackPanel>
+
+            <CheckBox IsChecked="{Binding DefaultEncrypt, Mode=TwoWay}" FontSize="13">
+              <StackPanel Spacing="2">
+                <TextBlock Text="默认启用加密导出" Foreground="{DynamicResource Ink700}"/>
+                <TextBlock Text="新建导出任务时默认勾选 AES-256 加密" FontSize="11"
+                           Foreground="{DynamicResource Ink400}"/>
+              </StackPanel>
+            </CheckBox>
+
+            <CheckBox IsChecked="{Binding DefaultUseTransaction, Mode=TwoWay}" FontSize="13">
+              <StackPanel Spacing="2">
+                <TextBlock Text="默认启用事务包裹" Foreground="{DynamicResource Ink700}"/>
+                <TextBlock Text="生成升级脚本时默认用 BEGIN/COMMIT 包裹" FontSize="11"
+                           Foreground="{DynamicResource Ink400}"/>
+              </StackPanel>
+            </CheckBox>
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <!-- 导出设置 -->
+      <Border Classes="panel" Padding="0">
+        <Grid RowDefinitions="Auto,*">
+          <Border Padding="12,8" BorderBrush="{DynamicResource Ink100}" BorderThickness="0,0,0,1">
+            <TextBlock Text="导出设置" Classes="section-title"/>
+          </Border>
+          <StackPanel Grid.Row="1" Spacing="16" Margin="16">
+            <StackPanel Spacing="4">
+              <TextBlock Text="默认导出目录" FontSize="12" FontWeight="Medium"
+                         Foreground="{DynamicResource Ink600}"/>
+              <TextBlock Text="留空则每次手动选择" FontSize="11"
+                         Foreground="{DynamicResource Ink400}"/>
+              <TextBox input:InputMethod.IsInputMethodEnabled="False"
+                       Text="{Binding DefaultExportDirectory, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                       PlaceholderText="例如 E:\Downloads"
+                       FontFamily="Consolas, Menlo, monospace" FontSize="12"/>
+            </StackPanel>
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <!-- 关于 -->
+      <Border Classes="panel" Padding="0">
+        <Grid RowDefinitions="Auto,*">
+          <Border Padding="12,8" BorderBrush="{DynamicResource Ink100}" BorderThickness="0,0,0,1">
+            <TextBlock Text="关于" Classes="section-title"/>
+          </Border>
+          <StackPanel Grid.Row="1" Spacing="8" Margin="16">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+              <TextBlock Text="版本" FontSize="12" Foreground="{DynamicResource Ink500}"/>
+              <TextBlock Grid.Column="1" Text="v2.1.0" FontSize="12" FontWeight="SemiBold"
+                         Foreground="{DynamicResource Ink800}"/>
+            </Grid>
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+              <TextBlock Text="框架" FontSize="12" Foreground="{DynamicResource Ink500}"/>
+              <TextBlock Grid.Column="1" Text=".NET 10 + Avalonia UI" FontSize="12"
+                         Foreground="{DynamicResource Ink700}"/>
+            </Grid>
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+              <TextBlock Text="数据库" FontSize="12" Foreground="{DynamicResource Ink500}"/>
+              <TextBlock Grid.Column="1" Text="SQL Server / MySQL / PostgreSQL / SQLite" FontSize="12"
+                         Foreground="{DynamicResource Ink700}"/>
+            </Grid>
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <!-- 操作按钮 -->
+      <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+        <Button Content="重置为默认" Classes="ghost" Command="{Binding ResetToDefaultsCommand}"/>
+        <Button Content="保存设置" Classes="primary" Command="{Binding SaveSettingsCommand}"/>
+      </StackPanel>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>
