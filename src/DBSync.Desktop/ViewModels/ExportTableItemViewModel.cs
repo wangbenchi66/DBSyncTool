@@ -1,4 +1,6 @@
+using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using DBSync.Core.Models;
 
 namespace DBSync.Desktop.ViewModels;
@@ -42,6 +44,11 @@ public sealed partial class ExportTableItemViewModel : ObservableObject
     public TableModel Table => _table;
 
     /// <summary>
+    /// 表注释
+    ///</summary>
+    public string Comment => string.IsNullOrWhiteSpace(_table.Comment) ? string.Empty : _table.Comment;
+
+    /// <summary>
     /// 表是否有主键
     ///</summary>
     public bool HasPrimaryKey => _table.HasPrimaryKey;
@@ -50,8 +57,25 @@ public sealed partial class ExportTableItemViewModel : ObservableObject
     /// 同步模式显示文本
     ///</summary>
     public string SyncModeText => HasPrimaryKey
-        ? SyncData ? "结构+数据" : "结构"
-        : "⚠ 无主键，仅结构";
+        ? SyncData ? "结构+数据" : "仅结构"
+        : "无主键";
+
+    /// <summary>
+    /// 同步模式标签的背景色画刷
+    ///</summary>
+    public IBrush SyncModeBrush => HasPrimaryKey
+        ? SyncData ? Brushes.RoyalBlue : Brushes.Gray
+        : Brushes.OrangeRed;
+
+    /// <summary>
+    /// 切换同步数据模式（仅结构 ↔ 结构+数据）
+    ///</summary>
+    [RelayCommand]
+    private void ToggleSyncData()
+    {
+        if (HasPrimaryKey)
+            SyncData = !SyncData;
+    }
 
     /// <summary>
     /// 创建导出表项视图模型
@@ -109,6 +133,7 @@ public sealed partial class ExportTableItemViewModel : ObservableObject
         }
 
         OnPropertyChanged(nameof(SyncModeText));
+        OnPropertyChanged(nameof(SyncModeBrush));
     }
 
     /// <summary>
@@ -120,6 +145,7 @@ public sealed partial class ExportTableItemViewModel : ObservableObject
         if (confirmed)
         {
             OnPropertyChanged(nameof(SyncModeText));
+            OnPropertyChanged(nameof(SyncModeBrush));
             return;
         }
 
@@ -132,6 +158,7 @@ public sealed partial class ExportTableItemViewModel : ObservableObject
         {
             _isRevertingSyncData = false;
             OnPropertyChanged(nameof(SyncModeText));
+            OnPropertyChanged(nameof(SyncModeBrush));
         }
     }
 }

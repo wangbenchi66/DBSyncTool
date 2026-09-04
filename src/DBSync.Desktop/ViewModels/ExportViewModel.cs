@@ -328,6 +328,9 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
             return;
         }
 
+        if (!await ShowExportOptionsAsync())
+            return;
+
         if (!string.Equals(ExportPassword, ExportPasswordConfirm, StringComparison.Ordinal))
         {
             StatusText = "两次输入的密码不一致";
@@ -446,7 +449,9 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
         FilteredExportTables.Clear();
         var filtered = string.IsNullOrWhiteSpace(TableFilter)
             ? ExportTables
-            : ExportTables.Where(t => t.FullName.Contains(TableFilter, StringComparison.OrdinalIgnoreCase));
+            : ExportTables.Where(t =>
+                t.FullName.Contains(TableFilter, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrEmpty(t.Comment) && t.Comment.Contains(TableFilter, StringComparison.OrdinalIgnoreCase)));
 
         foreach (var table in filtered)
             FilteredExportTables.Add(table);
@@ -563,6 +568,20 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
             return true;
 
         var dialog = new ConfirmLargeExportWindow(table);
+        return await dialog.ShowDialog<bool>(window);
+    }
+
+    /// <summary>
+    /// 打开导出输出设置弹窗
+    ///</summary>
+    /// <returns>用户确认则返回 true，取消返回 false</returns>
+    private async Task<bool> ShowExportOptionsAsync()
+    {
+        var window = _windowProvider.GetMainWindow();
+        if (window is null)
+            return true;
+
+        var dialog = new ExportOptionsWindow(this);
         return await dialog.ShowDialog<bool>(window);
     }
 

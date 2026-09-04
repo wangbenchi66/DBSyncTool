@@ -236,6 +236,11 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
     public ObservableCollection<CompareSchemaNodeViewModel> IdenticalSchemaNodes { get; } = new();
 
     /// <summary>
+    /// 有数据差异的表节点（新增/删除/变更行）
+    ///</summary>
+    public ObservableCollection<CompareSchemaNodeViewModel> DataDiffSchemaNodes { get; } = new();
+
+    /// <summary>
     /// 当前选中的差异项（用于底部 SQL Diff 面板）
     ///</summary>
     [ObservableProperty]
@@ -464,7 +469,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
                 return;
             }
 
-            _loadedSchemaDiff = SchemaComparer.Compare(selectedCurrentTables, selectedSnapshotTables, FilterOptions);
+            _loadedSchemaDiff = SchemaComparer.Compare(selectedSnapshotTables, selectedCurrentTables, FilterOptions);
             BuildSchemaPreview(_loadedSchemaDiff);
 
             var currentTableMap = selectedCurrentTables.ToDictionary(t => t.FullName, t => t, StringComparer.OrdinalIgnoreCase);
@@ -484,7 +489,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
                 if (!currentTableMap.TryGetValue(table.FullName, out var currentTable))
                 {
                     _loadedDataDiffs[table.FullName] = table.HasPrimaryKey
-                        ? DataComparer.Compare([], snapshotRows, false)
+                        ? DataComparer.Compare(snapshotRows, [], false)
                         : DataDiff.NoPrimaryKey;
                     continue;
                 }
@@ -504,7 +509,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
                     CompareProgressText = $"正在比对 {i + 1}/{snapshotTables.Count}：{table.FullName}，当前行 {currentRow}";
                 }
 
-                _loadedDataDiffs[table.FullName] = DataComparer.Compare(currentRows, snapshotRows, false);
+                _loadedDataDiffs[table.FullName] = DataComparer.Compare(snapshotRows, currentRows, false);
             }
 
             BuildDataPreview(_loadedDataDiffs, selectedSnapshotTables);
@@ -697,6 +702,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
         OnlySourceSchemaNodes.Clear();
         OnlyTargetSchemaNodes.Clear();
         IdenticalSchemaNodes.Clear();
+        DataDiffSchemaNodes.Clear();
         SelectedDiffItem = null;
         _loadedSchemaDiff = null;
         _loadedDataDiffs.Clear();
@@ -955,6 +961,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
         IEnumerable<TableModel> tables)
     {
         CompareDataSummaries.Clear();
+        DataDiffSchemaNodes.Clear();
 
         foreach (var table in tables.OrderBy(t => t.FullName))
         {
@@ -983,6 +990,19 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
                 HasSqlPreview = !string.IsNullOrWhiteSpace(sqlPreview),
                 Category = dataCategory
             });
+
+            if (hasDiff)
+            {
+                var node = new CompareSchemaNodeViewModel
+                {
+                    Title = FormatTableTitle(table),
+                    StatusText = summary,
+                    IsSelected = true,
+                    StatusBrush = ResolveDataBrush(diff),
+                    Category = DiffCategory.Different
+                };
+                DataDiffSchemaNodes.Add(node);
+            }
         }
     }
 

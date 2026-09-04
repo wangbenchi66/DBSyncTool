@@ -9,7 +9,7 @@ DBSyncTool 是一款跨平台桌面工具，用于在网络隔离环境之间通
 **核心工作流程（两阶段）：**
 1. **导出基线**：在目标库（生产）导出 `.dbsync` 快照（结构元数据 + 行哈希指纹）
 2. **比对生成**：在源库（测试）加载快照，比对差异，生成 `Upgrade.sql` + `Rollback.sql`
-3. 
+
 ### 编码行为准则（Karpathy Guidelines）
 
 每次编写、修改或审查代码时，**始终**遵守以下四条原则（来源：`.claude/skills/karpathy-guidelines.md`）：
@@ -23,45 +23,59 @@ DBSyncTool 是一款跨平台桌面工具，用于在网络隔离环境之间通
 
 | 层级 | 技术 |
 |------|------|
-| 框架 | .NET 8 LTS |
-| UI | **Avalonia UI** + CommunityToolkit.MVVM（跨平台，当前主要在 Windows 上开发）|
+| 框架 | .NET 10 |
+| UI | **Avalonia UI 12.x** + CommunityToolkit.MVVM 8.x（跨平台，当前主要在 Windows 上开发）|
 | ORM/数据库访问 | **Easy.SqlSugar.Core**（自研，基于 SqlSugar，天然支持 SQL Server、MySQL、PostgreSQL、SQLite 等）|
 | 缓存 | **Easy.Cache.Core**（自研）|
 | 日志 | **Easy.Serilog.Core**（自研）|
 | 测试数据生成 | **Easy.Bogus.Core**（自研）|
 | 序列化 | System.Text.Json |
 | 压缩/加密 | System.IO.Compression.ZipArchive + System.Security.Cryptography.Aes（AES-256）|
-| 依赖注入 | Microsoft.Extensions.DependencyInjection |
-| 测试 | xUnit + Moq |
+| 依赖注入 | Microsoft.Extensions.DependencyInjection + Hosting |
+| 测试 | xUnit |
 
-> **平台策略**：当前主要在 Windows 上开发，但 Avalonia 天然跨平台，`DBSync.Core` 和 `DBSync.Providers` 层不得引入任何 Windows 专有 API。
+> **平台策略**：当前主要在 Windows 上开发，但 Avalonia 天然跨平台，`DBSync.Core` 层不得引入任何 Windows 专有 API。
 
 ## 解决方案结构
 
 ```
 src/
 ├── DBSync.Core/               # 核心引擎类库（无 UI 依赖）
-│   ├── Models/                # TableModel、ColumnModel、IndexModel、RowHash 等元数据模型
-│   ├── Schema/                # ISchemaReader 接口 + 各数据库实现
-│   │   ├── SqlServerSchemaReader.cs
-│   │   ├── MySqlSchemaReader.cs
-│   │   ├── PostgresSchemaReader.cs
-│   │   └── SqliteSchemaReader.cs
-│   ├── Comparers/             # SchemaComparer（结构对比）、DataComparer（数据对比）
+│   ├── Models/                # TableModel、ColumnModel、IndexModel、RowHash、SchemaDiff、DataDiff 等
+│   ├── Schema/                # ISchemaReader 接口 + DatabaseSchemaReader 分发器 + 各数据库实现
+│   ├── Comparers/             # SchemaComparer（结构对比）、DataComparer（数据对比）、FkTopologicalSorter
+│   ├── Data/                  # IDataFingerprinter 接口 + 各数据库行哈希读取实现
 │   ├── Snapshot/              # 快照导出器、加载器、AES 加解密
 │   ├── SqlGenerators/         # ISqlGenerator 接口 + 各数据库方言 DDL+DML 实现
-│   │   ├── SqlServerSqlGenerator.cs
-│   │   ├── MySqlSqlGenerator.cs
-│   │   ├── PostgresSqlGenerator.cs
-│   │   └── SqliteSqlGenerator.cs
-│   └── Extensions/            # 扩展方法
+│   ├── Execution/             # IScriptExecutor 脚本执行引擎
+│   ├── Extensions/            # AddDbSyncCore() 等扩展方法
+│   └── DbDialectSupport.cs   # 列类型映射、标识符转义、CSV 处理
 ├── DBSync.Desktop/            # Avalonia UI 桌面应用（MVVM，跨平台）
-│   ├── ViewModels/
-│   ├── Views/
-│   ├── Services/              # 对话框、文件选择器等 UI 服务
-│   └── Resources/
-└── DBSync.Tests/              # 单元测试 + 集成测试
+│   ├── ViewModels/            # CommunityToolkit.Mvvm 的 ObservableObject 派生类
+│   ├── Views/                 # AXAML 视图（含 DataTemplate 映射）
+│   ├── Services/              # 对话框、加密、窗口提供者等 UI 服务
+│   ├── Storage/               # JSON 设置持久化、加密连接存储、项目文件读写
+│   └── Models/                # AppSettings、RecentHistoryItem
+├── DBSync.CLI/                # 命令行工具（程序集名 dbsync）
+│   └── Program.cs             # export / compare / script / execute 四个子命令
+└── DBSync.Tests/              # 单元测试（xUnit + Easy.Bogus.Core）
 ```
+
+### 核心接口分发模式
+
+`ISchemaReader`、`ISqlGenerator`、`IDataFingerprinter` 均采用**分发器 + 方言实现**模式：`DatabaseSchemaReader`/`DatabaseSqlGenerator`/`DatabaseDataFingerprinter` 根据 `DatabaseType` 枚举路由到对应的 SqlServer/MySql/Postgres/Sqlite 实现类。新增数据库方言时需同时实现三个接口并在分发器中注册。
+
+### Desktop MVVM 架构
+
+- `MainWindowViewModel` 管理 5 个导航页：仪表盘、连接管理、同步工作台、历史记录、设置
+- `SyncWorkflowViewModel` 是薄包装层，组合三个子 ViewModel：`ExportViewModel`（导出快照）、`CompareViewModel`（快照比对）、`DirectCompareViewModel`（直连比对）
+- 所有页 ViewModel 实现 `IPageViewModel`（`StatusText` + `LogSummary`），状态向上转发到 `MainWindowViewModel`
+- DI 注册在 `DBSync.Desktop/Extensions/ServiceCollectionExtensions.cs`，所有 ViewModel 注册为 Singleton
+- 入口 `Program.cs` 使用 `Host.CreateDefaultBuilder` 构建宿主，通过 `App.Services` 静态属性暴露 `IServiceProvider`
+
+### 设计体系
+
+`App.axaml` 定义了 Brand/Ink 色阶和公共样式（panel、toolbar、button variants: primary/success/secondary/ghost/danger、badge-* 等），所有视图通过 DynamicResource 引用。
 
 ## 常用命令
 
@@ -77,11 +91,23 @@ dotnet test --filter "ClassName=SchemaComparerTests"
 dotnet test --filter "FullyQualifiedName~MethodName"
 
 # 运行桌面应用
-dotnet run --project DBSync.Desktop
+dotnet run --project src/DBSync.Desktop
+
+# 运行 CLI 工具
+dotnet run --project src/DBSync.CLI -- export --connection "Server=..." --output snapshot.dbsync
+dotnet run --project src/DBSync.CLI -- compare --snapshot snapshot.dbsync --connection "Server=..."
 
 # 发布（自包含单文件）
-dotnet publish DBSync.Desktop -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
+dotnet publish src/DBSync.Desktop -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
 ```
+
+### CLI 退出码
+
+| 退出码 | 含义 |
+|--------|------|
+| 0 | 成功 / 无差异 |
+| 1 | 存在差异 |
+| 2 | 错误 |
 
 ## 架构关键约束
 
