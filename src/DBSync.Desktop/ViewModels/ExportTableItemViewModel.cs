@@ -161,4 +161,13 @@ public sealed partial class ExportTableItemViewModel : ObservableObject
             OnPropertyChanged(nameof(SyncModeBrush));
         }
     }
+
+    /// <summary>
+    /// 切换当前表的勾选状态
+    ///</summary>
+    [RelayCommand]
+    private void ToggleSelected()
+    {
+        IsSelected = !IsSelected;
+    }
 }

@@ -154,6 +154,11 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
     private string rowCountWarningThresholdText = "100000";
 
     /// <summary>
+    /// 是否全选当前筛选列表中的表
+    ///</summary>
+    private bool? areAllFilteredTablesSelected;
+
+    /// <summary>
     /// 可用的数据库连接列表
     ///</summary>
     public ObservableCollection<ConnectionItemViewModel> Connections { get; } = new();
@@ -167,6 +172,25 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
     /// 按 TableFilter 筛选后的表列表，绑定到界面展示
     ///</summary>
     public ObservableCollection<ExportTableItemViewModel> FilteredExportTables { get; } = new();
+
+    /// <summary>
+    /// 当前筛选列表是否全选。true 表示全选，false 表示全不选，null 表示部分选中。
+    ///</summary>
+    public bool? AreAllFilteredTablesSelected
+    {
+        get => areAllFilteredTablesSelected;
+        set
+        {
+            if (SetProperty(ref areAllFilteredTablesSelected, value))
+            {
+                if (value is bool selected)
+                {
+                    foreach (var table in FilteredExportTables)
+                        table.IsSelected = selected;
+                }
+            }
+        }
+    }
 
     /// <summary>
     /// 初始化导出视图模型，加载设置和连接列表
@@ -225,14 +249,17 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
             var tables = await _schemaReader.ReadAllTablesAsync(connection);
             foreach (var table in tables.OrderBy(t => t.FullName))
             {
-                ExportTables.Add(new ExportTableItemViewModel(table)
+                var item = new ExportTableItemViewModel(table)
                 {
                     RowCountWarningThreshold = ParseRowCountWarningThreshold(),
                     ConfirmLargeExportAsync = ConfirmLargeExportAsync
-                });
+                };
+                item.PropertyChanged += OnExportTableItemPropertyChanged;
+                ExportTables.Add(item);
             }
 
             ApplyTableFilter();
+            RefreshSelectAllState();
             StatusText = $"已加载 {ExportTables.Count} 张表";
             LogSummary = "请选择需要写入快照的表。";
             HasPendingOperation = true;
@@ -253,6 +280,8 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
     {
         foreach (var table in FilteredExportTables)
             table.IsSelected = true;
+
+        RefreshSelectAllState();
     }
 
     /// <summary>
@@ -263,6 +292,8 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
     {
         foreach (var table in FilteredExportTables)
             table.IsSelected = !table.IsSelected;
+
+        RefreshSelectAllState();
     }
 
     /// <summary>
@@ -455,6 +486,8 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
 
         foreach (var table in filtered)
             FilteredExportTables.Add(table);
+
+        RefreshSelectAllState();
     }
 
     /// <summary>
@@ -544,6 +577,39 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
         var path = BuildExportPath();
         if (path is not null)
             ExportPath = path;
+    }
+
+    /// <summary>
+    /// 表项勾选状态变化时刷新表头全选状态
+    ///</summary>
+    /// <param name="sender">表项对象</param>
+    /// <param name="e">属性变化参数</param>
+    private void OnExportTableItemPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ExportTableItemViewModel.IsSelected))
+            RefreshSelectAllState();
+    }
+
+    /// <summary>
+    /// 刷新表头全选状态
+    ///</summary>
+    private void RefreshSelectAllState()
+    {
+        if (FilteredExportTables.Count == 0)
+        {
+            areAllFilteredTablesSelected = false;
+            OnPropertyChanged(nameof(AreAllFilteredTablesSelected));
+            return;
+        }
+
+        var selectedCount = FilteredExportTables.Count(t => t.IsSelected);
+        areAllFilteredTablesSelected = selectedCount switch
+        {
+            0 => false,
+            var count when count == FilteredExportTables.Count => true,
+            _ => null
+        };
+        OnPropertyChanged(nameof(AreAllFilteredTablesSelected));
     }
 
     /// <summary>

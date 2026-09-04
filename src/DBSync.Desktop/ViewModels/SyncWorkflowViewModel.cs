@@ -97,6 +97,9 @@ public partial class SyncWorkflowViewModel : ObservableObject, IPageViewModel
         };
         StatusText = activePage.StatusText;
         LogSummary = activePage.LogSummary;
+
+        if (value == 2)
+            DirectCompare.RefreshConnections();
     }
 
     /// <summary>

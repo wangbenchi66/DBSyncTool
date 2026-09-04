@@ -1,0 +1,101 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:input="using:Avalonia.Input"
+        xmlns:vm="using:DBSync.Desktop.ViewModels"
+        x:Class="DBSync.Desktop.Views.ExportOptionsWindow"
+        x:DataType="vm:ExportViewModel"
+        x:CompileBindings="True"
+        Title="导出输出设置"
+        Width="520"
+        Height="560"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False">
+  <Grid RowDefinitions="*,Auto" Background="{DynamicResource PageBackgroundBrush}">
+    <ScrollViewer>
+      <StackPanel Spacing="14" Margin="16">
+        <StackPanel Spacing="4">
+          <TextBlock Text="加密密码" FontSize="12" FontWeight="Medium"
+                     Foreground="{DynamicResource Ink600}"/>
+          <TextBox PlaceholderText="留空则不加密"
+                   PasswordChar="●"
+                   input:InputMethod.IsInputMethodEnabled="False"
+                   Text="{Binding ExportPassword, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+        </StackPanel>
+
+        <StackPanel Spacing="4">
+          <TextBlock Text="确认密码" FontSize="12" FontWeight="Medium"
+                     Foreground="{DynamicResource Ink600}"/>
+          <TextBox PlaceholderText="再次输入密码"
+                   PasswordChar="●"
+                   input:InputMethod.IsInputMethodEnabled="False"
+                   Text="{Binding ExportPasswordConfirm, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+        </StackPanel>
+
+        <StackPanel Spacing="4">
+          <TextBlock Text="快照提示" FontSize="12" FontWeight="Medium"
+                     Foreground="{DynamicResource Ink600}"/>
+          <TextBlock Text="明文写入快照文件,帮助回忆密码" FontSize="11"
+                     Foreground="{DynamicResource Ink400}"/>
+          <TextBox PlaceholderText="例如: 9月3号验收前快照"
+                   input:InputMethod.IsInputMethodEnabled="False"
+                   Text="{Binding PasswordHint, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+        </StackPanel>
+
+        <StackPanel Spacing="4">
+          <TextBlock Text="输出路径" FontSize="12" FontWeight="Medium"
+                     Foreground="{DynamicResource Ink600}"/>
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+            <TextBox input:InputMethod.IsInputMethodEnabled="False"
+                     Text="{Binding ExportDirectory, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                     IsReadOnly="True"
+                     FontFamily="Consolas, Menlo, monospace" FontSize="12"/>
+            <Button Grid.Column="1" Content="选择" Classes="ghost"
+                    Command="{Binding BrowseExportDirectoryCommand}"/>
+          </Grid>
+        </StackPanel>
+
+        <StackPanel Spacing="4">
+          <TextBlock Text="文件名" FontSize="12" FontWeight="Medium"
+                     Foreground="{DynamicResource Ink600}"/>
+          <TextBox input:InputMethod.IsInputMethodEnabled="False"
+                   Text="{Binding ExportFileName, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                   FontFamily="Consolas, Menlo, monospace" FontSize="12"/>
+        </StackPanel>
+
+        <StackPanel Spacing="4">
+          <TextBlock Text="行数阈值" FontSize="12" FontWeight="Medium"
+                     Foreground="{DynamicResource Ink600}"/>
+          <TextBlock Text="新增表完整数据超过该值时会弹出确认" FontSize="11"
+                     Foreground="{DynamicResource Ink400}"/>
+          <TextBox input:InputMethod.IsInputMethodEnabled="False"
+                   Text="{Binding RowCountWarningThresholdText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                   FontFamily="Consolas, Menlo, monospace" FontSize="12"
+                   Width="160"/>
+        </StackPanel>
+
+        <Border BorderBrush="{DynamicResource Ink100}" BorderThickness="0,1,0,0" Padding="0,12,0,0">
+          <StackPanel Spacing="6">
+            <TextBlock Text="当前输出" FontSize="12" Foreground="{DynamicResource Ink500}"/>
+            <TextBlock Text="{Binding ExportPath}" FontSize="12"
+                       Foreground="{DynamicResource Ink700}"
+                       FontFamily="Consolas, Menlo, monospace"
+                       TextWrapping="Wrap"/>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+
+    <Border Grid.Row="1" Padding="16,10"
+            Background="{DynamicResource Ink50}"
+            BorderBrush="{DynamicResource Ink200}"
+            BorderThickness="0,1,0,0">
+      <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+        <TextBlock Text="确认后将开始导出" FontSize="12"
+                   Foreground="{DynamicResource Ink500}"
+                   VerticalAlignment="Center"/>
+        <Button Grid.Column="1" x:Name="CancelButton" Content="取消" Classes="secondary"/>
+        <Button Grid.Column="2" x:Name="ConfirmButton" Content="继续导出" Classes="primary"/>
+      </Grid>
+    </Border>
+  </Grid>
+</Window>

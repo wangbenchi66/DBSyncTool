@@ -100,6 +100,12 @@ public sealed partial class ConnectionEditViewModel : ObservableObject
     private string additionalParameters = "";
 
     /// <summary>
+    /// 连接所属环境
+    ///</summary>
+    [ObservableProperty]
+    private ConnectionEnvironment environment = ConnectionEnvironment.Unspecified;
+
+    /// <summary>
     /// 原始连接字符串（高级编辑模式）
     ///</summary>
     [ObservableProperty]
@@ -162,6 +168,7 @@ public sealed partial class ConnectionEditViewModel : ObservableObject
             Schema = connection.Schema;
             Charset = connection.Charset;
             AdditionalParameters = connection.AdditionalParameters;
+            Environment = connection.Environment;
         }
         finally
         {
@@ -353,7 +360,8 @@ public sealed partial class ConnectionEditViewModel : ObservableObject
             UseWindowsAuth = UseWindowsAuth,
             Schema = Schema,
             Charset = Charset,
-            AdditionalParameters = AdditionalParameters
+            AdditionalParameters = AdditionalParameters,
+            Environment = Environment
         };
         return conn with { ConnectionString = conn.BuildConnectionString() };
     }

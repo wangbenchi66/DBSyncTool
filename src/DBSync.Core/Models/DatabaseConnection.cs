@@ -68,6 +68,11 @@ public sealed record DatabaseConnection
     public string AdditionalParameters { get; init; } = "";
 
     /// <summary>
+    /// 连接所属环境
+    ///</summary>
+    public ConnectionEnvironment Environment { get; init; } = ConnectionEnvironment.Unspecified;
+
+    /// <summary>
     /// 根据结构化字段拼接对应数据库方言的完整连接字符串
     ///</summary>
     /// <returns>拼接后的连接字符串</returns>

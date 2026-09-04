@@ -29,7 +29,7 @@
         </Grid>
 
         <!-- 历史条目列表 -->
-        <ListBox Grid.Row="1"
+        <ListBox Classes="WithoutCheck" Grid.Row="1"
                  ItemsSource="{Binding RecentHistoryEntries}"
                  Background="Transparent"
                  BorderThickness="0">

@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DBSync.Core\DBSync.Core.csproj" />
+    <ProjectReference Include="..\DBSync.Desktop\DBSync.Desktop.csproj" />
   </ItemGroup>
 
 </Project>

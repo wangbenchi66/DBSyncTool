@@ -1,8 +1,10 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:suki="clr-namespace:SukiUI;assembly=SukiUI"
              xmlns:vm="using:DBSync.Desktop.ViewModels"
              xmlns:views="using:DBSync.Desktop.Views"
-             x:Class="DBSync.Desktop.App">
+             x:Class="DBSync.Desktop.App"
+             RequestedThemeVariant="Light">
   <Application.Resources>
     <!-- ===== 设计令牌：Brand 色阶 ===== -->
     <SolidColorBrush x:Key="Brand50"  Color="#EEF4FF"/>
@@ -47,6 +49,15 @@
 
   <Application.Styles>
     <FluentTheme/>
+    <suki:SukiTheme ThemeColor="Blue"/>
+    <Style Selector="Button">
+      <Setter Property="Padding" Value="12,6"/>
+      <Setter Property="MinWidth" Value="96"/>
+      <Setter Property="MinHeight" Value="32"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="CornerRadius" Value="6"/>
+    </Style>
 
     <!-- ===== 面板容器 ===== -->
     <Style Selector="Border.panel">
@@ -94,7 +105,11 @@
       <Setter Property="Background" Value="{DynamicResource Brand600}"/>
       <Setter Property="Foreground" Value="White"/>
       <Setter Property="CornerRadius" Value="6"/>
-      <Setter Property="Padding" Value="14,6"/>
+      <Setter Property="Padding" Value="12,6"/>
+      <Setter Property="MinWidth" Value="96"/>
+      <Setter Property="MinHeight" Value="32"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
       <Setter Property="FontSize" Value="13"/>
       <Setter Property="FontWeight" Value="Medium"/>
       <Setter Property="BorderThickness" Value="0"/>
@@ -109,7 +124,11 @@
       <Setter Property="Background" Value="{DynamicResource SuccessBrush}"/>
       <Setter Property="Foreground" Value="White"/>
       <Setter Property="CornerRadius" Value="6"/>
-      <Setter Property="Padding" Value="14,6"/>
+      <Setter Property="Padding" Value="12,6"/>
+      <Setter Property="MinWidth" Value="96"/>
+      <Setter Property="MinHeight" Value="32"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
       <Setter Property="FontSize" Value="13"/>
       <Setter Property="FontWeight" Value="Medium"/>
       <Setter Property="BorderThickness" Value="0"/>
@@ -126,7 +145,11 @@
       <Setter Property="BorderBrush" Value="{DynamicResource Ink200}"/>
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="CornerRadius" Value="6"/>
-      <Setter Property="Padding" Value="14,6"/>
+      <Setter Property="Padding" Value="12,6"/>
+      <Setter Property="MinWidth" Value="96"/>
+      <Setter Property="MinHeight" Value="32"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
       <Setter Property="FontSize" Value="13"/>
     </Style>
     <Style Selector="Button.secondary:pointerover /template/ ContentPresenter">
@@ -140,7 +163,11 @@
       <Setter Property="Foreground" Value="{DynamicResource Ink600}"/>
       <Setter Property="BorderThickness" Value="0"/>
       <Setter Property="CornerRadius" Value="6"/>
-      <Setter Property="Padding" Value="10,6"/>
+      <Setter Property="Padding" Value="12,6"/>
+      <Setter Property="MinWidth" Value="96"/>
+      <Setter Property="MinHeight" Value="32"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
       <Setter Property="FontSize" Value="13"/>
     </Style>
     <Style Selector="Button.ghost:pointerover /template/ ContentPresenter">
@@ -154,7 +181,11 @@
       <Setter Property="Foreground" Value="{DynamicResource Ink600}"/>
       <Setter Property="BorderThickness" Value="0"/>
       <Setter Property="CornerRadius" Value="6"/>
-      <Setter Property="Padding" Value="10,6"/>
+      <Setter Property="Padding" Value="12,6"/>
+      <Setter Property="MinWidth" Value="96"/>
+      <Setter Property="MinHeight" Value="32"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
       <Setter Property="FontSize" Value="13"/>
     </Style>
     <Style Selector="Button.danger:pointerover /template/ ContentPresenter">

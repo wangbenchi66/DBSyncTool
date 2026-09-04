@@ -15,6 +15,11 @@ namespace DBSync.Desktop.ViewModels;
 public sealed partial class ConnectionListViewModel : ObservableObject, IPageViewModel
 {
     /// <summary>
+    /// 连接列表变更通知
+    ///</summary>
+    public event Action? ConnectionsChanged;
+
+    /// <summary>
     /// 连接配置持久化存储
     ///</summary>
     private readonly IConnectionStore _connectionStore;
@@ -111,6 +116,7 @@ public sealed partial class ConnectionListViewModel : ObservableObject, IPageVie
             SelectedConnection = item;
             SaveConnections();
             StatusText = $"已添加连接：{item.Name}";
+            ConnectionsChanged?.Invoke();
         }
     }
 
@@ -141,6 +147,7 @@ public sealed partial class ConnectionListViewModel : ObservableObject, IPageVie
             SelectedConnection = updated;
             SaveConnections();
             StatusText = $"已更新连接：{updated.Name}";
+            ConnectionsChanged?.Invoke();
         }
     }
 
@@ -197,6 +204,7 @@ public sealed partial class ConnectionListViewModel : ObservableObject, IPageVie
         SelectedConnection = Connections.FirstOrDefault();
         SaveConnections();
         StatusText = "已删除连接";
+        ConnectionsChanged?.Invoke();
     }
 
     /// <summary>
@@ -240,6 +248,7 @@ public sealed partial class ConnectionListViewModel : ObservableObject, IPageVie
             settings = settings with { RowCountWarningThreshold = threshold };
             _appSettingsStore.Save(settings);
             StatusText = "设置已保存";
+            ConnectionsChanged?.Invoke();
         }
         else
         {

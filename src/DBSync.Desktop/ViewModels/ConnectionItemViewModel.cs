@@ -75,6 +75,12 @@ public sealed partial class ConnectionItemViewModel : ObservableObject
     private string additionalParameters = "";
 
     /// <summary>
+    /// 连接所属环境
+    ///</summary>
+    [ObservableProperty]
+    private ConnectionEnvironment environment = ConnectionEnvironment.Unspecified;
+
+    /// <summary>
     /// 根据结构化字段拼接的完整连接字符串
     ///</summary>
     public string ConnectionString => ToDatabaseConnection().ConnectionString;
@@ -89,10 +95,33 @@ public sealed partial class ConnectionItemViewModel : ObservableObject
             if (DbType == DatabaseType.Sqlite)
                 return Server;
             var info = Server;
+            if (Port.HasValue)
+                info += $":{Port.Value}";
             if (!string.IsNullOrEmpty(Database))
                 info += $" / {Database}";
             return info;
         }
+    }
+
+    /// <summary>
+    /// 环境显示文本
+    ///</summary>
+    public string EnvironmentText => Environment switch
+    {
+        ConnectionEnvironment.Development => "开发",
+        ConnectionEnvironment.Testing => "测试",
+        ConnectionEnvironment.Staging => "预发",
+        ConnectionEnvironment.Production => "生产",
+        _ => "未设置"
+    };
+
+    /// <summary>
+    /// 环境变更后刷新派生显示文本
+    ///</summary>
+    /// <param name="value">新的环境值</param>
+    partial void OnEnvironmentChanged(ConnectionEnvironment value)
+    {
+        OnPropertyChanged(nameof(EnvironmentText));
     }
 
     /// <summary>
@@ -114,7 +143,8 @@ public sealed partial class ConnectionItemViewModel : ObservableObject
             UseWindowsAuth = UseWindowsAuth,
             Schema = Schema,
             Charset = Charset,
-            AdditionalParameters = AdditionalParameters
+            AdditionalParameters = AdditionalParameters,
+            Environment = Environment
         };
         return conn with { ConnectionString = conn.BuildConnectionString() };
     }
@@ -138,7 +168,8 @@ public sealed partial class ConnectionItemViewModel : ObservableObject
             UseWindowsAuth = connection.UseWindowsAuth,
             Schema = connection.Schema,
             Charset = connection.Charset,
-            AdditionalParameters = connection.AdditionalParameters
+            AdditionalParameters = connection.AdditionalParameters,
+            Environment = connection.Environment
         };
     }
 }

@@ -69,7 +69,7 @@
           </Border>
 
           <!-- 列表 -->
-          <ListBox Grid.Row="2" ItemsSource="{Binding SnapshotCompareTables}"
+          <ListBox Classes="WithoutCheck" Grid.Row="2" ItemsSource="{Binding SnapshotCompareTables}"
                    Background="Transparent" BorderThickness="0">
             <ListBox.Styles>
               <Style Selector="ListBoxItem">
@@ -118,7 +118,7 @@
           </Border>
 
           <!-- 列表 -->
-          <ListBox Grid.Row="1" ItemsSource="{Binding DatabaseCompareTables}"
+          <ListBox Classes="WithoutCheck" Grid.Row="1" ItemsSource="{Binding DatabaseCompareTables}"
                    Background="Transparent" BorderThickness="0">
             <ListBox.Styles>
               <Style Selector="ListBoxItem">

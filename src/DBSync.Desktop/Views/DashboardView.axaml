@@ -76,7 +76,7 @@
             <Border Padding="12,8" BorderBrush="{DynamicResource Ink100}" BorderThickness="0,0,0,1">
               <TextBlock Text="最近活动" Classes="section-title"/>
             </Border>
-            <ListBox Grid.Row="1" ItemsSource="{Binding RecentActivities}"
+            <ListBox Classes="WithoutCheck" Grid.Row="1" ItemsSource="{Binding RecentActivities}"
                      Background="Transparent" BorderThickness="0">
               <ListBox.Styles>
                 <Style Selector="ListBoxItem">

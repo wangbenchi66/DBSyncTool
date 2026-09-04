@@ -97,7 +97,7 @@
                 <DataGridTemplateColumn Header="模式" Width="90">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate x:DataType="vm:ExportTableItemViewModel">
-                      <Button Command="{Binding ToggleSyncDataCommand}" Classes="ghost" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="0">
+                      <Button Command="{Binding ToggleSyncDataCommand}" Classes="ghost" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="0" MinWidth="0" MinHeight="0">
                         <Border Background="{Binding SyncModeBrush}" CornerRadius="10" Padding="8,2">
                           <TextBlock Text="{Binding SyncModeText}" Foreground="White" FontSize="10" FontWeight="SemiBold"/>
                         </Border>
@@ -156,7 +156,7 @@
                   </StackPanel>
                 </Grid>
               </Border>
-              <ListBox Grid.Row="1" ItemsSource="{Binding SnapshotCompareTables}" Background="Transparent" BorderThickness="0">
+              <ListBox Classes="WithoutCheck" Grid.Row="1" ItemsSource="{Binding SnapshotCompareTables}" Background="Transparent" BorderThickness="0">
                 <ListBox.Styles>
                   <Style Selector="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/></Style>
                   <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="#08366FF5"/></Style>
@@ -186,7 +186,7 @@
                   </StackPanel>
                 </Grid>
               </Border>
-              <ListBox Grid.Row="1" ItemsSource="{Binding DatabaseCompareTables}" Background="Transparent" BorderThickness="0">
+              <ListBox Classes="WithoutCheck" Grid.Row="1" ItemsSource="{Binding DatabaseCompareTables}" Background="Transparent" BorderThickness="0">
                 <ListBox.Styles>
                   <Style Selector="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/></Style>
                   <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="#08366FF5"/></Style>
@@ -241,11 +241,10 @@
                 </StackPanel>
               </Expander.Header>
               <Border Classes="panel" Padding="0" Margin="0,4,0,0">
-                <ListBox ItemsSource="{Binding DifferentSchemaNodes}" SelectedItem="{Binding SelectedDiffItem}" Background="Transparent" BorderThickness="0">
+                <ListBox Classes="WithoutCheck" ItemsSource="{Binding DifferentSchemaNodes}" SelectedItem="{Binding SelectedDiffItem}" Background="Transparent" BorderThickness="0">
                   <ListBox.Styles>
                     <Style Selector="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/></Style>
                     <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="#08366FF5"/></Style>
-                    <Style Selector="ListBoxItem:selected /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Brand50}"/></Style>
                   </ListBox.Styles>
                   <ListBox.ItemTemplate>
                     <DataTemplate>
@@ -269,11 +268,10 @@
                 </StackPanel>
               </Expander.Header>
               <Border Classes="panel" Padding="0" Margin="0,4,0,0">
-                <ListBox ItemsSource="{Binding OnlySourceSchemaNodes}" SelectedItem="{Binding SelectedDiffItem}" Background="Transparent" BorderThickness="0">
+                <ListBox Classes="WithoutCheck" ItemsSource="{Binding OnlySourceSchemaNodes}" SelectedItem="{Binding SelectedDiffItem}" Background="Transparent" BorderThickness="0">
                   <ListBox.Styles>
                     <Style Selector="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/></Style>
                     <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="#08366FF5"/></Style>
-                    <Style Selector="ListBoxItem:selected /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Brand50}"/></Style>
                   </ListBox.Styles>
                   <ListBox.ItemTemplate>
                     <DataTemplate>
@@ -297,11 +295,10 @@
                 </StackPanel>
               </Expander.Header>
               <Border Classes="panel" Padding="0" Margin="0,4,0,0">
-                <ListBox ItemsSource="{Binding OnlyTargetSchemaNodes}" SelectedItem="{Binding SelectedDiffItem}" Background="Transparent" BorderThickness="0">
+                <ListBox Classes="WithoutCheck" ItemsSource="{Binding OnlyTargetSchemaNodes}" SelectedItem="{Binding SelectedDiffItem}" Background="Transparent" BorderThickness="0">
                   <ListBox.Styles>
                     <Style Selector="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/></Style>
                     <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="#08366FF5"/></Style>
-                    <Style Selector="ListBoxItem:selected /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Brand50}"/></Style>
                   </ListBox.Styles>
                   <ListBox.ItemTemplate>
                     <DataTemplate>
@@ -325,11 +322,10 @@
                 </StackPanel>
               </Expander.Header>
               <Border Classes="panel" Padding="0" Margin="0,4,0,0">
-                <ListBox ItemsSource="{Binding DataDiffSchemaNodes}" SelectedItem="{Binding SelectedDiffItem}" Background="Transparent" BorderThickness="0">
+                <ListBox Classes="WithoutCheck" ItemsSource="{Binding DataDiffSchemaNodes}" SelectedItem="{Binding SelectedDiffItem}" Background="Transparent" BorderThickness="0">
                   <ListBox.Styles>
                     <Style Selector="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/></Style>
                     <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="#08366FF5"/></Style>
-                    <Style Selector="ListBoxItem:selected /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Brand50}"/></Style>
                   </ListBox.Styles>
                   <ListBox.ItemTemplate>
                     <DataTemplate>
@@ -434,11 +430,10 @@
                 </Border>
               </Expander.Header>
               <Border Background="{DynamicResource WarningLightBrush}" BorderBrush="{DynamicResource WarningLightBrush}" BorderThickness="1" CornerRadius="8" Padding="0" Margin="0,4,0,0">
-                <ListBox ItemsSource="{Binding DifferentNodes}" SelectedItem="{Binding SelectedDiffItem}" Background="Transparent" BorderThickness="0">
+                <ListBox Classes="WithoutCheck" ItemsSource="{Binding DifferentNodes}" SelectedItem="{Binding SelectedDiffItem}" Background="Transparent" BorderThickness="0">
                   <ListBox.Styles>
                     <Style Selector="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/></Style>
                     <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="#11B45309"/></Style>
-                    <Style Selector="ListBoxItem:selected /template/ ContentPresenter"><Setter Property="Background" Value="#22B45309"/></Style>
                   </ListBox.Styles>
                   <ListBox.ItemTemplate>
                     <DataTemplate>
@@ -475,11 +470,10 @@
                 </Border>
               </Expander.Header>
               <Border Background="{DynamicResource SuccessLightBrush}" BorderBrush="{DynamicResource SuccessLightBrush}" BorderThickness="1" CornerRadius="8" Padding="0" Margin="0,4,0,0">
-                <ListBox ItemsSource="{Binding OnlySourceNodes}" SelectedItem="{Binding SelectedDiffItem}" Background="Transparent" BorderThickness="0">
+                <ListBox Classes="WithoutCheck" ItemsSource="{Binding OnlySourceNodes}" SelectedItem="{Binding SelectedDiffItem}" Background="Transparent" BorderThickness="0">
                   <ListBox.Styles>
                     <Style Selector="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/></Style>
                     <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="#11047857"/></Style>
-                    <Style Selector="ListBoxItem:selected /template/ ContentPresenter"><Setter Property="Background" Value="#22047857"/></Style>
                   </ListBox.Styles>
                   <ListBox.ItemTemplate>
                     <DataTemplate>
@@ -516,11 +510,10 @@
                 </Border>
               </Expander.Header>
               <Border Background="{DynamicResource DangerLightBrush}" BorderBrush="{DynamicResource DangerLightBrush}" BorderThickness="1" CornerRadius="8" Padding="0" Margin="0,4,0,0">
-                <ListBox ItemsSource="{Binding OnlyTargetNodes}" SelectedItem="{Binding SelectedDiffItem}" Background="Transparent" BorderThickness="0">
+                <ListBox Classes="WithoutCheck" ItemsSource="{Binding OnlyTargetNodes}" SelectedItem="{Binding SelectedDiffItem}" Background="Transparent" BorderThickness="0">
                   <ListBox.Styles>
                     <Style Selector="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/></Style>
                     <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="#11B91C1C"/></Style>
-                    <Style Selector="ListBoxItem:selected /template/ ContentPresenter"><Setter Property="Background" Value="#22B91C1C"/></Style>
                   </ListBox.Styles>
                   <ListBox.ItemTemplate>
                     <DataTemplate>

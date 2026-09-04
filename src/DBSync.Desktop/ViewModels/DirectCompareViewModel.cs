@@ -393,35 +393,35 @@ public partial class DirectCompareViewModel : ObservableObject, IPageViewModel
         {
             var node = new CompareSchemaNodeViewModel
             {
-                Title = table.FullName,
+                Title = FormatTableTitle(table),
                 StatusText = "新增表",
                 IsSelected = true,
-                Category = DiffCategory.OnlyTarget,
+                Category = DiffCategory.OnlySource,
                 StatusBrush = Brushes.DarkGreen
             };
             AllSchemaNodes.Add(node);
-            OnlyTargetNodes.Add(node);
+            OnlySourceNodes.Add(node);
         }
 
         foreach (var table in diff.RemovedTables.OrderBy(t => t.FullName))
         {
             var node = new CompareSchemaNodeViewModel
             {
-                Title = table.FullName,
+                Title = FormatTableTitle(table),
                 StatusText = "删除表",
                 IsSelected = false,
-                Category = DiffCategory.OnlySource,
+                Category = DiffCategory.OnlyTarget,
                 StatusBrush = Brushes.Firebrick
             };
             AllSchemaNodes.Add(node);
-            OnlySourceNodes.Add(node);
+            OnlyTargetNodes.Add(node);
         }
 
         foreach (var mod in diff.ModifiedTables.OrderBy(t => t.SourceTable.FullName))
         {
             var node = new CompareSchemaNodeViewModel
             {
-                Title = mod.SourceTable.FullName,
+                Title = FormatTableTitle(mod.SourceTable),
                 StatusText = $"结构变更（{mod.ColumnDiffs.Count} 列，{mod.IndexDiffs.Count} 索引）",
                 IsSelected = true,
                 Category = DiffCategory.Different,
@@ -430,5 +430,17 @@ public partial class DirectCompareViewModel : ObservableObject, IPageViewModel
             AllSchemaNodes.Add(node);
             DifferentNodes.Add(node);
         }
+    }
+
+    /// <summary>
+    /// 格式化表标题，包含表注释
+    ///</summary>
+    /// <param name="table">表模型</param>
+    /// <returns>带注释的显示标题</returns>
+    private static string FormatTableTitle(TableModel table)
+    {
+        return string.IsNullOrWhiteSpace(table.Comment)
+            ? table.FullName
+            : $"{table.FullName}（{table.Comment}）";
     }
 }

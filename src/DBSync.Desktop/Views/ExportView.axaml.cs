@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using System.Diagnostics;
 
 namespace DBSync.Desktop.Views;
 
@@ -13,5 +14,6 @@ public partial class ExportView : UserControl
     public ExportView()
     {
         InitializeComponent();
+        Loaded += (_, _) => LayoutRoot.ShowGridLines = Debugger.IsAttached;
     }
 }

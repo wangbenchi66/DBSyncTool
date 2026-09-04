@@ -73,7 +73,8 @@ public sealed class LocalConnectionStore(IConnectionEncryption encryption) : ICo
             UseWindowsAuth = dto.UseWindowsAuth,
             Schema = dto.Schema ?? "",
             Charset = dto.Charset ?? "",
-            AdditionalParameters = dto.AdditionalParameters ?? ""
+            AdditionalParameters = dto.AdditionalParameters ?? "",
+            Environment = dto.Environment
         };
         return conn with { ConnectionString = conn.BuildConnectionString() };
     }
@@ -95,7 +96,8 @@ public sealed class LocalConnectionStore(IConnectionEncryption encryption) : ICo
             UseWindowsAuth = conn.UseWindowsAuth,
             Schema = conn.Schema,
             Charset = conn.Charset,
-            AdditionalParameters = conn.AdditionalParameters
+            AdditionalParameters = conn.AdditionalParameters,
+            Environment = conn.Environment
         };
     }
 
@@ -163,5 +165,10 @@ public sealed class LocalConnectionStore(IConnectionEncryption encryption) : ICo
         /// 额外连接字符串参数
         ///</summary>
         public string? AdditionalParameters { get; init; }
+
+        /// <summary>
+        /// 连接所属环境
+        ///</summary>
+        public ConnectionEnvironment Environment { get; init; }
     }
 }

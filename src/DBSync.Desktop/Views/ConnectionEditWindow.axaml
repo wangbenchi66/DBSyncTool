@@ -31,6 +31,19 @@
                     SelectedItem="{Binding DbType, Mode=TwoWay}"
                     HorizontalAlignment="Stretch"/>
         </StackPanel>
+        <StackPanel Spacing="4">
+          <TextBlock Text="环境" FontSize="12" FontWeight="SemiBold"
+                     Foreground="{DynamicResource Ink700}"/>
+          <ComboBox ItemsSource="{x:Static views:ConnectionEditWindow.EnvironmentOptions}"
+                    SelectedItem="{Binding Environment, Mode=TwoWay}"
+                    HorizontalAlignment="Stretch">
+            <ComboBox.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding ., Converter={x:Static views:ConnectionEditWindow.EnvironmentDisplayConverter}}"/>
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+        </StackPanel>
       </StackPanel>
     </Border>
 

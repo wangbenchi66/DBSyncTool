@@ -8,13 +8,13 @@ using Serilog;
 namespace DBSync.Desktop;
 
 /// <summary>
-/// 应用程序入口
-///</summary>
+/// 应用程序入口。
+/// </summary>
 internal static class Program
 {
     /// <summary>
-    /// 主入口方法
-    ///</summary>
+    /// 主入口方法。
+    /// </summary>
     [STAThread]
     public static void Main(string[] args)
     {
@@ -68,8 +68,8 @@ internal static class Program
     }
 
     /// <summary>
-    /// 构建 Avalonia 应用
-    ///</summary>
+    /// 构建 Avalonia 应用。
+    /// </summary>
     public static AppBuilder BuildAvaloniaApp()
     {
         return AppBuilder.Configure<App>()
