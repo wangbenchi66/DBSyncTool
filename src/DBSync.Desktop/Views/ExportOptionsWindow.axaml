@@ -13,7 +13,7 @@
   <Grid RowDefinitions="*,Auto" Background="{DynamicResource PageBackgroundBrush}">
     <ScrollViewer>
       <StackPanel Spacing="14" Margin="16">
-        <StackPanel Spacing="4">
+        <StackPanel Spacing="4" IsVisible="False">
           <TextBlock Text="加密密码" FontSize="12" FontWeight="Medium"
                      Foreground="{DynamicResource Ink600}"/>
           <TextBox PlaceholderText="留空则不加密"
@@ -22,7 +22,7 @@
                    Text="{Binding ExportPassword, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
         </StackPanel>
 
-        <StackPanel Spacing="4">
+        <StackPanel Spacing="4" IsVisible="False">
           <TextBlock Text="确认密码" FontSize="12" FontWeight="Medium"
                      Foreground="{DynamicResource Ink600}"/>
           <TextBox PlaceholderText="再次输入密码"

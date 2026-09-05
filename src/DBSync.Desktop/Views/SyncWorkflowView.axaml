@@ -133,7 +133,7 @@
                 <Button Grid.Column="1" Content="浏览" Classes="ghost" Command="{Binding BrowseSnapshotCommand}"/>
               </Grid>
               <Button Grid.Column="1" Content="加载快照" Classes="secondary" Command="{Binding LoadSnapshotCommand}"/>
-              <TextBox Grid.Column="2" PlaceholderText="快照密码（可不填）" PasswordChar="●" input:InputMethod.IsInputMethodEnabled="False" Text="{Binding ComparePassword, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+              <TextBox Grid.Column="2" IsVisible="False" PlaceholderText="快照密码（可不填）" PasswordChar="●" input:InputMethod.IsInputMethodEnabled="False" Text="{Binding ComparePassword, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
               <ComboBox Grid.Column="3" ItemsSource="{Binding CompareConnections}" SelectedItem="{Binding SelectedCompareConnection}" DisplayMemberBinding="{Binding Name}" HorizontalAlignment="Stretch"/>
               <Button Grid.Column="4" Content="加载表" Classes="secondary" Command="{Binding LoadCompareTablesCommand}"/>
               <Button Grid.Column="5" Content="开始比对" Classes="primary" Command="{Binding RunCompareCommand}"/>

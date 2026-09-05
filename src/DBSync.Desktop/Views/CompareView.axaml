@@ -33,7 +33,7 @@
             <Button Grid.Column="1" Content="浏览" Classes="ghost" Command="{Binding BrowseSnapshotCommand}"/>
           </Grid>
           <Button Grid.Column="1" Content="加载快照" Classes="secondary" Command="{Binding LoadSnapshotCommand}"/>
-          <TextBox Grid.Column="2"
+          <TextBox Grid.Column="2" IsVisible="False"
                    PlaceholderText="快照密码（可不填）"
                    PasswordChar="●"
                    input:InputMethod.IsInputMethodEnabled="False"
