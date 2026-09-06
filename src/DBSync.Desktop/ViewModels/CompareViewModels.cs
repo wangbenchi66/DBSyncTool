@@ -66,6 +66,54 @@ public sealed partial class CompareSchemaNodeViewModel : ObservableObject
     private bool isExpanded;
 
     /// <summary>
+    /// 是否存在数据差异
+    ///</summary>
+    [ObservableProperty]
+    private bool hasDataDiff;
+
+    /// <summary>
+    /// 数据新增行数
+    ///</summary>
+    [ObservableProperty]
+    private int dataInsertCount;
+
+    /// <summary>
+    /// 数据删除行数
+    ///</summary>
+    [ObservableProperty]
+    private int dataDeleteCount;
+
+    /// <summary>
+    /// 数据变更行数
+    ///</summary>
+    [ObservableProperty]
+    private int dataChangeCount;
+
+    /// <summary>
+    /// 是否生成结构变更语句（ALTER/CREATE/DROP）
+    ///</summary>
+    [ObservableProperty]
+    private bool generateSchema = true;
+
+    /// <summary>
+    /// 是否生成 INSERT 语句
+    ///</summary>
+    [ObservableProperty]
+    private bool generateInsert = true;
+
+    /// <summary>
+    /// 是否生成 UPDATE 语句
+    ///</summary>
+    [ObservableProperty]
+    private bool generateUpdate;
+
+    /// <summary>
+    /// 是否生成 DELETE 语句
+    ///</summary>
+    [ObservableProperty]
+    private bool generateDelete;
+
+    /// <summary>
     /// 子节点集合（列级差异、索引差异等）
     ///</summary>
     public ObservableCollection<CompareSchemaNodeViewModel> Children { get; } = new();

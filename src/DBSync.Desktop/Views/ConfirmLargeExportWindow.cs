@@ -3,10 +3,11 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using DBSync.Desktop.ViewModels;
+using SukiUI.Controls;
 
 namespace DBSync.Desktop.Views;
 
-public sealed class ConfirmLargeExportWindow : Window
+public sealed class ConfirmLargeExportWindow : SukiWindow
 {
     public ConfirmLargeExportWindow(ExportTableItemViewModel table)
     {
@@ -22,7 +23,9 @@ public sealed class ConfirmLargeExportWindow : Window
         };
 
         var yes = new Button { Content = "继续导出" };
+        yes.Classes.Add("primary");
         var no = new Button { Content = "取消" };
+        no.Classes.Add("secondary");
 
         yes.Click += (_, _) => Close(true);
         no.Click += (_, _) => Close(false);

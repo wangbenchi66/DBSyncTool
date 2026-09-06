@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Data.Converters;
 using DBSync.Core.Models;
 using DBSync.Desktop.ViewModels;
+using SukiUI.Controls;
 using System.Globalization;
 
 namespace DBSync.Desktop.Views;
@@ -9,7 +10,7 @@ namespace DBSync.Desktop.Views;
 /// <summary>
 /// 连接编辑对话框窗口
 ///</summary>
-public partial class ConnectionEditWindow : Window
+public partial class ConnectionEditWindow : SukiWindow
 {
     /// <summary>
     /// 数据库类型列表（供 ComboBox 绑定）

@@ -17,7 +17,7 @@
             x:DataType="vm:ExportViewModel">
 
         <!-- 页头 + 工具栏 -->
-        <Border Classes="panel" Padding="12">
+        <Border Classes="panel" Padding="8">
           <Grid RowDefinitions="Auto,Auto">
             <StackPanel Spacing="2" Margin="0,0,0,10">
               <TextBlock Text="导出快照" Classes="page-title"/>
@@ -97,7 +97,7 @@
                 <DataGridTemplateColumn Header="模式" Width="90">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate x:DataType="vm:ExportTableItemViewModel">
-                      <Button Command="{Binding ToggleSyncDataCommand}" Classes="ghost" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="0" MinWidth="0" MinHeight="0">
+                      <Button Command="{Binding ToggleSyncDataCommand}" Classes="compact" Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand">
                         <Border Background="{Binding SyncModeBrush}" CornerRadius="10" Padding="8,2">
                           <TextBlock Text="{Binding SyncModeText}" Foreground="White" FontSize="10" FontWeight="SemiBold"/>
                         </Border>
@@ -114,7 +114,7 @@
 
     <!-- ==================== Tab 2: 加载比对 ==================== -->
     <TabItem Header="加载比对">
-      <Grid RowDefinitions="Auto,Auto,*,4,280"
+      <Grid RowDefinitions="Auto,Auto,*"
             Margin="16"
             Background="{DynamicResource PageBackgroundBrush}"
             DataContext="{Binding Compare}"
@@ -229,145 +229,149 @@
           </Border>
         </Grid>
 
-        <!-- 比对结果：4 个折叠卡片 -->
-        <ScrollViewer Grid.Row="2">
-          <StackPanel Spacing="8">
-            <!-- 两端不同 -->
-            <Expander IsExpanded="True">
-              <Expander.Header>
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <TextBlock Text="两端不同" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource Ink800}"/>
-                  <Border Classes="badge-warning"><TextBlock Text="{Binding DifferentSchemaNodes.Count}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource WarningBrush}"/></Border>
-                </StackPanel>
-              </Expander.Header>
-              <Border Classes="panel" Padding="0" Margin="0,4,0,0">
-                <ListBox Classes="WithoutCheck" ItemsSource="{Binding DifferentSchemaNodes}" SelectedItem="{Binding SelectedDiffItem}" Background="Transparent" BorderThickness="0">
+        <!-- 比对结果：左右分栏 -->
+        <Grid Grid.Row="3" ColumnDefinitions="1*,4,*">
+          <!-- 左侧：分类按钮 + 差异列表 -->
+          <Border Classes="panel" Padding="0">
+            <Grid RowDefinitions="Auto,*">
+              <!-- 分类按钮组 + 全局 SQL 类型开关 -->
+              <Border Padding="4,4" BorderBrush="{DynamicResource Ink100}" BorderThickness="0,0,0,1">
+                <Grid ColumnDefinitions="Auto,*,260">
+                <ListBox x:Name="DiffCategoryList" Classes="WithoutCheck" SelectedIndex="{Binding SelectedDiffTabIndex}" Tapped="DiffCategoryList_Tapped" Background="Transparent" BorderThickness="0">
+                  <ListBox.ItemsPanel>
+                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="2"/></ItemsPanelTemplate>
+                  </ListBox.ItemsPanel>
                   <ListBox.Styles>
-                    <Style Selector="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/></Style>
-                    <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="#08366FF5"/></Style>
+                    <Style Selector="ListBoxItem">
+                      <Setter Property="Padding" Value="8,4"/>
+                      <Setter Property="MinHeight" Value="0"/>
+                      <Setter Property="MinWidth" Value="0"/>
+                      <Setter Property="CornerRadius" Value="6"/>
+                      <Setter Property="Background" Value="Transparent"/>
+                      <Setter Property="Foreground" Value="{DynamicResource Ink500}"/>
+                      <Setter Property="FontSize" Value="12"/>
+                      <Setter Property="Cursor" Value="Hand"/>
+                    </Style>
+                    <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+                      <Setter Property="Background" Value="{DynamicResource Ink100}"/>
+                    </Style>
+                    <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+                      <Setter Property="Background" Value="Transparent"/>
+                    </Style>
+                    <Style Selector="ListBoxItem:selected">
+                      <Setter Property="Foreground" Value="{DynamicResource Brand700}"/>
+                      <Setter Property="FontWeight" Value="SemiBold"/>
+                    </Style>
                   </ListBox.Styles>
-                  <ListBox.ItemTemplate>
-                    <DataTemplate>
-                      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Margin="12,0" MinHeight="32">
-                        <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="1" Text="{Binding Title}" FontFamily="Consolas, Menlo, monospace" FontSize="12" Foreground="{DynamicResource Ink700}" VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="2" Text="{Binding StatusText}" Foreground="{Binding StatusBrush}" FontFamily="Consolas, Menlo, monospace" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                      </Grid>
-                    </DataTemplate>
-                  </ListBox.ItemTemplate>
+                  <ListBoxItem>
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                      <TextBlock Text="全部"/><Border Classes="badge-warning"><TextBlock Text="{Binding AllDiffSchemaNodes.Count}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource WarningBrush}"/></Border>
+                    </StackPanel>
+                  </ListBoxItem>
+                  <ListBoxItem>
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                      <TextBlock Text="不同"/><Border Classes="badge-warning"><TextBlock Text="{Binding DifferentSchemaNodes.Count}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource WarningBrush}"/></Border>
+                    </StackPanel>
+                  </ListBoxItem>
+                  <ListBoxItem>
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                      <TextBlock Text="快照"/><Border Classes="badge-danger"><TextBlock Text="{Binding OnlySourceSchemaNodes.Count}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource DangerBrush}"/></Border>
+                    </StackPanel>
+                  </ListBoxItem>
+                  <ListBoxItem>
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                      <TextBlock Text="目标"/><Border Classes="badge-success"><TextBlock Text="{Binding OnlyTargetSchemaNodes.Count}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource SuccessBrush}"/></Border>
+                    </StackPanel>
+                  </ListBoxItem>
+                  <ListBoxItem>
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                      <TextBlock Text="数据"/><Border Classes="badge-warning"><TextBlock Text="{Binding DataDiffSchemaNodes.Count}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource WarningBrush}"/></Border>
+                    </StackPanel>
+                  </ListBoxItem>
                 </ListBox>
+                <Grid Grid.Column="2" ColumnDefinitions="50,70,70,70" VerticalAlignment="Center">
+                  <CheckBox IsChecked="{Binding GlobalGenerateSchema, Mode=TwoWay}" Command="{Binding RefreshDiffSqlCommand}" Padding="0" MinWidth="0" MinHeight="0">
+                    <TextBlock Text="结构" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource Brand600}"/>
+                  </CheckBox>
+                  <CheckBox Grid.Column="1" IsChecked="{Binding GlobalGenerateInsert, Mode=TwoWay}" Command="{Binding RefreshDiffSqlCommand}" Padding="0" MinWidth="0" MinHeight="0">
+                    <TextBlock Text="新增" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource SuccessBrush}"/>
+                  </CheckBox>
+                  <CheckBox Grid.Column="2" IsChecked="{Binding GlobalGenerateDelete, Mode=TwoWay}" Command="{Binding RefreshDiffSqlCommand}" Padding="0" MinWidth="0" MinHeight="0">
+                    <TextBlock Text="删除" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource DangerBrush}"/>
+                  </CheckBox>
+                  <CheckBox Grid.Column="3" IsChecked="{Binding GlobalGenerateUpdate, Mode=TwoWay}" Command="{Binding RefreshDiffSqlCommand}" Padding="0" MinWidth="0" MinHeight="0">
+                    <TextBlock Text="变更" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource WarningBrush}"/>
+                  </CheckBox>
+                </Grid>
+                </Grid>
               </Border>
-            </Expander>
 
-            <!-- 仅快照有 -->
-            <Expander>
-              <Expander.Header>
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <TextBlock Text="仅快照有" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource Ink800}"/>
-                  <Border Classes="badge-danger"><TextBlock Text="{Binding OnlySourceSchemaNodes.Count}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource DangerBrush}"/></Border>
-                </StackPanel>
-              </Expander.Header>
-              <Border Classes="panel" Padding="0" Margin="0,4,0,0">
-                <ListBox Classes="WithoutCheck" ItemsSource="{Binding OnlySourceSchemaNodes}" SelectedItem="{Binding SelectedDiffItem}" Background="Transparent" BorderThickness="0">
-                  <ListBox.Styles>
-                    <Style Selector="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/></Style>
-                    <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="#08366FF5"/></Style>
-                  </ListBox.Styles>
-                  <ListBox.ItemTemplate>
-                    <DataTemplate>
-                      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Margin="12,0" MinHeight="32">
-                        <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="1" Text="{Binding Title}" FontFamily="Consolas, Menlo, monospace" FontSize="12" Foreground="{DynamicResource Ink700}" VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="2" Text="{Binding StatusText}" Foreground="{Binding StatusBrush}" FontFamily="Consolas, Menlo, monospace" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
+              <!-- 差异列表 -->
+              <ListBox Grid.Row="1" Classes="WithoutCheck" ItemsSource="{Binding CurrentDiffNodes}" SelectedItem="{Binding SelectedDiffItem}" Background="Transparent" BorderThickness="0">
+                <ListBox.Styles>
+                  <Style Selector="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/></Style>
+                  <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="#08366FF5"/></Style>
+                </ListBox.Styles>
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:CompareSchemaNodeViewModel">
+                    <Grid ColumnDefinitions="Auto,*,260" ColumnSpacing="4" Margin="4,3,4,3">
+                      <!-- 勾选 -->
+                      <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" Command="{Binding $parent[ListBox].DataContext.RefreshDiffSqlCommand}" VerticalAlignment="Center"/>
+                      <!-- 表名 -->
+                      <TextBlock Grid.Column="1" Text="{Binding Title}" FontFamily="Consolas, Menlo, monospace" FontSize="11" Foreground="{DynamicResource Ink700}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                      <!-- 表级 SQL 类型开关 -->
+                      <Grid Grid.Column="2" ColumnDefinitions="50,70,70,70" VerticalAlignment="Center">
+                        <CheckBox IsChecked="{Binding GenerateSchema, Mode=TwoWay}" Command="{Binding $parent[ListBox].DataContext.RefreshDiffSqlCommand}" Padding="0" MinWidth="0" MinHeight="0">
+                          <TextBlock Text="结构" FontSize="10" Foreground="{DynamicResource Brand600}"/>
+                        </CheckBox>
+                        <CheckBox Grid.Column="1" IsVisible="{Binding HasDataDiff}" IsChecked="{Binding GenerateInsert, Mode=TwoWay}" Command="{Binding $parent[ListBox].DataContext.RefreshDiffSqlCommand}" Padding="0" MinWidth="0" MinHeight="0">
+                          <TextBlock FontSize="10" Foreground="{DynamicResource SuccessBrush}">
+                            <TextBlock.Text><MultiBinding StringFormat="新增{0}"><Binding Path="DataInsertCount"/></MultiBinding></TextBlock.Text>
+                          </TextBlock>
+                        </CheckBox>
+                        <CheckBox Grid.Column="2" IsVisible="{Binding HasDataDiff}" IsChecked="{Binding GenerateDelete, Mode=TwoWay}" Command="{Binding $parent[ListBox].DataContext.RefreshDiffSqlCommand}" Padding="0" MinWidth="0" MinHeight="0">
+                          <TextBlock FontSize="10" Foreground="{DynamicResource DangerBrush}">
+                            <TextBlock.Text><MultiBinding StringFormat="删除{0}"><Binding Path="DataDeleteCount"/></MultiBinding></TextBlock.Text>
+                          </TextBlock>
+                        </CheckBox>
+                        <CheckBox Grid.Column="3" IsVisible="{Binding HasDataDiff}" IsChecked="{Binding GenerateUpdate, Mode=TwoWay}" Command="{Binding $parent[ListBox].DataContext.RefreshDiffSqlCommand}" Padding="0" MinWidth="0" MinHeight="0">
+                          <TextBlock FontSize="10" Foreground="{DynamicResource WarningBrush}">
+                            <TextBlock.Text><MultiBinding StringFormat="变更{0}"><Binding Path="DataChangeCount"/></MultiBinding></TextBlock.Text>
+                          </TextBlock>
+                        </CheckBox>
                       </Grid>
-                    </DataTemplate>
-                  </ListBox.ItemTemplate>
-                </ListBox>
-              </Border>
-            </Expander>
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </Grid>
+          </Border>
 
-            <!-- 仅目标库有 -->
-            <Expander>
-              <Expander.Header>
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <TextBlock Text="仅目标库有" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource Ink800}"/>
-                  <Border Classes="badge-success"><TextBlock Text="{Binding OnlyTargetSchemaNodes.Count}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource SuccessBrush}"/></Border>
-                </StackPanel>
-              </Expander.Header>
-              <Border Classes="panel" Padding="0" Margin="0,4,0,0">
-                <ListBox Classes="WithoutCheck" ItemsSource="{Binding OnlyTargetSchemaNodes}" SelectedItem="{Binding SelectedDiffItem}" Background="Transparent" BorderThickness="0">
-                  <ListBox.Styles>
-                    <Style Selector="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/></Style>
-                    <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="#08366FF5"/></Style>
-                  </ListBox.Styles>
-                  <ListBox.ItemTemplate>
-                    <DataTemplate>
-                      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Margin="12,0" MinHeight="32">
-                        <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="1" Text="{Binding Title}" FontFamily="Consolas, Menlo, monospace" FontSize="12" Foreground="{DynamicResource Ink700}" VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="2" Text="{Binding StatusText}" Foreground="{Binding StatusBrush}" FontFamily="Consolas, Menlo, monospace" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                      </Grid>
-                    </DataTemplate>
-                  </ListBox.ItemTemplate>
-                </ListBox>
-              </Border>
-            </Expander>
+          <!-- 拖拽分隔条 -->
+          <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch"
+                        Background="{DynamicResource Ink200}"/>
 
-            <!-- 数据差异 -->
-            <Expander IsExpanded="True">
-              <Expander.Header>
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <TextBlock Text="数据差异" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource Ink800}"/>
-                  <Border Classes="badge-warning"><TextBlock Text="{Binding DataDiffSchemaNodes.Count}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource WarningBrush}"/></Border>
-                </StackPanel>
-              </Expander.Header>
-              <Border Classes="panel" Padding="0" Margin="0,4,0,0">
-                <ListBox Classes="WithoutCheck" ItemsSource="{Binding DataDiffSchemaNodes}" SelectedItem="{Binding SelectedDiffItem}" Background="Transparent" BorderThickness="0">
-                  <ListBox.Styles>
-                    <Style Selector="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/></Style>
-                    <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="#08366FF5"/></Style>
-                  </ListBox.Styles>
-                  <ListBox.ItemTemplate>
-                    <DataTemplate>
-                      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Margin="12,0" MinHeight="32">
-                        <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="1" Text="{Binding Title}" FontFamily="Consolas, Menlo, monospace" FontSize="12" Foreground="{DynamicResource Ink700}" VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="2" Text="{Binding StatusText}" Foreground="{Binding StatusBrush}" FontFamily="Consolas, Menlo, monospace" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                      </Grid>
-                    </DataTemplate>
-                  </ListBox.ItemTemplate>
-                </ListBox>
-              </Border>
-            </Expander>
-          </StackPanel>
-        </ScrollViewer>
-
-        <!-- GridSplitter -->
-        <GridSplitter Grid.Row="3" Height="4" HorizontalAlignment="Stretch"
-                      Background="{DynamicResource Ink200}"/>
-
-        <!-- 底部 SQL Diff 面板 -->
-        <Border Grid.Row="4" Classes="panel" Padding="0">
-          <Grid RowDefinitions="Auto,*">
-            <Border Padding="8,6" BorderBrush="{DynamicResource Ink100}" BorderThickness="0,0,0,1">
-              <Grid ColumnDefinitions="*,Auto">
+          <!-- 右侧：SQL 差异预览 -->
+          <Border Grid.Column="2" Classes="panel" Padding="0">
+            <Grid RowDefinitions="Auto,*">
+              <Border Padding="8,6" BorderBrush="{DynamicResource Ink100}" BorderThickness="0,0,0,1">
                 <TextBlock Text="SQL 差异预览" Classes="section-title" VerticalAlignment="Center"/>
-                <TextBlock Grid.Column="1" Text="{Binding SelectedDiffItem.Title, FallbackValue='选择左侧项查看 SQL'}"
-                           FontSize="11" Foreground="{DynamicResource Ink400}" VerticalAlignment="Center"/>
-              </Grid>
-            </Border>
-            <TextBox Grid.Row="1"
-                     Text="{Binding SelectedDiffSqlText}"
-                     IsReadOnly="True"
-                     AcceptsReturn="True"
-                     TextWrapping="NoWrap"
-                     FontFamily="Consolas, Menlo, monospace" FontSize="12"
-                     Foreground="{DynamicResource Ink700}"
-                     Background="Transparent"
-                     BorderThickness="0"
-                     Margin="8"/>
-          </Grid>
-        </Border>
+              </Border>
+              <TextBox Grid.Row="1"
+                       Text="{Binding SelectedDiffSqlText}"
+                       IsReadOnly="True"
+                       AcceptsReturn="True"
+                       TextWrapping="NoWrap"
+                       FontFamily="Consolas, Menlo, monospace" FontSize="12"
+                       Foreground="{DynamicResource Ink700}"
+                       Background="Transparent"
+                       BorderThickness="0"
+                       Padding="8,4"
+                       VerticalAlignment="Stretch"
+                       CaretBrush="Transparent"/>
+            </Grid>
+          </Border>
+        </Grid>
       </Grid>
     </TabItem>
 

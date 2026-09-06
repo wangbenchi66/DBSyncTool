@@ -16,9 +16,12 @@ public static class SqlGeneratorRows
             .Select(r => r.PrimaryKeyString)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        return fullRows
+        var matched = fullRows
             .Where(row => keys.Contains(BuildPrimaryKeyString(table, row)))
             .ToList();
+
+        // 当完整数据匹配失败时，回退到主键数据
+        return matched.Count > 0 ? matched : diff.RowsToInsert.Select(r => r.PrimaryKeyValues).ToList();
     }
 
     private static string BuildPrimaryKeyString(TableModel table, IReadOnlyDictionary<string, string?> row)

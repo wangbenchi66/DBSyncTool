@@ -153,6 +153,30 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
     private bool useTransaction = true;
 
     /// <summary>
+    /// 全局开关：是否生成结构变更语句（默认开启）
+    ///</summary>
+    [ObservableProperty]
+    private bool globalGenerateSchema = true;
+
+    /// <summary>
+    /// 全局开关：是否生成 INSERT 语句（默认开启）
+    ///</summary>
+    [ObservableProperty]
+    private bool globalGenerateInsert = true;
+
+    /// <summary>
+    /// 全局开关：是否生成 UPDATE 语句（默认关闭）
+    ///</summary>
+    [ObservableProperty]
+    private bool globalGenerateUpdate;
+
+    /// <summary>
+    /// 全局开关：是否生成 DELETE 语句（默认关闭）
+    ///</summary>
+    [ObservableProperty]
+    private bool globalGenerateDelete;
+
+    /// <summary>
     /// 当前选中的比对目标数据库连接
     ///</summary>
     [ObservableProperty]
@@ -239,6 +263,23 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
     /// 有数据差异的表节点（新增/删除/变更行）
     ///</summary>
     public ObservableCollection<CompareSchemaNodeViewModel> DataDiffSchemaNodes { get; } = new();
+
+    /// <summary>
+    /// 全部差异节点（合并 4 个分类集合，供"全部"tab 使用）
+    ///</summary>
+    public ObservableCollection<CompareSchemaNodeViewModel> AllDiffSchemaNodes { get; } = new();
+
+    /// <summary>
+    /// 差异分类按钮组的选中索引，默认 0（全部）
+    ///</summary>
+    [ObservableProperty]
+    private int selectedDiffTabIndex;
+
+    /// <summary>
+    /// 当前展示的差异节点集合（根据 SelectedDiffTabIndex 切换）
+    ///</summary>
+    [ObservableProperty]
+    private ObservableCollection<CompareSchemaNodeViewModel> currentDiffNodes = new();
 
     /// <summary>
     /// 当前选中的差异项（用于底部 SQL Diff 面板）
@@ -513,6 +554,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
             }
 
             BuildDataPreview(_loadedDataDiffs, selectedSnapshotTables);
+            RebuildAllDiffNodes();
             CompareProgress = 100;
             CompareProgressText = "比对完成";
             CompareSummaryText = BuildCompareSummary(_loadedSchemaDiff, _loadedDataDiffs);
@@ -633,13 +675,13 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
     /// <summary>
     /// 当选中的差异项变化时，生成该项的 SQL 差异文本
     ///</summary>
+    /// <summary>
+    /// 点击单个表时，生成该表的差异 SQL
+    ///</summary>
     partial void OnSelectedDiffItemChanged(CompareSchemaNodeViewModel? value)
     {
         if (value is null || _loadedSchemaDiff is null || _loadedSnapshot is null)
-        {
-            SelectedDiffSqlText = string.Empty;
             return;
-        }
 
         try
         {
@@ -647,41 +689,56 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
             var tableName = value.Title.Split('（')[0].Trim();
             var sb = new StringBuilder();
 
-            var modifiedTable = _loadedSchemaDiff.ModifiedTables
-                .FirstOrDefault(t => t.SourceTable.FullName.Equals(tableName, StringComparison.OrdinalIgnoreCase));
-            if (modifiedTable is not null)
+            if (value.GenerateSchema)
             {
-                var alterSql = _sqlGenerator.GenerateAlterTable(dbType, modifiedTable);
-                sb.AppendLine($"-- {tableName} 结构变更");
-                sb.AppendLine(string.Join(Environment.NewLine, alterSql));
+                var modifiedTable = _loadedSchemaDiff.ModifiedTables
+                    .FirstOrDefault(t => t.SourceTable.FullName.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+                if (modifiedTable is not null)
+                {
+                    sb.AppendLine($"-- {tableName} 结构变更");
+                    sb.AppendLine(string.Join(Environment.NewLine, _sqlGenerator.GenerateAlterTable(dbType, modifiedTable)));
+                }
+
+                var addedTable = _loadedSchemaDiff.AddedTables
+                    .FirstOrDefault(t => t.FullName.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+                if (addedTable is not null)
+                {
+                    sb.AppendLine($"-- {tableName} 新增表");
+                    sb.AppendLine(_sqlGenerator.GenerateCreateTable(dbType, addedTable));
+                }
+
+                var removedTable = _loadedSchemaDiff.RemovedTables
+                    .FirstOrDefault(t => t.FullName.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+                if (removedTable is not null)
+                {
+                    sb.AppendLine($"-- {tableName} 删除表");
+                    sb.AppendLine($"DROP TABLE {tableName};");
+                }
             }
 
-            var addedTable = _loadedSchemaDiff.AddedTables
-                .FirstOrDefault(t => t.FullName.Equals(tableName, StringComparison.OrdinalIgnoreCase));
-            if (addedTable is not null)
-            {
-                var createSql = _sqlGenerator.GenerateCreateTable(dbType, addedTable);
-                sb.AppendLine($"-- {tableName} 新增表");
-                sb.AppendLine(createSql);
-            }
-
-            var removedTable = _loadedSchemaDiff.RemovedTables
-                .FirstOrDefault(t => t.FullName.Equals(tableName, StringComparison.OrdinalIgnoreCase));
-            if (removedTable is not null)
-            {
-                sb.AppendLine($"-- {tableName} 删除表");
-                sb.AppendLine($"DROP TABLE {tableName};");
-            }
-
-            if (_loadedDataDiffs.TryGetValue(tableName, out var dataDiff) && dataDiff.RowsToInsert.Count > 0)
+            if (_loadedDataDiffs.TryGetValue(tableName, out var dataDiff) && !dataDiff.Skipped)
             {
                 var table = _loadedSnapshot.Tables.GetValueOrDefault(tableName);
-                if (table is not null)
+
+                if (value.GenerateInsert && dataDiff.RowsToInsert.Count > 0 && table is not null)
                 {
                     var rows = SqlGeneratorRows.ResolveRowsToInsert(table, dataDiff, _loadedSnapshot.FullData);
-                    var insertSql = _sqlGenerator.GenerateInsertStatements(dbType, table, rows);
                     sb.AppendLine($"-- {tableName} 数据新增 {dataDiff.RowsToInsert.Count} 行");
-                    sb.AppendLine(string.Join(Environment.NewLine, insertSql));
+                    sb.AppendLine(string.Join(Environment.NewLine, _sqlGenerator.GenerateInsertStatements(dbType, table, rows)));
+                }
+
+                if (value.GenerateDelete && dataDiff.DeletedRows.Count > 0 && table is not null)
+                {
+                    var pkValues = dataDiff.DeletedRows.Select(r => r.PrimaryKeyValues).ToList();
+                    sb.AppendLine($"-- {tableName} 数据删除 {dataDiff.DeletedRows.Count} 行");
+                    sb.AppendLine(string.Join(Environment.NewLine, _sqlGenerator.GenerateDeleteStatements(dbType, table, pkValues)));
+                }
+
+                if (value.GenerateUpdate && dataDiff.ChangedRows.Count > 0 && table is not null)
+                {
+                    var changedRowData = dataDiff.ChangedRows.Select(r => r.PrimaryKeyValues).ToList();
+                    sb.AppendLine($"-- {tableName} 数据变更 {dataDiff.ChangedRows.Count} 行");
+                    sb.AppendLine(string.Join(Environment.NewLine, _sqlGenerator.GenerateUpdateStatements(dbType, table, changedRowData)));
                 }
             }
 
@@ -703,6 +760,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
         OnlyTargetSchemaNodes.Clear();
         IdenticalSchemaNodes.Clear();
         DataDiffSchemaNodes.Clear();
+        AllDiffSchemaNodes.Clear();
         SelectedDiffItem = null;
         _loadedSchemaDiff = null;
         _loadedDataDiffs.Clear();
@@ -881,6 +939,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
         OnlySourceSchemaNodes.Clear();
         OnlyTargetSchemaNodes.Clear();
         IdenticalSchemaNodes.Clear();
+        AllDiffSchemaNodes.Clear();
 
         var cyclicTables = schemaDiff.CyclicDependencyGroups
             .SelectMany(group => group)
@@ -993,17 +1052,194 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
 
             if (hasDiff)
             {
-                var node = new CompareSchemaNodeViewModel
+                var existingNode = CompareSchemaNodes
+                    .FirstOrDefault(n => n.Title.Split('（')[0].Trim()
+                        .Equals(table.FullName, StringComparison.OrdinalIgnoreCase));
+
+                if (existingNode is not null)
                 {
-                    Title = FormatTableTitle(table),
-                    StatusText = summary,
-                    IsSelected = true,
-                    StatusBrush = ResolveDataBrush(diff),
-                    Category = DiffCategory.Different
-                };
-                DataDiffSchemaNodes.Add(node);
+                    existingNode.HasDataDiff = true;
+                    existingNode.DataInsertCount = diff.RowsToInsert.Count;
+                    existingNode.DataDeleteCount = diff.DeletedRows.Count;
+                    existingNode.DataChangeCount = diff.ChangedRows.Count;
+                }
+                else
+                {
+                    var node = new CompareSchemaNodeViewModel
+                    {
+                        Title = FormatTableTitle(table),
+                        StatusText = summary,
+                        IsSelected = true,
+                        StatusBrush = ResolveDataBrush(diff),
+                        Category = DiffCategory.Different,
+                        HasDataDiff = true,
+                        DataInsertCount = diff.RowsToInsert.Count,
+                        DataDeleteCount = diff.DeletedRows.Count,
+                        DataChangeCount = diff.ChangedRows.Count
+                    };
+                    DataDiffSchemaNodes.Add(node);
+                }
             }
         }
+    }
+
+    /// <summary>
+    /// 将 4 个分类差异集合合并到 AllDiffSchemaNodes（供"全部"tab 使用）
+    ///</summary>
+    private void RebuildAllDiffNodes()
+    {
+        AllDiffSchemaNodes.Clear();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var node in DifferentSchemaNodes) { seen.Add(node.Title); AllDiffSchemaNodes.Add(node); }
+        foreach (var node in OnlySourceSchemaNodes) { seen.Add(node.Title); AllDiffSchemaNodes.Add(node); }
+        foreach (var node in OnlyTargetSchemaNodes) { seen.Add(node.Title); AllDiffSchemaNodes.Add(node); }
+        foreach (var node in DataDiffSchemaNodes)
+        {
+            if (!seen.Contains(node.Title)) AllDiffSchemaNodes.Add(node);
+        }
+        RefreshCurrentDiffNodes();
+        BuildCategoryDiffSql();
+    }
+
+    /// <summary>
+    /// 刷新当前分类的 SQL 预览（切换分类或点击已选中分类时调用）
+    ///</summary>
+    [RelayCommand]
+    public void RefreshDiffSql()
+    {
+        SelectedDiffItem = null;
+        BuildCategoryDiffSql();
+    }
+
+    partial void OnGlobalGenerateSchemaChanged(bool value) { SyncGlobalToNodes(n => n.GenerateSchema = value); BuildCategoryDiffSql(); }
+    partial void OnGlobalGenerateInsertChanged(bool value) { SyncGlobalToNodes(n => n.GenerateInsert = value); BuildCategoryDiffSql(); }
+    partial void OnGlobalGenerateUpdateChanged(bool value) { SyncGlobalToNodes(n => n.GenerateUpdate = value); BuildCategoryDiffSql(); }
+    partial void OnGlobalGenerateDeleteChanged(bool value) { SyncGlobalToNodes(n => n.GenerateDelete = value); BuildCategoryDiffSql(); }
+
+    /// <summary>
+    /// 全局开关变更时同步到所有差异节点
+    ///</summary>
+    private void SyncGlobalToNodes(Action<CompareSchemaNodeViewModel> apply)
+    {
+        foreach (var node in AllDiffSchemaNodes) apply(node);
+        foreach (var node in DataDiffSchemaNodes.Where(n => !AllDiffSchemaNodes.Contains(n))) apply(node);
+    }
+
+    /// <summary>
+    /// 当差异分类按钮切换时，更新当前展示的集合并刷新 SQL 预览
+    ///</summary>
+    partial void OnSelectedDiffTabIndexChanged(int value)
+    {
+        RefreshCurrentDiffNodes();
+        RefreshDiffSql();
+    }
+
+    /// <summary>
+    /// 根据当前分类下所有表生成合并的 SQL 差异文本
+    ///</summary>
+    private void BuildCategoryDiffSql()
+    {
+        if (_loadedSchemaDiff is null || _loadedSnapshot is null)
+        {
+            SelectedDiffSqlText = string.Empty;
+            return;
+        }
+
+        try
+        {
+            var dbType = SelectedCompareConnection?.ToDatabaseConnection()?.DbType ?? _loadedSnapshot.Manifest.DbType;
+            var sb = new StringBuilder();
+            var processedTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var node in CurrentDiffNodes.Where(n => n.IsSelected))
+            {
+                var tableName = node.Title.Split('（')[0].Trim();
+                if (!processedTables.Add(tableName)) continue;
+
+                if (node.GenerateSchema)
+                {
+                    var modifiedTable = _loadedSchemaDiff.ModifiedTables
+                        .FirstOrDefault(t => t.SourceTable.FullName.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+                    if (modifiedTable is not null)
+                    {
+                        sb.AppendLine($"-- {tableName} 结构变更");
+                        sb.AppendLine(string.Join(Environment.NewLine, _sqlGenerator.GenerateAlterTable(dbType, modifiedTable)));
+                        sb.AppendLine();
+                    }
+
+                    var addedTable = _loadedSchemaDiff.AddedTables
+                        .FirstOrDefault(t => t.FullName.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+                    if (addedTable is not null)
+                    {
+                        sb.AppendLine($"-- {tableName} 新增表");
+                        sb.AppendLine(_sqlGenerator.GenerateCreateTable(dbType, addedTable));
+                        sb.AppendLine();
+                    }
+
+                    var removedTable = _loadedSchemaDiff.RemovedTables
+                        .FirstOrDefault(t => t.FullName.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+                    if (removedTable is not null)
+                    {
+                        sb.AppendLine($"-- {tableName} 删除表");
+                        sb.AppendLine($"DROP TABLE {tableName};");
+                        sb.AppendLine();
+                    }
+                }
+
+                if (_loadedDataDiffs.TryGetValue(tableName, out var dataDiff) && !dataDiff.Skipped)
+                {
+                    var table = _loadedSnapshot.Tables.GetValueOrDefault(tableName);
+
+                    if (node.GenerateInsert && dataDiff.RowsToInsert.Count > 0 && table is not null)
+                    {
+                        var rows = SqlGeneratorRows.ResolveRowsToInsert(table, dataDiff, _loadedSnapshot.FullData);
+                        var insertSql = _sqlGenerator.GenerateInsertStatements(dbType, table, rows);
+                        sb.AppendLine($"-- {tableName} 数据新增 {dataDiff.RowsToInsert.Count} 行");
+                        sb.AppendLine(string.Join(Environment.NewLine, insertSql));
+                        sb.AppendLine();
+                    }
+
+                    if (node.GenerateDelete && dataDiff.DeletedRows.Count > 0 && table is not null)
+                    {
+                        var pkValues = dataDiff.DeletedRows.Select(r => r.PrimaryKeyValues).ToList();
+                        var deleteSql = _sqlGenerator.GenerateDeleteStatements(dbType, table, pkValues);
+                        sb.AppendLine($"-- {tableName} 数据删除 {dataDiff.DeletedRows.Count} 行");
+                        sb.AppendLine(string.Join(Environment.NewLine, deleteSql));
+                        sb.AppendLine();
+                    }
+
+                    if (node.GenerateUpdate && dataDiff.ChangedRows.Count > 0 && table is not null)
+                    {
+                        var changedRowData = dataDiff.ChangedRows.Select(r => r.PrimaryKeyValues).ToList();
+                        var updateSql = _sqlGenerator.GenerateUpdateStatements(dbType, table, changedRowData);
+                        sb.AppendLine($"-- {tableName} 数据变更 {dataDiff.ChangedRows.Count} 行");
+                        sb.AppendLine(string.Join(Environment.NewLine, updateSql));
+                        sb.AppendLine();
+                    }
+                }
+            }
+
+            SelectedDiffSqlText = sb.ToString().TrimEnd();
+        }
+        catch (Exception ex)
+        {
+            SelectedDiffSqlText = $"-- 生成 SQL 时出错: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// 根据 SelectedDiffTabIndex 切换 CurrentDiffNodes 指向的集合
+    ///</summary>
+    private void RefreshCurrentDiffNodes()
+    {
+        CurrentDiffNodes = SelectedDiffTabIndex switch
+        {
+            1 => DifferentSchemaNodes,
+            2 => OnlySourceSchemaNodes,
+            3 => OnlyTargetSchemaNodes,
+            4 => DataDiffSchemaNodes,
+            _ => AllDiffSchemaNodes
+        };
     }
 
     private string BuildDataSqlPreview(TableModel table, DataDiff diff)

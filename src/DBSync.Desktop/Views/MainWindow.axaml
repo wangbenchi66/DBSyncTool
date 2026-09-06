@@ -9,6 +9,7 @@
                  Title="DBSyncTool"
                  Width="1100"
                  Height="760"
+                 WindowState="Maximized"
                  TitleBarControlSize="12"
                  RootCornerRadius="2"
                  ShowBottomBorder="True">

@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using SukiUI.Controls;
 using DBSync.Desktop.ViewModels;
 
 namespace DBSync.Desktop.Views;
@@ -6,7 +7,7 @@ namespace DBSync.Desktop.Views;
 /// <summary>
 /// 导出输出设置弹窗
 ///</summary>
-public partial class ExportOptionsWindow : Window
+public partial class ExportOptionsWindow : SukiWindow
 {
     /// <summary>
     /// 设计器和 XAML 编译器使用的无参构造函数

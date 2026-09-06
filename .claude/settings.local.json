@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet --version)",
+      "Bash(dotnet --list-sdks)",
+      "Bash(dotnet new *)",
+      "Bash(dotnet add *)",
+      "WebFetch(domain:github.com)",
+      "Bash(gh api *)",
+      "Bash(gh api *)",
+      "WebSearch",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:alternativeto.net)",
+      "WebFetch(domain:sugggest.com)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:www.saashub.com)",
+      "WebFetch(domain:www.topbestalternatives.com)",
+      "WebFetch(domain:pitchwall.co)",
+      "WebFetch(domain:zhuanlan.zhihu.com)",
+      "WebFetch(domain:blog.csdn.net)",
+      "WebFetch(domain:www.intoep.com)",
+      "Bash(dotnet nuget *)"
+    ]
+  }
+}

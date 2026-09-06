@@ -51,12 +51,38 @@
     <FluentTheme/>
     <suki:SukiTheme ThemeColor="Blue"/>
     <Style Selector="Button">
-      <Setter Property="Padding" Value="12,6"/>
-      <Setter Property="MinWidth" Value="96"/>
-      <Setter Property="MinHeight" Value="32"/>
+      <Setter Property="Padding" Value="10,5"/>
+      <Setter Property="MinWidth" Value="40"/>
+      <Setter Property="MinHeight" Value="28"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
       <Setter Property="HorizontalContentAlignment" Value="Center"/>
       <Setter Property="VerticalContentAlignment" Value="Center"/>
       <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="FontSize" Value="13"/>
+    </Style>
+
+    <Style Selector="TextBox">
+      <Setter Property="MinHeight" Value="28"/>
+      <Setter Property="Padding" Value="8,4"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+      <Setter Property="VerticalContentAlignment" Value="Top"/>
+      <Setter Property="FontSize" Value="13"/>
+    </Style>
+
+    <Style Selector="ComboBox">
+      <Setter Property="MinHeight" Value="28"/>
+      <Setter Property="Padding" Value="8,4"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="FontSize" Value="13"/>
+    </Style>
+
+    <Style Selector="Button.compact">
+      <Setter Property="Padding" Value="8,4"/>
+      <Setter Property="MinWidth" Value="0"/>
+      <Setter Property="MinHeight" Value="0"/>
+      <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="FontSize" Value="12"/>
     </Style>
 
     <!-- ===== 面板容器 ===== -->
@@ -104,38 +130,16 @@
     <Style Selector="Button.primary">
       <Setter Property="Background" Value="{DynamicResource Brand600}"/>
       <Setter Property="Foreground" Value="White"/>
-      <Setter Property="CornerRadius" Value="6"/>
-      <Setter Property="Padding" Value="12,6"/>
-      <Setter Property="MinWidth" Value="96"/>
-      <Setter Property="MinHeight" Value="32"/>
-      <Setter Property="HorizontalContentAlignment" Value="Center"/>
-      <Setter Property="VerticalContentAlignment" Value="Center"/>
-      <Setter Property="FontSize" Value="13"/>
       <Setter Property="FontWeight" Value="Medium"/>
       <Setter Property="BorderThickness" Value="0"/>
-    </Style>
-    <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource Brand700}"/>
-      <Setter Property="Foreground" Value="White"/>
     </Style>
 
     <!-- ===== 成功按钮（emerald 绿底白字） ===== -->
     <Style Selector="Button.success">
       <Setter Property="Background" Value="{DynamicResource SuccessBrush}"/>
       <Setter Property="Foreground" Value="White"/>
-      <Setter Property="CornerRadius" Value="6"/>
-      <Setter Property="Padding" Value="12,6"/>
-      <Setter Property="MinWidth" Value="96"/>
-      <Setter Property="MinHeight" Value="32"/>
-      <Setter Property="HorizontalContentAlignment" Value="Center"/>
-      <Setter Property="VerticalContentAlignment" Value="Center"/>
-      <Setter Property="FontSize" Value="13"/>
       <Setter Property="FontWeight" Value="Medium"/>
       <Setter Property="BorderThickness" Value="0"/>
-    </Style>
-    <Style Selector="Button.success:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="#065F46"/>
-      <Setter Property="Foreground" Value="White"/>
     </Style>
 
     <!-- ===== 次按钮（白底边框） ===== -->
@@ -144,17 +148,6 @@
       <Setter Property="Foreground" Value="{DynamicResource Ink700}"/>
       <Setter Property="BorderBrush" Value="{DynamicResource Ink200}"/>
       <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="CornerRadius" Value="6"/>
-      <Setter Property="Padding" Value="12,6"/>
-      <Setter Property="MinWidth" Value="96"/>
-      <Setter Property="MinHeight" Value="32"/>
-      <Setter Property="HorizontalContentAlignment" Value="Center"/>
-      <Setter Property="VerticalContentAlignment" Value="Center"/>
-      <Setter Property="FontSize" Value="13"/>
-    </Style>
-    <Style Selector="Button.secondary:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource Ink50}"/>
-      <Setter Property="Foreground" Value="{DynamicResource Ink800}"/>
     </Style>
 
     <!-- ===== 幽灵按钮（透明底，文字按钮风格） ===== -->
@@ -162,17 +155,6 @@
       <Setter Property="Background" Value="{DynamicResource Ink100}"/>
       <Setter Property="Foreground" Value="{DynamicResource Ink600}"/>
       <Setter Property="BorderThickness" Value="0"/>
-      <Setter Property="CornerRadius" Value="6"/>
-      <Setter Property="Padding" Value="12,6"/>
-      <Setter Property="MinWidth" Value="96"/>
-      <Setter Property="MinHeight" Value="32"/>
-      <Setter Property="HorizontalContentAlignment" Value="Center"/>
-      <Setter Property="VerticalContentAlignment" Value="Center"/>
-      <Setter Property="FontSize" Value="13"/>
-    </Style>
-    <Style Selector="Button.ghost:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource Ink200}"/>
-      <Setter Property="Foreground" Value="{DynamicResource Ink800}"/>
     </Style>
 
     <!-- ===== 危险按钮 ===== -->
@@ -180,17 +162,13 @@
       <Setter Property="Background" Value="Transparent"/>
       <Setter Property="Foreground" Value="{DynamicResource Ink600}"/>
       <Setter Property="BorderThickness" Value="0"/>
-      <Setter Property="CornerRadius" Value="6"/>
-      <Setter Property="Padding" Value="12,6"/>
-      <Setter Property="MinWidth" Value="96"/>
-      <Setter Property="MinHeight" Value="32"/>
-      <Setter Property="HorizontalContentAlignment" Value="Center"/>
-      <Setter Property="VerticalContentAlignment" Value="Center"/>
-      <Setter Property="FontSize" Value="13"/>
     </Style>
-    <Style Selector="Button.danger:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource DangerLightBrush}"/>
-      <Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/>
+
+    <!-- ===== 关闭按钮 ===== -->
+    <Style Selector="Button.close">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="{DynamicResource Ink600}"/>
+      <Setter Property="BorderThickness" Value="0"/>
     </Style>
 
     <!-- ===== 表格列表（去底色去边框） ===== -->

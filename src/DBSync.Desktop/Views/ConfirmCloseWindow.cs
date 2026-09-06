@@ -1,10 +1,11 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using SukiUI.Controls;
 
 namespace DBSync.Desktop.Views;
 
-public sealed class ConfirmCloseWindow : Window
+public sealed class ConfirmCloseWindow : SukiWindow
 {
     private ConfirmCloseWindow()
     {
@@ -20,7 +21,9 @@ public sealed class ConfirmCloseWindow : Window
         };
 
         var ok = new Button { Content = "退出", HorizontalAlignment = HorizontalAlignment.Right };
+        ok.Classes.Add("primary");
         var cancel = new Button { Content = "取消", HorizontalAlignment = HorizontalAlignment.Right };
+        cancel.Classes.Add("secondary");
 
         var panel = new StackPanel { Margin = new Thickness(20), Spacing = 16 };
         panel.Children.Add(text);
