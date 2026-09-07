@@ -12,7 +12,10 @@ namespace DBSync.Core.Snapshot;
 ///</summary>
 public sealed class SnapshotLoader : ISnapshotLoader
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    /// <summary>
+    /// JSON Source Generator 上下文
+    ///</summary>
+    private static readonly SnapshotJsonContext JsonContext = SnapshotJsonContext.Default;
 
     /// <summary>
     /// 从文件头读取明文密码提示。
@@ -49,14 +52,14 @@ public sealed class SnapshotLoader : ISnapshotLoader
             await using var cryptoStream = SnapshotFileFormat.CreateDecryptStream(inputStream, password, header);
             using var archive = new ZipArchive(cryptoStream, ZipArchiveMode.Read);
 
-            var manifest = await ReadJsonEntryAsync<SnapshotManifest>(archive, "manifest.json", cancellationToken);
+            var manifest = await ReadManifestEntryAsync(archive, "manifest.json", cancellationToken);
             var tables = new Dictionary<string, TableModel>(StringComparer.OrdinalIgnoreCase);
             var fingerprints = new Dictionary<string, IReadOnlyList<RowHash>>(StringComparer.OrdinalIgnoreCase);
             var fullData = new Dictionary<string, IReadOnlyList<IReadOnlyDictionary<string, string?>>>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var entry in archive.Entries.Where(e => e.FullName.StartsWith("schema/", StringComparison.OrdinalIgnoreCase)))
             {
-                var table = await ReadJsonEntryAsync<TableModel>(entry, cancellationToken);
+                var table = await ReadTableEntryAsync(entry, cancellationToken);
                 tables[table.FullName] = table;
             }
 
@@ -93,30 +96,23 @@ public sealed class SnapshotLoader : ISnapshotLoader
     }
 
     /// <summary>
-    /// 从 ZIP 中读取 JSON 条目。
-    /// </summary>
-    /// <typeparam name="T">目标类型</typeparam>
-    /// <param name="archive">ZIP 包</param>
-    /// <param name="entryName">条目名</param>
-    /// <param name="cancellationToken">取消令牌</param>
-    /// <returns>反序列化对象</returns>
-    private static async Task<T> ReadJsonEntryAsync<T>(ZipArchive archive, string entryName, CancellationToken cancellationToken)
+    /// 从 ZIP 中读取 SnapshotManifest 条目。
+    ///</summary>
+    private static async Task<SnapshotManifest> ReadManifestEntryAsync(ZipArchive archive, string entryName, CancellationToken cancellationToken)
     {
         var entry = archive.GetEntry(entryName) ?? throw new InvalidOperationException($"快照缺少 {entryName}。");
-        return await ReadJsonEntryAsync<T>(entry, cancellationToken);
+        await using var stream = entry.Open();
+        return await JsonSerializer.DeserializeAsync(stream, JsonContext.SnapshotManifest, cancellationToken)
+               ?? throw new InvalidOperationException($"快照条目 {entry.FullName} 内容为空。");
     }
 
     /// <summary>
-    /// 从 ZIP 条目读取 JSON。
-    /// </summary>
-    /// <typeparam name="T">目标类型</typeparam>
-    /// <param name="entry">ZIP 条目</param>
-    /// <param name="cancellationToken">取消令牌</param>
-    /// <returns>反序列化对象</returns>
-    private static async Task<T> ReadJsonEntryAsync<T>(ZipArchiveEntry entry, CancellationToken cancellationToken)
+    /// 从 ZIP 条目读取 TableModel。
+    ///</summary>
+    private static async Task<TableModel> ReadTableEntryAsync(ZipArchiveEntry entry, CancellationToken cancellationToken)
     {
         await using var stream = entry.Open();
-        return await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions, cancellationToken)
+        return await JsonSerializer.DeserializeAsync(stream, JsonContext.TableModel, cancellationToken)
                ?? throw new InvalidOperationException($"快照条目 {entry.FullName} 内容为空。");
     }
 
@@ -138,7 +134,7 @@ public sealed class SnapshotLoader : ISnapshotLoader
             return rows;
 
         foreach (var json in ReadJsonObjects(content))
-            rows.Add(JsonSerializer.Deserialize<RowHash>(json, JsonOptions)!);
+            rows.Add(JsonSerializer.Deserialize(json, JsonContext.RowHash)!);
 
         return rows;
     }

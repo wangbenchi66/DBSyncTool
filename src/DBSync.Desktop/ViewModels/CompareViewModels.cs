@@ -99,7 +99,7 @@ public sealed partial class CompareSchemaNodeViewModel : ObservableObject
     /// 是否生成 INSERT 语句
     ///</summary>
     [ObservableProperty]
-    private bool generateInsert = true;
+    private bool generateInsert;
 
     /// <summary>
     /// 是否生成 UPDATE 语句
@@ -112,6 +112,17 @@ public sealed partial class CompareSchemaNodeViewModel : ObservableObject
     ///</summary>
     [ObservableProperty]
     private bool generateDelete;
+
+    /// <summary>
+    /// 节点状态变更后的刷新回调
+    ///</summary>
+    public Action<CompareSchemaNodeViewModel>? RefreshRequested { get; set; }
+
+    partial void OnIsSelectedChanged(bool value) => RefreshRequested?.Invoke(this);
+    partial void OnGenerateSchemaChanged(bool value) => RefreshRequested?.Invoke(this);
+    partial void OnGenerateInsertChanged(bool value) => RefreshRequested?.Invoke(this);
+    partial void OnGenerateUpdateChanged(bool value) => RefreshRequested?.Invoke(this);
+    partial void OnGenerateDeleteChanged(bool value) => RefreshRequested?.Invoke(this);
 
     /// <summary>
     /// 子节点集合（列级差异、索引差异等）
@@ -201,6 +212,19 @@ public sealed partial class CompareTableSelectionViewModel : ObservableObject
     ///</summary>
     [ObservableProperty]
     private bool isSelected = true;
+
+    /// <summary>
+    /// 选中状态变更时的回调（用于快照→数据库的联动同步）
+    ///</summary>
+    public Action<CompareTableSelectionViewModel>? IsSelectedChangedCallback { get; init; }
+
+    /// <summary>
+    /// 选中状态变更后触发回调
+    ///</summary>
+    partial void OnIsSelectedChanged(bool value)
+    {
+        IsSelectedChangedCallback?.Invoke(this);
+    }
 
     /// <summary>
     /// 表结构模型

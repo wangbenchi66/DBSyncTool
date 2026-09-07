@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using DBSync.Core;
 using DBSync.Core.Models;
 using Npgsql;
@@ -150,10 +151,10 @@ public sealed class PostgresSchemaReader : ISchemaReader
         return new NpgsqlConnection(connection.ConnectionString);
     }
 
-    private static async Task<IReadOnlyList<T>> QueryAsync<T>(
+    private static async Task<IReadOnlyList<T>> QueryAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] T>(
         NpgsqlConnection db,
         string sql,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken) where T : new()
     {
         var result = new List<T>();
         await using var command = db.CreateCommand();
@@ -164,9 +165,9 @@ public sealed class PostgresSchemaReader : ISchemaReader
         return result;
     }
 
-    private static T ReadRow<T>(DbDataReader reader)
+    private static T ReadRow<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] T>(DbDataReader reader) where T : new()
     {
-        var instance = Activator.CreateInstance<T>();
+        var instance = new T();
         foreach (var prop in typeof(T).GetProperties().Where(p => p.CanWrite))
         {
             var ordinal = GetOrdinal(reader, prop.Name);

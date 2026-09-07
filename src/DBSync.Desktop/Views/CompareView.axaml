@@ -41,7 +41,7 @@
           <ComboBox Grid.Column="3"
                     ItemsSource="{Binding CompareConnections}"
                     SelectedItem="{Binding SelectedCompareConnection}"
-                    DisplayMemberBinding="{Binding Name}"
+                    DisplayMemberBinding="{Binding ComboDisplayText}"
                     HorizontalAlignment="Stretch"/>
           <Button Grid.Column="4" Content="加载表" Classes="secondary" Command="{Binding LoadCompareTablesCommand}"/>
           <Button Grid.Column="5" Content="开始比对" Classes="primary" Command="{Binding RunCompareCommand}"/>

@@ -88,6 +88,11 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
     private IReadOnlyList<TableModel> _comparedSnapshotTables = [];
 
     /// <summary>
+    /// 批量同步节点状态时的刷新抑制标记
+    ///</summary>
+    private bool _suppressNodeRefresh;
+
+    /// <summary>
     /// 当前应用设置
     ///</summary>
     private AppSettings _settings;
@@ -159,10 +164,10 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
     private bool globalGenerateSchema = true;
 
     /// <summary>
-    /// 全局开关：是否生成 INSERT 语句（默认开启）
+    /// 全局开关：是否生成 INSERT 语句（默认关闭）
     ///</summary>
     [ObservableProperty]
-    private bool globalGenerateInsert = true;
+    private bool globalGenerateInsert;
 
     /// <summary>
     /// 全局开关：是否生成 UPDATE 语句（默认关闭）
@@ -294,6 +299,18 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
     private string selectedDiffSqlText = string.Empty;
 
     /// <summary>
+    /// 快照表搜索关键字
+    ///</summary>
+    [ObservableProperty]
+    private string snapshotTableFilter = string.Empty;
+
+    /// <summary>
+    /// 数据库表搜索关键字
+    ///</summary>
+    [ObservableProperty]
+    private string databaseTableFilter = string.Empty;
+
+    /// <summary>
     /// 快照文件中的可选表
     ///</summary>
     public ObservableCollection<CompareTableSelectionViewModel> SnapshotCompareTables { get; } = new();
@@ -302,6 +319,16 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
     /// 当前数据库中的可选表
     ///</summary>
     public ObservableCollection<CompareTableSelectionViewModel> DatabaseCompareTables { get; } = new();
+
+    /// <summary>
+    /// 按关键字过滤后的快照表
+    ///</summary>
+    public ObservableCollection<CompareTableSelectionViewModel> FilteredSnapshotCompareTables { get; } = new();
+
+    /// <summary>
+    /// 按关键字过滤后的数据库表
+    ///</summary>
+    public ObservableCollection<CompareTableSelectionViewModel> FilteredDatabaseCompareTables { get; } = new();
 
     /// <summary>
     /// 初始化比对视图模型，注入所有依赖并加载初始配置
@@ -530,7 +557,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
                 if (!currentTableMap.TryGetValue(table.FullName, out var currentTable))
                 {
                     _loadedDataDiffs[table.FullName] = table.HasPrimaryKey
-                        ? DataComparer.Compare(snapshotRows, [], false)
+                        ? DataComparer.Compare([], snapshotRows, false)
                         : DataDiff.NoPrimaryKey;
                     continue;
                 }
@@ -550,7 +577,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
                     CompareProgressText = $"正在比对 {i + 1}/{snapshotTables.Count}：{table.FullName}，当前行 {currentRow}";
                 }
 
-                _loadedDataDiffs[table.FullName] = DataComparer.Compare(snapshotRows, currentRows, false);
+                _loadedDataDiffs[table.FullName] = DataComparer.Compare(currentRows, snapshotRows, false);
             }
 
             BuildDataPreview(_loadedDataDiffs, selectedSnapshotTables);
@@ -681,7 +708,10 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
     partial void OnSelectedDiffItemChanged(CompareSchemaNodeViewModel? value)
     {
         if (value is null || _loadedSchemaDiff is null || _loadedSnapshot is null)
+        {
+            BuildCategoryDiffSql();
             return;
+        }
 
         try
         {
@@ -770,28 +800,28 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
     [RelayCommand]
     private void SelectAllSnapshotTables()
     {
-        foreach (var table in SnapshotCompareTables)
+        foreach (var table in FilteredSnapshotCompareTables)
             table.IsSelected = true;
     }
 
     [RelayCommand]
     private void InvertSnapshotTables()
     {
-        foreach (var table in SnapshotCompareTables)
+        foreach (var table in FilteredSnapshotCompareTables)
             table.IsSelected = !table.IsSelected;
     }
 
     [RelayCommand]
     private void SelectAllDatabaseTables()
     {
-        foreach (var table in DatabaseCompareTables)
+        foreach (var table in FilteredDatabaseCompareTables)
             table.IsSelected = true;
     }
 
     [RelayCommand]
     private void InvertDatabaseTables()
     {
-        foreach (var table in DatabaseCompareTables)
+        foreach (var table in FilteredDatabaseCompareTables)
             table.IsSelected = !table.IsSelected;
     }
 
@@ -910,22 +940,85 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
             SnapshotCompareTables.Add(new CompareTableSelectionViewModel
             {
                 Table = table,
-                IsSelected = true
+                IsSelected = true,
+                IsSelectedChangedCallback = OnSnapshotTableSelectionChanged
             });
         }
+
+        SnapshotTableFilter = string.Empty;
+        ApplySnapshotTableFilter();
     }
 
     private void RefreshDatabaseCompareTables(IEnumerable<TableModel> tables)
     {
+        var selectedNames = SnapshotCompareTables
+            .Where(t => t.IsSelected)
+            .Select(t => t.FullName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         DatabaseCompareTables.Clear();
         foreach (var table in tables.OrderBy(t => t.FullName))
         {
             DatabaseCompareTables.Add(new CompareTableSelectionViewModel
             {
                 Table = table,
-                IsSelected = true
+                IsSelected = selectedNames.Contains(table.FullName)
             });
         }
+
+        DatabaseTableFilter = string.Empty;
+        ApplyDatabaseTableFilter();
+    }
+
+    /// <summary>
+    /// 快照表选中状态变化时，同步到数据库表同名项
+    ///</summary>
+    private void OnSnapshotTableSelectionChanged(CompareTableSelectionViewModel item)
+    {
+        var dbItem = DatabaseCompareTables.FirstOrDefault(
+            t => string.Equals(t.FullName, item.FullName, StringComparison.OrdinalIgnoreCase));
+        if (dbItem is not null)
+            dbItem.IsSelected = item.IsSelected;
+    }
+
+    /// <summary>
+    /// 快照表搜索关键字变更时触发过滤
+    ///</summary>
+    partial void OnSnapshotTableFilterChanged(string value) => ApplySnapshotTableFilter();
+
+    /// <summary>
+    /// 数据库表搜索关键字变更时触发过滤
+    ///</summary>
+    partial void OnDatabaseTableFilterChanged(string value) => ApplyDatabaseTableFilter();
+
+    /// <summary>
+    /// 按关键字过滤快照表
+    ///</summary>
+    private void ApplySnapshotTableFilter()
+    {
+        FilteredSnapshotCompareTables.Clear();
+        var source = string.IsNullOrWhiteSpace(SnapshotTableFilter)
+            ? SnapshotCompareTables
+            : SnapshotCompareTables.Where(t =>
+                t.FullName.Contains(SnapshotTableFilter, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrEmpty(t.Comment) && t.Comment.Contains(SnapshotTableFilter, StringComparison.OrdinalIgnoreCase)));
+        foreach (var item in source)
+            FilteredSnapshotCompareTables.Add(item);
+    }
+
+    /// <summary>
+    /// 按关键字过滤数据库表
+    ///</summary>
+    private void ApplyDatabaseTableFilter()
+    {
+        FilteredDatabaseCompareTables.Clear();
+        var source = string.IsNullOrWhiteSpace(DatabaseTableFilter)
+            ? DatabaseCompareTables
+            : DatabaseCompareTables.Where(t =>
+                t.FullName.Contains(DatabaseTableFilter, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrEmpty(t.Comment) && t.Comment.Contains(DatabaseTableFilter, StringComparison.OrdinalIgnoreCase)));
+        foreach (var item in source)
+            FilteredDatabaseCompareTables.Add(item);
     }
 
     /// <summary>
@@ -1077,6 +1170,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
                         DataDeleteCount = diff.DeletedRows.Count,
                         DataChangeCount = diff.ChangedRows.Count
                     };
+                    node.RefreshRequested = RefreshDiffSqlPreview;
                     DataDiffSchemaNodes.Add(node);
                 }
             }
@@ -1107,8 +1201,24 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
     [RelayCommand]
     public void RefreshDiffSql()
     {
-        SelectedDiffItem = null;
-        BuildCategoryDiffSql();
+        RefreshDiffSqlPreview(SelectedDiffItem);
+    }
+
+    private void RefreshDiffSqlPreview(CompareSchemaNodeViewModel? source = null)
+    {
+        if (_suppressNodeRefresh)
+            return;
+
+        if (source is not null && CurrentDiffNodes.Contains(source))
+        {
+            OnSelectedDiffItemChanged(source);
+            return;
+        }
+
+        if (SelectedDiffItem is not null && CurrentDiffNodes.Contains(SelectedDiffItem))
+            OnSelectedDiffItemChanged(SelectedDiffItem);
+        else
+            BuildCategoryDiffSql();
     }
 
     partial void OnGlobalGenerateSchemaChanged(bool value) { SyncGlobalToNodes(n => n.GenerateSchema = value); BuildCategoryDiffSql(); }
@@ -1121,8 +1231,16 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
     ///</summary>
     private void SyncGlobalToNodes(Action<CompareSchemaNodeViewModel> apply)
     {
-        foreach (var node in AllDiffSchemaNodes) apply(node);
-        foreach (var node in DataDiffSchemaNodes.Where(n => !AllDiffSchemaNodes.Contains(n))) apply(node);
+        _suppressNodeRefresh = true;
+        try
+        {
+            foreach (var node in AllDiffSchemaNodes) apply(node);
+            foreach (var node in DataDiffSchemaNodes.Where(n => !AllDiffSchemaNodes.Contains(n))) apply(node);
+        }
+        finally
+        {
+            _suppressNodeRefresh = false;
+        }
     }
 
     /// <summary>
@@ -1261,7 +1379,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
     /// <param name="hasWarning">是否有警告标识</param>
     /// <param name="children">子节点列表</param>
     /// <returns>结构差异预览节点</returns>
-    private static CompareSchemaNodeViewModel CreateSchemaNode(
+    private CompareSchemaNodeViewModel CreateSchemaNode(
         string title,
         string statusText,
         bool isSelected,
@@ -1277,6 +1395,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
             StatusBrush = ResolveSchemaBrush(statusText, hasWarning),
             IsExpanded = hasWarning
         };
+        node.RefreshRequested = RefreshDiffSqlPreview;
 
         if (children is not null)
         {
@@ -1293,15 +1412,17 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
     /// <param name="title">节点标题</param>
     /// <param name="statusText">状态描述文本</param>
     /// <returns>叶子节点</returns>
-    private static CompareSchemaNodeViewModel CreateLeafNode(string title, string statusText)
+    private CompareSchemaNodeViewModel CreateLeafNode(string title, string statusText)
     {
-        return new CompareSchemaNodeViewModel
+        var node = new CompareSchemaNodeViewModel
         {
             Title = title,
             StatusText = statusText,
-            IsSelected = true,
+            IsSelected = false,
             StatusBrush = ResolveSchemaBrush(statusText, false)
         };
+        node.RefreshRequested = RefreshDiffSqlPreview;
+        return node;
     }
 
     private static string FormatTableTitle(TableModel table)

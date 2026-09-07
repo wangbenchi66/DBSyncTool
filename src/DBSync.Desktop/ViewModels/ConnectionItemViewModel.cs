@@ -86,6 +86,28 @@ public sealed partial class ConnectionItemViewModel : ObservableObject
     public string ConnectionString => ToDatabaseConnection().ConnectionString;
 
     /// <summary>
+    /// 下拉框显示文本（名称 + 数据库类型 + 地址）
+    ///</summary>
+    public string ComboDisplayText
+    {
+        get
+        {
+            var dbTypeText = DbType switch
+            {
+                DatabaseType.SqlServer => "SQL Server",
+                DatabaseType.MySql => "MySQL",
+                DatabaseType.PostgreSql => "PostgreSQL",
+                DatabaseType.Sqlite => "SQLite",
+                _ => DbType.ToString()
+            };
+            if (DbType == DatabaseType.Sqlite)
+                return $"{Name}  ({dbTypeText} · {Server})";
+            var address = Port.HasValue ? $"{Server}:{Port.Value}" : Server;
+            return $"{Name}  ({dbTypeText} · {address})";
+        }
+    }
+
+    /// <summary>
     /// 连接摘要信息（用于列表展示）
     ///</summary>
     public string DisplayInfo

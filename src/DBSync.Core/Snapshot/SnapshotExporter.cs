@@ -19,12 +19,15 @@ namespace DBSync.Core.Snapshot;
 ///</summary>
 public sealed class SnapshotExporter(ISchemaReader schemaReader, IDataFingerprinter fingerprinter) : ISnapshotExporter
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        WriteIndented = true
-    };
+    /// <summary>
+    /// 带缩进的 JSON 序列化上下文
+    ///</summary>
+    private static readonly SnapshotJsonIndentedContext IndentedContext = SnapshotJsonIndentedContext.Default;
 
-    private static readonly JsonSerializerOptions JsonLineOptions = new(JsonSerializerDefaults.Web);
+    /// <summary>
+    /// 紧凑单行 JSON 序列化上下文
+    ///</summary>
+    private static readonly SnapshotJsonContext CompactContext = SnapshotJsonContext.Default;
 
     /// <summary>
     /// 导出加密快照。
@@ -56,7 +59,7 @@ public sealed class SnapshotExporter(ISchemaReader schemaReader, IDataFingerprin
             PasswordHint = options.PasswordHint
         };
 
-        await WriteJsonEntryAsync(archive, "manifest.json", manifest, cancellationToken);
+        await WriteManifestEntryAsync(archive, "manifest.json", manifest, cancellationToken);
 
         for (var i = 0; i < selectedTables.Count; i++)
         {
@@ -65,7 +68,7 @@ public sealed class SnapshotExporter(ISchemaReader schemaReader, IDataFingerprin
             progress?.Report((i + 1, selectedTables.Count, table.FullName, 0));
 
             if (tableOptions.SyncSchema)
-                await WriteJsonEntryAsync(archive, $"schema/{table.FullName}.json", table, cancellationToken);
+                await WriteTableEntryAsync(archive, $"schema/{table.FullName}.json", table, cancellationToken);
 
             await WriteFingerprintsAsync(archive, connection, table, tableOptions.WhereClause, progress, i + 1, selectedTables.Count, cancellationToken);
 
@@ -75,22 +78,31 @@ public sealed class SnapshotExporter(ISchemaReader schemaReader, IDataFingerprin
     }
 
     /// <summary>
-    /// 写入 JSON 条目。
-    /// </summary>
-    /// <typeparam name="T">对象类型</typeparam>
-    /// <param name="archive">ZIP 包</param>
-    /// <param name="entryName">条目名</param>
-    /// <param name="value">写入对象</param>
-    /// <param name="cancellationToken">取消令牌</param>
-    private static async Task WriteJsonEntryAsync<T>(
+    /// 写入 SnapshotManifest JSON 条目。
+    ///</summary>
+    private static async Task WriteManifestEntryAsync(
         ZipArchive archive,
         string entryName,
-        T value,
+        SnapshotManifest value,
         CancellationToken cancellationToken)
     {
         var entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
         await using var stream = entry.Open();
-        await JsonSerializer.SerializeAsync(stream, value, JsonOptions, cancellationToken);
+        await JsonSerializer.SerializeAsync(stream, value, IndentedContext.SnapshotManifest, cancellationToken);
+    }
+
+    /// <summary>
+    /// 写入 TableModel JSON 条目。
+    ///</summary>
+    private static async Task WriteTableEntryAsync(
+        ZipArchive archive,
+        string entryName,
+        TableModel value,
+        CancellationToken cancellationToken)
+    {
+        var entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
+        await using var stream = entry.Open();
+        await JsonSerializer.SerializeAsync(stream, value, IndentedContext.TableModel, cancellationToken);
     }
 
     /// <summary>
@@ -119,7 +131,7 @@ public sealed class SnapshotExporter(ISchemaReader schemaReader, IDataFingerprin
         var currentRow = 0L;
         await foreach (var row in fingerprinter.ReadRowHashesAsync(connection, table, whereClause, cancellationToken))
         {
-            await writer.WriteLineAsync(JsonSerializer.Serialize(row, JsonLineOptions));
+            await writer.WriteLineAsync(JsonSerializer.Serialize(row, CompactContext.RowHash));
             currentRow++;
             progress?.Report((currentTable, totalTables, table.FullName, currentRow));
         }

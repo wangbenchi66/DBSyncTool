@@ -24,7 +24,7 @@
         <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
           <ComboBox ItemsSource="{Binding Connections}"
                     SelectedItem="{Binding SelectedConnection}"
-                    DisplayMemberBinding="{Binding Name}"
+                    DisplayMemberBinding="{Binding ComboDisplayText}"
                     MinWidth="200"/>
           <Button Content="加载表" Classes="secondary" Command="{Binding LoadTablesCommand}"/>
           <Button Content="开始导出" Classes="primary" Command="{Binding ExportSnapshotCommand}"/>

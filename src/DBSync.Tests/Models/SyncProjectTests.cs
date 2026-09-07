@@ -8,11 +8,10 @@ namespace DBSync.Tests.Models;
 ///</summary>
 public class SyncProjectTests
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
+    /// <summary>
+    /// JSON 序列化上下文（Source Generator）
+    ///</summary>
+    private static readonly TestJsonContext JsonContext = TestJsonContext.Default;
 
     [Fact]
     public void SerializeDeserialize_RoundTrip()
@@ -34,8 +33,8 @@ public class SyncProjectTests
             }
         };
 
-        var json = JsonSerializer.Serialize(project, JsonOptions);
-        var deserialized = JsonSerializer.Deserialize<SyncProject>(json, JsonOptions)!;
+        var json = JsonSerializer.Serialize(project, JsonContext.SyncProject);
+        var deserialized = JsonSerializer.Deserialize(json, JsonContext.SyncProject)!;
 
         Assert.Equal(project.Name, deserialized.Name);
         Assert.Equal(project.SourceConnectionName, deserialized.SourceConnectionName);

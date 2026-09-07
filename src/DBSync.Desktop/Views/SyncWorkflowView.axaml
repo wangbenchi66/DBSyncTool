@@ -26,7 +26,7 @@
             <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
               <ComboBox ItemsSource="{Binding Connections}"
                         SelectedItem="{Binding SelectedConnection}"
-                        DisplayMemberBinding="{Binding Name}"
+                        DisplayMemberBinding="{Binding ComboDisplayText}"
                         MinWidth="200"/>
               <Button Content="加载表" Classes="secondary" Command="{Binding LoadTablesCommand}"/>
               <Button Content="开始导出" Classes="primary" Command="{Binding ExportSnapshotCommand}"/>
@@ -114,7 +114,7 @@
 
     <!-- ==================== Tab 2: 加载比对 ==================== -->
     <TabItem Header="加载比对">
-      <Grid RowDefinitions="Auto,Auto,*"
+      <Grid RowDefinitions="Auto,200,4,*"
             Margin="16"
             Background="{DynamicResource PageBackgroundBrush}"
             DataContext="{Binding Compare}"
@@ -134,7 +134,7 @@
               </Grid>
               <Button Grid.Column="1" Content="加载快照" Classes="secondary" Command="{Binding LoadSnapshotCommand}"/>
               <TextBox Grid.Column="2" IsVisible="False" PlaceholderText="快照密码（可不填）" PasswordChar="●" input:InputMethod.IsInputMethodEnabled="False" Text="{Binding ComparePassword, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
-              <ComboBox Grid.Column="3" ItemsSource="{Binding CompareConnections}" SelectedItem="{Binding SelectedCompareConnection}" DisplayMemberBinding="{Binding Name}" HorizontalAlignment="Stretch"/>
+              <ComboBox Grid.Column="3" ItemsSource="{Binding CompareConnections}" SelectedItem="{Binding SelectedCompareConnection}" DisplayMemberBinding="{Binding ComboDisplayText}" HorizontalAlignment="Stretch"/>
               <Button Grid.Column="4" Content="加载表" Classes="secondary" Command="{Binding LoadCompareTablesCommand}"/>
               <Button Grid.Column="5" Content="开始比对" Classes="primary" Command="{Binding RunCompareCommand}"/>
               <Button Grid.Column="6" Content="生成脚本" Classes="success" Command="{Binding GenerateUpgradeScriptCommand}"/>
@@ -142,11 +142,11 @@
           </Grid>
         </Border>
 
-        <!-- 表选择区（紧凑，固定高度） -->
-        <Grid Grid.Row="1" ColumnDefinitions="*,*,280" ColumnSpacing="8" Margin="0,0,0,8">
+        <!-- 表选择区（可拖动调节高度） -->
+        <Grid Grid.Row="1" ColumnDefinitions="*,*,280" ColumnSpacing="8">
           <!-- 快照表 -->
-          <Border Classes="panel" Padding="0" MaxHeight="200">
-            <Grid RowDefinitions="Auto,*">
+          <Border Classes="panel" Padding="0">
+            <Grid RowDefinitions="Auto,Auto,*">
               <Border Padding="8,6" BorderBrush="{DynamicResource Ink100}" BorderThickness="0,0,0,1">
                 <Grid ColumnDefinitions="*,Auto">
                   <TextBlock Text="快照文件表" Classes="section-title" VerticalAlignment="Center"/>
@@ -156,7 +156,10 @@
                   </StackPanel>
                 </Grid>
               </Border>
-              <ListBox Classes="WithoutCheck" Grid.Row="1" ItemsSource="{Binding SnapshotCompareTables}" Background="Transparent" BorderThickness="0">
+              <Border Grid.Row="1" Padding="8,4" Background="{DynamicResource Ink50}" BorderBrush="{DynamicResource Ink100}" BorderThickness="0,0,0,1">
+                <TextBox PlaceholderText="搜索表名..." Text="{Binding SnapshotTableFilter, Mode=TwoWay}" FontSize="11"/>
+              </Border>
+              <ListBox Classes="WithoutCheck" Grid.Row="2" ItemsSource="{Binding FilteredSnapshotCompareTables}" Background="Transparent" BorderThickness="0">
                 <ListBox.Styles>
                   <Style Selector="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/></Style>
                   <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="#08366FF5"/></Style>
@@ -175,8 +178,8 @@
           </Border>
 
           <!-- 数据库表 -->
-          <Border Grid.Column="1" Classes="panel" Padding="0" MaxHeight="200">
-            <Grid RowDefinitions="Auto,*">
+          <Border Grid.Column="1" Classes="panel" Padding="0">
+            <Grid RowDefinitions="Auto,Auto,*">
               <Border Padding="8,6" BorderBrush="{DynamicResource Ink100}" BorderThickness="0,0,0,1">
                 <Grid ColumnDefinitions="*,Auto">
                   <TextBlock Text="当前数据库表" Classes="section-title" VerticalAlignment="Center"/>
@@ -186,7 +189,10 @@
                   </StackPanel>
                 </Grid>
               </Border>
-              <ListBox Classes="WithoutCheck" Grid.Row="1" ItemsSource="{Binding DatabaseCompareTables}" Background="Transparent" BorderThickness="0">
+              <Border Grid.Row="1" Padding="8,4" Background="{DynamicResource Ink50}" BorderBrush="{DynamicResource Ink100}" BorderThickness="0,0,0,1">
+                <TextBox PlaceholderText="搜索表名..." Text="{Binding DatabaseTableFilter, Mode=TwoWay}" FontSize="11"/>
+              </Border>
+              <ListBox Classes="WithoutCheck" Grid.Row="2" ItemsSource="{Binding FilteredDatabaseCompareTables}" Background="Transparent" BorderThickness="0">
                 <ListBox.Styles>
                   <Style Selector="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/></Style>
                   <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="#08366FF5"/></Style>
@@ -205,7 +211,7 @@
           </Border>
 
           <!-- 比对摘要 -->
-          <Border Grid.Column="2" Classes="panel" Padding="0" MaxHeight="200">
+          <Border Grid.Column="2" Classes="panel" Padding="0">
             <Grid RowDefinitions="Auto,*">
               <Border Padding="8,6" BorderBrush="{DynamicResource Ink100}" BorderThickness="0,0,0,1">
                 <Grid ColumnDefinitions="*,Auto">
@@ -228,6 +234,9 @@
             </Grid>
           </Border>
         </Grid>
+
+        <!-- 表选择区与比对结果之间的拖拽分隔条 -->
+        <GridSplitter Grid.Row="2" Height="4" HorizontalAlignment="Stretch" Background="{DynamicResource Ink200}"/>
 
         <!-- 比对结果：左右分栏 -->
         <Grid Grid.Row="3" ColumnDefinitions="1*,4,*">
@@ -290,16 +299,16 @@
                   </ListBoxItem>
                 </ListBox>
                 <Grid Grid.Column="2" ColumnDefinitions="50,70,70,70" VerticalAlignment="Center">
-                  <CheckBox IsChecked="{Binding GlobalGenerateSchema, Mode=TwoWay}" Command="{Binding RefreshDiffSqlCommand}" Padding="0" MinWidth="0" MinHeight="0">
+                  <CheckBox IsChecked="{Binding GlobalGenerateSchema, Mode=TwoWay}" Padding="0" MinWidth="0" MinHeight="0">
                     <TextBlock Text="结构" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource Brand600}"/>
                   </CheckBox>
-                  <CheckBox Grid.Column="1" IsChecked="{Binding GlobalGenerateInsert, Mode=TwoWay}" Command="{Binding RefreshDiffSqlCommand}" Padding="0" MinWidth="0" MinHeight="0">
+                  <CheckBox Grid.Column="1" IsChecked="{Binding GlobalGenerateInsert, Mode=TwoWay}" Padding="0" MinWidth="0" MinHeight="0">
                     <TextBlock Text="新增" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource SuccessBrush}"/>
                   </CheckBox>
-                  <CheckBox Grid.Column="2" IsChecked="{Binding GlobalGenerateDelete, Mode=TwoWay}" Command="{Binding RefreshDiffSqlCommand}" Padding="0" MinWidth="0" MinHeight="0">
+                  <CheckBox Grid.Column="2" IsChecked="{Binding GlobalGenerateDelete, Mode=TwoWay}" Padding="0" MinWidth="0" MinHeight="0">
                     <TextBlock Text="删除" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource DangerBrush}"/>
                   </CheckBox>
-                  <CheckBox Grid.Column="3" IsChecked="{Binding GlobalGenerateUpdate, Mode=TwoWay}" Command="{Binding RefreshDiffSqlCommand}" Padding="0" MinWidth="0" MinHeight="0">
+                  <CheckBox Grid.Column="3" IsChecked="{Binding GlobalGenerateUpdate, Mode=TwoWay}" Padding="0" MinWidth="0" MinHeight="0">
                     <TextBlock Text="变更" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource WarningBrush}"/>
                   </CheckBox>
                 </Grid>
@@ -316,25 +325,25 @@
                   <DataTemplate x:DataType="vm:CompareSchemaNodeViewModel">
                     <Grid ColumnDefinitions="Auto,*,260" ColumnSpacing="4" Margin="4,3,4,3">
                       <!-- 勾选 -->
-                      <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" Command="{Binding $parent[ListBox].DataContext.RefreshDiffSqlCommand}" VerticalAlignment="Center"/>
+                      <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" VerticalAlignment="Center"/>
                       <!-- 表名 -->
                       <TextBlock Grid.Column="1" Text="{Binding Title}" FontFamily="Consolas, Menlo, monospace" FontSize="11" Foreground="{DynamicResource Ink700}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                       <!-- 表级 SQL 类型开关 -->
                       <Grid Grid.Column="2" ColumnDefinitions="50,70,70,70" VerticalAlignment="Center">
-                        <CheckBox IsChecked="{Binding GenerateSchema, Mode=TwoWay}" Command="{Binding $parent[ListBox].DataContext.RefreshDiffSqlCommand}" Padding="0" MinWidth="0" MinHeight="0">
+                        <CheckBox IsChecked="{Binding GenerateSchema, Mode=TwoWay}" Padding="0" MinWidth="0" MinHeight="0">
                           <TextBlock Text="结构" FontSize="10" Foreground="{DynamicResource Brand600}"/>
                         </CheckBox>
-                        <CheckBox Grid.Column="1" IsVisible="{Binding HasDataDiff}" IsChecked="{Binding GenerateInsert, Mode=TwoWay}" Command="{Binding $parent[ListBox].DataContext.RefreshDiffSqlCommand}" Padding="0" MinWidth="0" MinHeight="0">
+                        <CheckBox Grid.Column="1" IsVisible="{Binding HasDataDiff}" IsChecked="{Binding GenerateInsert, Mode=TwoWay}" Padding="0" MinWidth="0" MinHeight="0">
                           <TextBlock FontSize="10" Foreground="{DynamicResource SuccessBrush}">
                             <TextBlock.Text><MultiBinding StringFormat="新增{0}"><Binding Path="DataInsertCount"/></MultiBinding></TextBlock.Text>
                           </TextBlock>
                         </CheckBox>
-                        <CheckBox Grid.Column="2" IsVisible="{Binding HasDataDiff}" IsChecked="{Binding GenerateDelete, Mode=TwoWay}" Command="{Binding $parent[ListBox].DataContext.RefreshDiffSqlCommand}" Padding="0" MinWidth="0" MinHeight="0">
+                        <CheckBox Grid.Column="2" IsVisible="{Binding HasDataDiff}" IsChecked="{Binding GenerateDelete, Mode=TwoWay}" Padding="0" MinWidth="0" MinHeight="0">
                           <TextBlock FontSize="10" Foreground="{DynamicResource DangerBrush}">
                             <TextBlock.Text><MultiBinding StringFormat="删除{0}"><Binding Path="DataDeleteCount"/></MultiBinding></TextBlock.Text>
                           </TextBlock>
                         </CheckBox>
-                        <CheckBox Grid.Column="3" IsVisible="{Binding HasDataDiff}" IsChecked="{Binding GenerateUpdate, Mode=TwoWay}" Command="{Binding $parent[ListBox].DataContext.RefreshDiffSqlCommand}" Padding="0" MinWidth="0" MinHeight="0">
+                        <CheckBox Grid.Column="3" IsVisible="{Binding HasDataDiff}" IsChecked="{Binding GenerateUpdate, Mode=TwoWay}" Padding="0" MinWidth="0" MinHeight="0">
                           <TextBlock FontSize="10" Foreground="{DynamicResource WarningBrush}">
                             <TextBlock.Text><MultiBinding StringFormat="变更{0}"><Binding Path="DataChangeCount"/></MultiBinding></TextBlock.Text>
                           </TextBlock>
@@ -392,10 +401,10 @@
             </StackPanel>
             <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
               <TextBlock Text="源库" FontSize="12" Foreground="{DynamicResource Ink500}" VerticalAlignment="Center"/>
-              <ComboBox ItemsSource="{Binding Connections}" SelectedItem="{Binding SelectedSourceConnection}" DisplayMemberBinding="{Binding Name}" MinWidth="160"/>
+              <ComboBox ItemsSource="{Binding Connections}" SelectedItem="{Binding SelectedSourceConnection}" DisplayMemberBinding="{Binding ComboDisplayText}" MinWidth="160"/>
               <Button Content="交换" Classes="ghost" Command="{Binding SwapConnectionsCommand}"/>
               <TextBlock Text="目标库" FontSize="12" Foreground="{DynamicResource Ink500}" VerticalAlignment="Center"/>
-              <ComboBox ItemsSource="{Binding Connections}" SelectedItem="{Binding SelectedTargetConnection}" DisplayMemberBinding="{Binding Name}" MinWidth="160"/>
+              <ComboBox ItemsSource="{Binding Connections}" SelectedItem="{Binding SelectedTargetConnection}" DisplayMemberBinding="{Binding ComboDisplayText}" MinWidth="160"/>
               <Button Content="开始比对" Classes="primary" Command="{Binding RunCompareCommand}"/>
               <Button Content="生成脚本" Classes="success" Command="{Binding GenerateScriptCommand}"/>
             </StackPanel>

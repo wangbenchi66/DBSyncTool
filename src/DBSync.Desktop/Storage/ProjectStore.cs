@@ -9,13 +9,9 @@ namespace DBSync.Desktop.Storage;
 public static class ProjectStore
 {
     /// <summary>
-    /// JSON 序列化选项
+    /// JSON 序列化上下文（Source Generator）
     ///</summary>
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
+    private static readonly StorageJsonContext JsonContext = StorageJsonContext.Default;
 
     /// <summary>
     /// 保存项目到 .dbsync-project 文件
@@ -25,7 +21,7 @@ public static class ProjectStore
     public static async Task SaveAsync(string path, SyncProject project)
     {
         var updated = project with { UpdatedAt = DateTimeOffset.Now };
-        var json = JsonSerializer.Serialize(updated, JsonOptions);
+        var json = JsonSerializer.Serialize(updated, JsonContext.SyncProject);
         await File.WriteAllTextAsync(path, json);
     }
 
@@ -37,6 +33,6 @@ public static class ProjectStore
     public static async Task<SyncProject> LoadAsync(string path)
     {
         var json = await File.ReadAllTextAsync(path);
-        return JsonSerializer.Deserialize<SyncProject>(json, JsonOptions) ?? new SyncProject();
+        return JsonSerializer.Deserialize(json, JsonContext.SyncProject) ?? new SyncProject();
     }
 }

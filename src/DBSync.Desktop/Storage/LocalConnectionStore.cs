@@ -10,9 +10,9 @@ namespace DBSync.Desktop.Storage;
 public sealed class LocalConnectionStore(IConnectionEncryption encryption) : IConnectionStore
 {
     /// <summary>
-    /// JSON 序列化选项
+    /// JSON 序列化上下文（Source Generator）
     ///</summary>
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+    private static readonly StorageJsonContext JsonContext = StorageJsonContext.Default;
 
     /// <summary>
     /// 存储目录路径
@@ -37,7 +37,7 @@ public sealed class LocalConnectionStore(IConnectionEncryption encryption) : ICo
 
         var protectedBytes = File.ReadAllBytes(FilePath);
         var json = encryption.Unprotect(protectedBytes);
-        var items = JsonSerializer.Deserialize<List<ConnectionDto>>(json, JsonOptions) ?? [];
+        var items = JsonSerializer.Deserialize(json, JsonContext.ListConnectionDto) ?? [];
 
         return items.Select(DtoToConnection).ToList();
     }
@@ -50,7 +50,7 @@ public sealed class LocalConnectionStore(IConnectionEncryption encryption) : ICo
     {
         Directory.CreateDirectory(Folder);
         var items = connections.Select(ConnectionToDto).ToList();
-        var json = JsonSerializer.SerializeToUtf8Bytes(items, JsonOptions);
+        var json = JsonSerializer.SerializeToUtf8Bytes(items, JsonContext.ListConnectionDto);
         var protectedBytes = encryption.Protect(json);
         File.WriteAllBytes(FilePath, protectedBytes);
     }
@@ -104,7 +104,7 @@ public sealed class LocalConnectionStore(IConnectionEncryption encryption) : ICo
     /// <summary>
     /// 连接配置持久化 DTO（向后兼容旧格式的 ServerAddress 字段）
     ///</summary>
-    private sealed record ConnectionDto
+    internal sealed record ConnectionDto
     {
         /// <summary>
         /// 连接显示名称
