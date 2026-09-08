@@ -49,21 +49,43 @@
           <Border Grid.Row="1" Padding="8,4" Background="{DynamicResource Ink50}" BorderBrush="{DynamicResource Ink100}" BorderThickness="0,0,0,1">
             <TextBox PlaceholderText="搜索表名..." Text="{Binding SnapshotTableFilter, Mode=TwoWay}" FontSize="11"/>
           </Border>
-          <ListBox Classes="WithoutCheck" Grid.Row="2" ItemsSource="{Binding FilteredSnapshotCompareTables}" Background="Transparent" BorderThickness="0">
-            <ListBox.Styles>
-              <Style Selector="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/></Style>
-              <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="#08366FF5"/></Style>
-            </ListBox.Styles>
-            <ListBox.ItemTemplate>
-              <DataTemplate>
-                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6" Margin="8,0" MinHeight="28">
-                  <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" VerticalAlignment="Center"/>
-                  <TextBlock Grid.Column="1" Text="{Binding FullName}" FontFamily="Consolas, Menlo, monospace" FontSize="11" Foreground="{DynamicResource Ink700}" VerticalAlignment="Center"/>
-                  <TextBlock Grid.Column="2" Text="{Binding Comment}" FontSize="10" Foreground="{DynamicResource Ink400}" VerticalAlignment="Center" MaxWidth="100" TextTrimming="CharacterEllipsis"/>
-                </Grid>
-              </DataTemplate>
-            </ListBox.ItemTemplate>
-          </ListBox>
+          <DataGrid Grid.Row="2"
+                    ItemsSource="{Binding FilteredSnapshotCompareTables}"
+                    AutoGenerateColumns="False"
+                    CanUserResizeColumns="True"
+                    CanUserReorderColumns="False"
+                    CanUserSortColumns="False"
+                    HeadersVisibility="Column"
+                    GridLinesVisibility="All"
+                    IsReadOnly="True"
+                    SelectionMode="Single"
+                    BorderThickness="0"
+                    RowHeight="30"
+                    FontSize="12">
+            <DataGrid.Columns>
+              <DataGridTemplateColumn Header="" Width="36" CanUserResize="False">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate x:DataType="vm:CompareTableSelectionViewModel">
+                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <DataGridTemplateColumn Header="表名" Width="3*">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate x:DataType="vm:CompareTableSelectionViewModel">
+                    <TextBlock Text="{Binding FullName}" FontFamily="Consolas, Menlo, monospace" FontSize="12" Foreground="{DynamicResource Ink700}" VerticalAlignment="Center" Margin="8,0" TextTrimming="CharacterEllipsis"/>
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <DataGridTemplateColumn Header="注释" Width="2*">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate x:DataType="vm:CompareTableSelectionViewModel">
+                    <TextBlock Text="{Binding Comment}" FontSize="11" Foreground="{DynamicResource Ink500}" VerticalAlignment="Center" Margin="8,0" TextTrimming="CharacterEllipsis"/>
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+            </DataGrid.Columns>
+          </DataGrid>
         </Grid>
       </Border>
 
@@ -82,21 +104,43 @@
           <Border Grid.Row="1" Padding="8,4" Background="{DynamicResource Ink50}" BorderBrush="{DynamicResource Ink100}" BorderThickness="0,0,0,1">
             <TextBox PlaceholderText="搜索表名..." Text="{Binding DatabaseTableFilter, Mode=TwoWay}" FontSize="11"/>
           </Border>
-          <ListBox Classes="WithoutCheck" Grid.Row="2" ItemsSource="{Binding FilteredDatabaseCompareTables}" Background="Transparent" BorderThickness="0">
-            <ListBox.Styles>
-              <Style Selector="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/></Style>
-              <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="#08366FF5"/></Style>
-            </ListBox.Styles>
-            <ListBox.ItemTemplate>
-              <DataTemplate>
-                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6" Margin="8,0" MinHeight="28">
-                  <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" VerticalAlignment="Center"/>
-                  <TextBlock Grid.Column="1" Text="{Binding FullName}" FontFamily="Consolas, Menlo, monospace" FontSize="11" Foreground="{DynamicResource Ink700}" VerticalAlignment="Center"/>
-                  <TextBlock Grid.Column="2" Text="{Binding Comment}" FontSize="10" Foreground="{DynamicResource Ink400}" VerticalAlignment="Center" MaxWidth="100" TextTrimming="CharacterEllipsis"/>
-                </Grid>
-              </DataTemplate>
-            </ListBox.ItemTemplate>
-          </ListBox>
+          <DataGrid Grid.Row="2"
+                    ItemsSource="{Binding FilteredDatabaseCompareTables}"
+                    AutoGenerateColumns="False"
+                    CanUserResizeColumns="True"
+                    CanUserReorderColumns="False"
+                    CanUserSortColumns="False"
+                    HeadersVisibility="Column"
+                    GridLinesVisibility="All"
+                    IsReadOnly="True"
+                    SelectionMode="Single"
+                    BorderThickness="0"
+                    RowHeight="30"
+                    FontSize="12">
+            <DataGrid.Columns>
+              <DataGridTemplateColumn Header="" Width="36" CanUserResize="False">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate x:DataType="vm:CompareTableSelectionViewModel">
+                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <DataGridTemplateColumn Header="表名" Width="3*">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate x:DataType="vm:CompareTableSelectionViewModel">
+                    <TextBlock Text="{Binding FullName}" FontFamily="Consolas, Menlo, monospace" FontSize="12" Foreground="{DynamicResource Ink700}" VerticalAlignment="Center" Margin="8,0" TextTrimming="CharacterEllipsis"/>
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <DataGridTemplateColumn Header="注释" Width="2*">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate x:DataType="vm:CompareTableSelectionViewModel">
+                    <TextBlock Text="{Binding Comment}" FontSize="11" Foreground="{DynamicResource Ink500}" VerticalAlignment="Center" Margin="8,0" TextTrimming="CharacterEllipsis"/>
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+            </DataGrid.Columns>
+          </DataGrid>
         </Grid>
       </Border>
 

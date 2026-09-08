@@ -77,18 +77,20 @@
       <Setter Property="FontSize" Value="13"/>
     </Style>
 
-    <!-- ===== 列表项默认无过渡/缩放 ===== -->
-    <Style Selector="ListBoxItem">
+    <!-- ===== 全局禁用过渡动画 ===== -->
+    <Style Selector=":is(Control)">
       <Setter Property="Transitions" Value="{x:Null}"/>
-      <Setter Property="RenderTransform" Value="{x:Null}"/>
     </Style>
-    <Style Selector="TreeViewItem">
-      <Setter Property="Transitions" Value="{x:Null}"/>
-      <Setter Property="RenderTransform" Value="{x:Null}"/>
-    </Style>
-    <Style Selector="DataGridRow">
-      <Setter Property="Transitions" Value="{x:Null}"/>
-      <Setter Property="RenderTransform" Value="{x:Null}"/>
+
+    <!-- ===== 全局关闭 ListBox 虚拟化 ===== -->
+    <Style Selector="ListBox">
+      <Setter Property="ItemsPanel">
+        <Setter.Value>
+          <ItemsPanelTemplate>
+            <StackPanel/>
+          </ItemsPanelTemplate>
+        </Setter.Value>
+      </Setter>
     </Style>
 
     <Style Selector="Button.compact">

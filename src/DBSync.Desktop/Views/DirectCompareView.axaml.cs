@@ -1,4 +1,6 @@
 using Avalonia.Controls;
+using Avalonia.Input;
+using DBSync.Desktop.ViewModels;
 
 namespace DBSync.Desktop.Views;
 
@@ -13,5 +15,14 @@ public partial class DirectCompareView : UserControl
     public DirectCompareView()
     {
         InitializeComponent();
+    }
+
+    /// <summary>
+    /// 点击分类按钮时强制刷新 SQL 预览
+    /// </summary>
+    private void DiffCategoryList_Tapped(object? sender, TappedEventArgs e)
+    {
+        if (DataContext is DirectCompareViewModel vm)
+            vm.RefreshDiffSql();
     }
 }

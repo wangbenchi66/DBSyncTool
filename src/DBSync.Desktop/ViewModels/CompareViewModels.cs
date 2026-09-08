@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Avalonia.Media;
 using System.Collections.ObjectModel;
 
@@ -16,7 +17,9 @@ public enum DiffCategory
     /// <summary>仅目标库中存在（目标库有、快照无）</summary>
     OnlyTarget,
     /// <summary>完全相同</summary>
-    Identical
+    Identical,
+    /// <summary>仅数据差异（结构相同）</summary>
+    DataDiff
 }
 
 /// <summary>
@@ -224,6 +227,39 @@ public sealed partial class CompareTableSelectionViewModel : ObservableObject
     partial void OnIsSelectedChanged(bool value)
     {
         IsSelectedChangedCallback?.Invoke(this);
+    }
+
+    /// <summary>
+    /// 是否比对数据（false 时仅比对结构）
+    ///</summary>
+    [ObservableProperty]
+    private bool compareData;
+
+    /// <summary>
+    /// 模式显示文本
+    ///</summary>
+    public string CompareModText => CompareData ? "结构+数据" : "仅结构";
+
+    /// <summary>
+    /// 模式徽章颜色
+    ///</summary>
+    public Avalonia.Media.IBrush CompareModeBrush => CompareData
+        ? new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#2549E0"))
+        : new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#5B6678"));
+
+    /// <summary>
+    /// 切换比对模式
+    ///</summary>
+    [RelayCommand]
+    private void ToggleCompareData()
+    {
+        CompareData = !CompareData;
+    }
+
+    partial void OnCompareDataChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CompareModText));
+        OnPropertyChanged(nameof(CompareModeBrush));
     }
 
     /// <summary>
