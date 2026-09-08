@@ -18,11 +18,11 @@ public partial class DirectCompareView : UserControl
     }
 
     /// <summary>
-    /// 点击分类按钮时强制刷新 SQL 预览
+    /// 点击分类按钮时重新渲染当前分类所有勾选差异的 SQL 预览
     /// </summary>
     private void DiffCategoryList_Tapped(object? sender, TappedEventArgs e)
     {
         if (DataContext is DirectCompareViewModel vm)
-            vm.RefreshDiffSql();
+            vm.ShowCategoryDiffSql();
     }
 }

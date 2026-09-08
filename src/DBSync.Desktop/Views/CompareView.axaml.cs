@@ -18,11 +18,11 @@ public partial class CompareView : UserControl
     }
 
     /// <summary>
-    /// 点击分类按钮时强制刷新 SQL 预览（包括点击已选中的分类）
+    /// 点击分类按钮时重新渲染当前分类所有勾选差异的 SQL 预览
     /// </summary>
     private void DiffCategoryList_Tapped(object? sender, TappedEventArgs e)
     {
         if (DataContext is CompareViewModel vm)
-            vm.RefreshDiffSql();
+            vm.ShowCategoryDiffSql();
     }
 }

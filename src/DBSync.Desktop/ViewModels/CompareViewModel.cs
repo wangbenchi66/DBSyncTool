@@ -1393,6 +1393,15 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
         RefreshDiffSqlPreview(SelectedDiffItem);
     }
 
+    /// <summary>
+    /// 点击分类 Tab 时调用：清除单行选中，重新渲染当前分类所有勾选差异的 SQL
+    ///</summary>
+    public void ShowCategoryDiffSql()
+    {
+        SelectedDiffItem = null;
+        BuildCategoryDiffSql();
+    }
+
     private void RefreshDiffSqlPreview(CompareSchemaNodeViewModel? source = null)
     {
         if (_suppressNodeRefresh)
