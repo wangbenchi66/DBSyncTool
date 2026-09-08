@@ -8,6 +8,7 @@
       <ApplicationManifest>app.manifest</ApplicationManifest>
       <UsedAvaloniaProducts></UsedAvaloniaProducts>
       <HotAvalonia>$(IsDebug)</HotAvalonia>
+      <ServerGarbageCollection>false</ServerGarbageCollection>
     </PropertyGroup>
 
   <ItemGroup>
