@@ -10,10 +10,10 @@
 2. 在源库中加载快照并生成结构或数据差异
 3. 输出可执行的升级脚本
 
-当前仓库包含三块主要内容：
+当前仓库包含四块主要内容：
 
 - `src/DBSync.Core`：核心领域与算法
-- `src/DBSync.Desktop`：Avalonia 桌面端
+- `src/DBSync.Desktop`：Avalonia 桌面端（SukiUI 主题）
 - `src/DBSync.CLI`：命令行入口
 - `src/DBSync.Tests`：单元测试
 
@@ -41,19 +41,26 @@
   - `Extensions`：核心依赖注入扩展
 
 - `src/DBSync.Desktop`
-  - `Views`：主窗口、仪表盘、连接管理、同步工作台、历史记录、设置等界面
-  - `ViewModels`：页面视图模型
+  - `Views`：主窗口、仪表盘、连接管理、导出快照、加载对比、直连对比、历史记录、设置等界面
+  - `ViewModels`：页面视图模型（含 CompareViewModels.cs 共享差异节点/表选择模型）
   - `Services`：窗口、加密、导出等 UI 服务
   - `Storage`：本地配置与连接持久化
+  - `Helpers`：IME 输入辅助等工具类
 
 - `src/DBSync.CLI`
   - 支持 `export`、`compare`、`script`、`execute`
 
 ## 当前界面状态
 
-- 主界面采用侧边导航
-- 已有仪表盘、连接管理、同步工作台、历史记录、设置页
-- 连接编辑窗的密码输入当前为临时隐藏状态
+- 主界面采用侧边导航（SukiWindow），导航项为独立页面（非 TabControl）
+- 侧边栏菜单：仪表盘、连接管理、导出快照、加载对比、直连对比、历史记录、设置
+- 连接编辑窗：可调整大小，数据库名称支持 AutoCompleteBox 搜索选择
+- 导出快照/加载对比/直连对比：选择连接后自动加载服务器数据库列表（ISchemaReader.ListDatabasesAsync）
+- 表选择区域统一使用 DataGrid（非 ListBox），避免虚拟化渐入问题
+- 加载对比和直连对比布局一致：表选择三栏 + 分类按钮（全部/不同/源库/目标/数据）+ SQL 类型开关 + 差异列表 + SQL 预览
+- 脚本生成按 UI 节点勾选状态组装（所见即所得），支持启用事务和排除自增列
+- 直连对比支持结构/结构+数据模式切换（默认仅结构），源库勾选联动目标库同名表
+- 全局关闭 ListBox 虚拟化（App.axaml），全局禁用 Transitions 动画
 
 ## 关键约束
 
@@ -63,6 +70,9 @@
 4. 结构对比要遵守基线表在前、目标表在后的方向
 5. 不要删除用户未要求清理的方法和注释
 6. 保持改动尽量小，优先复用现有模式
+7. 表选择区域使用 DataGrid（不要用 ListBox，避免虚拟化渐入问题）
+8. SQL 预览和脚本导出保持所见即所得（事务包裹、排除自增列等选项实时反映）
+9. 非 Windows 平台需设置 DBSYNC_MASTER_PASSWORD 环境变量（用于连接信息加密）
 
 ## 常用命令
 
