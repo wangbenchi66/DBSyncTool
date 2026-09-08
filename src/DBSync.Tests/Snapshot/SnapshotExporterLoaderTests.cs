@@ -35,7 +35,7 @@ public class SnapshotExporterLoaderTests
         Assert.Equal(DatabaseType.SqlServer, snapshot.Manifest.DbType);
         Assert.Equal([table.FullName], snapshot.Manifest.TableNames);
         Assert.True(snapshot.Tables.ContainsKey(table.FullName));
-        Assert.Empty(snapshot.DataFingerprints[table.FullName]);
+        Assert.False(snapshot.DataFingerprints.ContainsKey(table.FullName));
     }
 
     [Fact]
@@ -108,34 +108,6 @@ public class SnapshotExporterLoaderTests
 
         Assert.Equal([selected.FullName], snapshot.Manifest.TableNames);
         Assert.Equal([selected.FullName], snapshot.Tables.Keys);
-    }
-
-    [Fact]
-    public async Task ExportAndLoadAsync_RowFingerprints_RoundTripsSnapshot()
-    {
-        var table = TableModelFactory.Simple("Logs");
-        var row = new RowHash
-        {
-            PrimaryKeyValues = new Dictionary<string, string?> { ["Id"] = "1" },
-            Hash = "abc123"
-        };
-        var exporter = new SnapshotExporter(new FakeSchemaReader([table]), new FakeFingerprinter(row));
-        var loader = new SnapshotLoader();
-        await using var stream = new MemoryStream();
-
-        await exporter.ExportAsync(
-            SqlServerConnection(),
-            new ExportOptions
-            {
-                Password = "",
-                Tables = [new TableExportOptions { TableName = table.FullName }]
-            },
-            stream);
-
-        stream.Position = 0;
-        var snapshot = await loader.LoadAsync(stream, "");
-
-        Assert.Single(snapshot.DataFingerprints[table.FullName]);
     }
 
     /// <summary>

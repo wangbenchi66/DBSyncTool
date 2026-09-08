@@ -144,6 +144,10 @@ public static class Program
 
         foreach (var table in snapshot.Tables.Values)
         {
+            // 快照中未采集该表数据（仅结构导出），跳过数据比对
+            if (!snapshot.DataFingerprints.ContainsKey(table.FullName))
+                continue;
+
             var snapshotRows = snapshot.DataFingerprints.TryGetValue(table.FullName, out var rows) ? rows : [];
             if (!targetMap.TryGetValue(table.FullName, out var targetTable) || !table.HasPrimaryKey || !targetTable.HasPrimaryKey)
             {
@@ -234,6 +238,10 @@ public static class Program
         var targetMap = targetTables.ToDictionary(t => t.FullName, t => t, StringComparer.OrdinalIgnoreCase);
         foreach (var table in snapshot.Tables.Values)
         {
+            // 快照中未采集该表数据（仅结构导出），跳过数据比对
+            if (!snapshot.DataFingerprints.ContainsKey(table.FullName))
+                continue;
+
             var snapshotRows = snapshot.DataFingerprints.TryGetValue(table.FullName, out var rows) ? rows : [];
             if (!targetMap.TryGetValue(table.FullName, out var targetTable) || !table.HasPrimaryKey || !targetTable.HasPrimaryKey)
             {

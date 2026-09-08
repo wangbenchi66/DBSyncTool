@@ -70,10 +70,11 @@ public sealed class SnapshotExporter(ISchemaReader schemaReader, IDataFingerprin
             if (tableOptions.SyncSchema)
                 await WriteTableEntryAsync(archive, $"schema/{table.FullName}.json", table, cancellationToken);
 
-            await WriteFingerprintsAsync(archive, connection, table, tableOptions.WhereClause, progress, i + 1, selectedTables.Count, cancellationToken);
-
             if (tableOptions.SyncData)
+            {
+                await WriteFingerprintsAsync(archive, connection, table, tableOptions.WhereClause, progress, i + 1, selectedTables.Count, cancellationToken);
                 await WriteFullDataAsync(archive, connection, table, tableOptions.WhereClause, progress, i + 1, selectedTables.Count, cancellationToken);
+            }
         }
     }
 

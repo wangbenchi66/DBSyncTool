@@ -575,6 +575,10 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
                 CompareProgress = snapshotTables.Count == 0 ? 0 : (i + 1) * 100 / snapshotTables.Count;
                 CompareProgressText = $"正在比对 {i + 1}/{snapshotTables.Count}：{table.FullName}";
 
+                // 快照中未采集该表数据（仅结构导出），跳过数据比对
+                if (!_loadedSnapshot.DataFingerprints.ContainsKey(table.FullName))
+                    continue;
+
                 var snapshotRows = _loadedSnapshot.DataFingerprints.TryGetValue(table.FullName, out var rows)
                     ? rows
                     : [];
