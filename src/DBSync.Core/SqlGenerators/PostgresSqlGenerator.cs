@@ -12,7 +12,9 @@ public sealed class PostgresSqlGenerator : ISqlGenerator
         SchemaDiff schemaDiff,
         IReadOnlyDictionary<string, DataDiff> dataDiffs,
         IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, string?>>>? fullData = null,
-        bool useTransaction = true)
+        bool useTransaction = true,
+        bool excludeIdentityColumns = false,
+        IReadOnlyDictionary<string, TableModel>? allTables = null)
     {
         if (dbType != DatabaseType.PostgreSql)
             throw new ArgumentException("PostgresSqlGenerator 只支持 PostgreSQL。", nameof(dbType));
@@ -37,7 +39,7 @@ public sealed class PostgresSqlGenerator : ISqlGenerator
             script.AppendLine();
         }
 
-        var dataTables = schemaDiff.AddedTables.Concat(schemaDiff.ModifiedTables.Select(t => t.SourceTable));
+        var dataTables = SqlGeneratorRows.ResolveDataTables(schemaDiff, dataDiffs, allTables);
         var sortedDataTables = FkTopologicalSorter.Sort(dataTables).Sorted;
         foreach (var table in sortedDataTables)
         {
@@ -45,7 +47,7 @@ public sealed class PostgresSqlGenerator : ISqlGenerator
                 continue;
 
             var rows = SqlGeneratorRows.ResolveRowsToInsert(table, diff, fullData);
-            foreach (var insert in GenerateInsertStatements(table, rows))
+            foreach (var insert in GenerateInsertStatements(table, rows, excludeIdentityColumns))
             {
                 script.AppendLine(insert);
                 script.AppendLine();
@@ -154,12 +156,13 @@ public sealed class PostgresSqlGenerator : ISqlGenerator
     public IReadOnlyList<string> GenerateInsertStatements(
         DatabaseType dbType,
         TableModel table,
-        IReadOnlyList<IReadOnlyDictionary<string, string?>> rows)
+        IReadOnlyList<IReadOnlyDictionary<string, string?>> rows,
+        bool excludeIdentityColumns = false)
     {
         if (dbType != DatabaseType.PostgreSql)
             throw new ArgumentException("PostgresSqlGenerator 只支持 PostgreSQL。", nameof(dbType));
 
-        return GenerateInsertStatements(table, rows);
+        return GenerateInsertStatements(table, rows, excludeIdentityColumns);
     }
 
     public string GenerateCreateTable(TableModel table) => GenerateCreateTable(DatabaseType.PostgreSql, table);
@@ -170,14 +173,18 @@ public sealed class PostgresSqlGenerator : ISqlGenerator
 
     public IReadOnlyList<string> GenerateInsertStatements(
         TableModel table,
-        IReadOnlyList<IReadOnlyDictionary<string, string?>> rows)
+        IReadOnlyList<IReadOnlyDictionary<string, string?>> rows,
+        bool excludeIdentityColumns = false)
     {
         if (rows.Count == 0)
             return [];
 
         var columns = table.Columns.OrderBy(c => c.OrdinalPosition).ToList();
+        if (excludeIdentityColumns)
+            columns = columns.Where(c => !c.IsIdentity && !c.IsAutoIncrement).ToList();
         var columnNames = string.Join(", ", columns.Select(c => QuoteIdentifier(c.Name)));
-        var insertPrefix = table.Columns.Any(c => c.IsIdentity || c.IsAutoIncrement)
+        var hasIdentityColumn = !excludeIdentityColumns && table.Columns.Any(c => c.IsIdentity || c.IsAutoIncrement);
+        var insertPrefix = hasIdentityColumn
             ? $"INSERT INTO {QuoteName(table)} ({columnNames}) OVERRIDING SYSTEM VALUE"
             : $"INSERT INTO {QuoteName(table)} ({columnNames})";
 

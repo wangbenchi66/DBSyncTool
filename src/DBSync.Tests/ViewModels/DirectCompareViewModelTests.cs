@@ -175,17 +175,20 @@ public sealed class DirectCompareViewModelTests
 
         public Task<bool> TestConnectionAsync(DatabaseConnection connection, CancellationToken cancellationToken = default) =>
             Task.FromResult(true);
+
+        public Task<IReadOnlyList<string>> ListDatabasesAsync(DatabaseConnection connection, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<string>>([]);
     }
 
     private sealed class FakeSqlGenerator : ISqlGenerator
     {
-        public string GenerateUpgradeScript(DatabaseType dbType, SchemaDiff schemaDiff, IReadOnlyDictionary<string, DataDiff> dataDiffs, IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, string?>>>? fullData = null, bool useTransaction = true) => "";
+        public string GenerateUpgradeScript(DatabaseType dbType, SchemaDiff schemaDiff, IReadOnlyDictionary<string, DataDiff> dataDiffs, IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, string?>>>? fullData = null, bool useTransaction = true, bool excludeIdentityColumns = false, IReadOnlyDictionary<string, TableModel>? allTables = null) => "";
         public string GenerateCreateTable(DatabaseType dbType, TableModel table) => "";
         public string GenerateDropTable(DatabaseType dbType, TableModel table) => "";
         public IReadOnlyList<string> GenerateAlterTable(DatabaseType dbType, TableDiff diff) => [];
         public IReadOnlyList<string> GenerateUpdateStatements(DatabaseType dbType, TableModel table, IReadOnlyList<IReadOnlyDictionary<string, string?>> rows) => [];
         public IReadOnlyList<string> GenerateDeleteStatements(DatabaseType dbType, TableModel table, IReadOnlyList<IReadOnlyDictionary<string, string?>> primaryKeyValues) => [];
-        public IReadOnlyList<string> GenerateInsertStatements(DatabaseType dbType, TableModel table, IReadOnlyList<IReadOnlyDictionary<string, string?>> rows) => [];
+        public IReadOnlyList<string> GenerateInsertStatements(DatabaseType dbType, TableModel table, IReadOnlyList<IReadOnlyDictionary<string, string?>> rows, bool excludeIdentityColumns = false) => [];
     }
 
     private sealed class FakeFingerprinter : IDataFingerprinter

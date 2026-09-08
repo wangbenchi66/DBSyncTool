@@ -595,4 +595,17 @@ ORDER BY s.name, t.name, i.name, ic.key_ordinal
         // v2.5 存根实现，后续填充 SQL Server 查询
         return Task.FromResult<IReadOnlyList<DatabaseObjectModel>>([]);
     }
+
+    /// <summary>
+    /// 获取 SQL Server 上所有可用的数据库名称列表
+    ///</summary>
+    public async Task<IReadOnlyList<string>> ListDatabasesAsync(
+        DatabaseConnection connection,
+        CancellationToken cancellationToken = default)
+    {
+        using var db = CreateClient(connection);
+        var rows = await db.Ado.SqlQueryAsync<string>(
+            "SELECT name FROM sys.databases WHERE state = 0 ORDER BY name");
+        return rows;
+    }
 }

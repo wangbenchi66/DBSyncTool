@@ -5,6 +5,7 @@ using DBSync.Core.Models;
 using DBSync.Core.Schema;
 using DBSync.Desktop.Services;
 using Serilog;
+using System.Collections.ObjectModel;
 
 namespace DBSync.Desktop.ViewModels;
 
@@ -116,6 +117,17 @@ public sealed partial class ConnectionEditViewModel : ObservableObject
     ///</summary>
     [ObservableProperty]
     private string testConnectionStatusText = "";
+
+    /// <summary>
+    /// 是否正在加载数据库列表
+    ///</summary>
+    [ObservableProperty]
+    private bool isLoadingDatabases;
+
+    /// <summary>
+    /// 服务器上可用的数据库列表
+    ///</summary>
+    public ObservableCollection<string> AvailableDatabases { get; } = new();
 
     /// <summary>
     /// 是否为新增连接模式
@@ -339,6 +351,41 @@ public sealed partial class ConnectionEditViewModel : ObservableObject
         var localPath = file?.TryGetLocalPath();
         if (!string.IsNullOrWhiteSpace(localPath))
             Server = localPath;
+    }
+
+    /// <summary>
+    /// 从服务器获取可用的数据库列表
+    ///</summary>
+    [RelayCommand]
+    private async Task LoadDatabasesAsync()
+    {
+        SyncFieldsToRawString();
+        var connection = BuildConnection();
+        if (connection is null)
+        {
+            TestConnectionStatusText = "连接信息不完整";
+            return;
+        }
+
+        try
+        {
+            IsLoadingDatabases = true;
+            TestConnectionStatusText = "正在获取数据库列表...";
+            var databases = await _schemaReader.ListDatabasesAsync(connection);
+            AvailableDatabases.Clear();
+            foreach (var db in databases)
+                AvailableDatabases.Add(db);
+            TestConnectionStatusText = $"已获取 {databases.Count} 个数据库";
+        }
+        catch (Exception ex)
+        {
+            TestConnectionStatusText = $"✗ 获取失败：{ex.Message}";
+            Log.Error(ex, "获取数据库列表失败");
+        }
+        finally
+        {
+            IsLoadingDatabases = false;
+        }
     }
 
     /// <summary>

@@ -64,4 +64,18 @@ public sealed class DatabaseSchemaReader(
             _ => throw new NotSupportedException($"不支持的数据库类型：{connection.DbType}")
         };
     }
+
+    public Task<IReadOnlyList<string>> ListDatabasesAsync(
+        DatabaseConnection connection,
+        CancellationToken cancellationToken = default)
+    {
+        return connection.DbType switch
+        {
+            DatabaseType.SqlServer => sqlServer.ListDatabasesAsync(connection, cancellationToken),
+            DatabaseType.MySql => mySql.ListDatabasesAsync(connection, cancellationToken),
+            DatabaseType.PostgreSql => postgreSql.ListDatabasesAsync(connection, cancellationToken),
+            DatabaseType.Sqlite => sqlite.ListDatabasesAsync(connection, cancellationToken),
+            _ => throw new NotSupportedException($"不支持的数据库类型：{connection.DbType}")
+        };
+    }
 }

@@ -360,4 +360,22 @@ ORDER BY n.nspname, t.relname, i.relname, ck.ordinality
     {
         return Task.FromResult<IReadOnlyList<DatabaseObjectModel>>([]);
     }
+
+    /// <summary>
+    /// 获取 PostgreSQL 服务器上所有可用的数据库名称列表
+    ///</summary>
+    public async Task<IReadOnlyList<string>> ListDatabasesAsync(
+        DatabaseConnection connection,
+        CancellationToken cancellationToken = default)
+    {
+        await using var db = CreateConnection(connection);
+        await db.OpenAsync(cancellationToken);
+        await using var cmd = db.CreateCommand();
+        cmd.CommandText = "SELECT datname FROM pg_database WHERE datistemplate = false ORDER BY datname";
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        var result = new List<string>();
+        while (await reader.ReadAsync(cancellationToken))
+            result.Add(reader.GetString(0));
+        return result;
+    }
 }

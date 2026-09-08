@@ -344,4 +344,14 @@ ORDER BY seqno
     {
         return Task.FromResult<IReadOnlyList<DatabaseObjectModel>>([]);
     }
+
+    /// <summary>
+    /// SQLite 为文件型数据库，不支持列出数据库，返回空列表
+    ///</summary>
+    public Task<IReadOnlyList<string>> ListDatabasesAsync(
+        DatabaseConnection connection,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult<IReadOnlyList<string>>([]);
+    }
 }

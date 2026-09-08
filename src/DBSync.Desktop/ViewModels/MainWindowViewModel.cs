@@ -39,11 +39,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public DirectCompareViewModel DirectCompare { get; }
 
     /// <summary>
-    /// 同步工作台 ViewModel（组合导出 + 比对）
-    ///</summary>
-    public SyncWorkflowViewModel SyncWorkflow { get; }
-
-    /// <summary>
     /// 历史记录页面 ViewModel
     ///</summary>
     public HistoryViewModel History { get; }
@@ -136,15 +131,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Settings = settingsVm;
         _appSettingsStore = appSettingsStore;
 
-        SyncWorkflow = new SyncWorkflowViewModel(export, compare, directCompare);
-
         ConnectionList.ConnectionsChanged += OnConnectionsChanged;
 
         NavigationItems =
         [
             new NavigationItemViewModel("dashboard", "仪表盘", dashboard),
             new NavigationItemViewModel("connections", "连接管理", connectionList),
-            new NavigationItemViewModel("sync", "同步工作台", SyncWorkflow),
+            new NavigationItemViewModel("export", "导出快照", export),
+            new NavigationItemViewModel("compare", "加载对比", compare),
+            new NavigationItemViewModel("direct-compare", "直连对比", directCompare),
             new NavigationItemViewModel("history", "历史记录", history),
             new NavigationItemViewModel("settings", "设置", settingsVm)
         ];
@@ -154,15 +149,27 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         // 监听各页面的 StatusText 变化
         connectionList.PropertyChanged += (_, e) => ForwardStatus(connectionList, e.PropertyName);
-        SyncWorkflow.PropertyChanged += (_, e) => ForwardStatus(SyncWorkflow, e.PropertyName);
+        export.PropertyChanged += (_, e) => ForwardStatus(export, e.PropertyName);
+        compare.PropertyChanged += (_, e) => ForwardStatus(compare, e.PropertyName);
+        directCompare.PropertyChanged += (_, e) => ForwardStatus(directCompare, e.PropertyName);
         history.PropertyChanged += (_, e) => ForwardStatus(history, e.PropertyName);
         settingsVm.PropertyChanged += (_, e) => ForwardStatus(settingsVm, e.PropertyName);
 
-        // 监听同步工作台的 HasPendingOperation 变化
-        SyncWorkflow.PropertyChanged += (_, e) =>
+        // 监听各操作页面的 HasPendingOperation 变化
+        export.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(SyncWorkflowViewModel.HasPendingOperation))
-                HasPendingOperation = SyncWorkflow.HasPendingOperation;
+            if (e.PropertyName == nameof(ExportViewModel.HasPendingOperation))
+                RefreshPendingState();
+        };
+        compare.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(CompareViewModel.HasPendingOperation))
+                RefreshPendingState();
+        };
+        directCompare.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(DirectCompareViewModel.HasPendingOperation))
+                RefreshPendingState();
         };
 
         // 设置历史记录的导航回调
@@ -171,9 +178,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
         // 恢复上次使用的页面
         var settings = appSettingsStore.Load();
         var lastPage = settings.LastPageName ?? "dashboard";
-        // 兼容旧设置：export 和 compare 都映射到 sync
-        if (lastPage == "export" || lastPage == "compare")
-            lastPage = "sync";
+        // 兼容旧设置：sync 映射到 export
+        if (lastPage == "sync")
+            lastPage = "export";
         var targetNav = NavigationItems.FirstOrDefault(n => n.Key == lastPage) ?? NavigationItems[0];
         selectedNavigationItem = targetNav;
         currentPage = targetNav.PageViewModel;
@@ -194,15 +201,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
         // 页面切换时刷新数据
         if (value.PageViewModel is DashboardViewModel dashVm)
             dashVm.Refresh();
-        else if (value.PageViewModel is SyncWorkflowViewModel syncVm)
-        {
-            if (syncVm.SelectedTabIndex == 0)
-                syncVm.ActivateExportTab();
-            else if (syncVm.SelectedTabIndex == 2)
-                syncVm.ActivateDirectCompareTab();
-            else
-                syncVm.ActivateCompareTab();
-        }
+        else if (value.PageViewModel is ExportViewModel exportVm)
+            exportVm.RefreshConnections();
+        else if (value.PageViewModel is CompareViewModel compareVm)
+            compareVm.RefreshCompareConnections();
+        else if (value.PageViewModel is DirectCompareViewModel directCompareVm)
+            directCompareVm.RefreshConnections();
         else if (value.PageViewModel is HistoryViewModel historyVm)
             historyVm.RefreshHistory();
 
@@ -229,8 +233,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private void OnNavigateFromHistory(string pageKey, HistoryEntryViewModel entry)
     {
         // 兼容旧的 pageKey
-        if (pageKey == "export" || pageKey == "compare")
-            pageKey = "sync";
+        if (pageKey == "sync")
+        {
+            var isExportEntry = entry.Kind is "导出快照" or "快照";
+            pageKey = isExportEntry ? "export" : "compare";
+        }
 
         var nav = NavigationItems.FirstOrDefault(n => n.Key == pageKey);
         if (nav is null)
@@ -238,14 +245,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         SelectedNavigationItem = nav;
 
-        if (pageKey != "sync")
-            return;
-
-        // 根据历史条目类型切换到对应 Tab
-        var isExportEntry = entry.Kind is "导出快照" or "快照";
-        if (isExportEntry)
+        // 根据历史条目类型预填数据
+        if (pageKey == "export")
         {
-            SyncWorkflow.ActivateExportTab();
             if (!string.IsNullOrWhiteSpace(entry.Path))
                 Export.SetExportPath(entry.Path);
             if (!string.IsNullOrWhiteSpace(entry.ConnectionName))
@@ -256,9 +258,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
                     Export.SelectedConnection = conn;
             }
         }
-        else
+        else if (pageKey == "compare")
         {
-            SyncWorkflow.ActivateCompareTab();
             if (!string.IsNullOrWhiteSpace(entry.Path))
                 Compare.CompareSnapshotPath = entry.Path;
             if (!string.IsNullOrWhiteSpace(entry.ConnectionName))
@@ -285,19 +286,26 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>
     /// 仪表盘快捷操作导航回调
     ///</summary>
-    /// <param name="target">目标页面标识（sync-export / sync-compare）</param>
+    /// <param name="target">目标页面标识（export / compare / direct-compare）</param>
     private void OnDashboardNavigate(string target)
     {
-        var syncNav = NavigationItems.FirstOrDefault(n => n.Key == "sync");
-        if (syncNav is null)
+        // 兼容旧标识
+        if (target == "sync-export") target = "export";
+        else if (target == "sync-compare") target = "compare";
+
+        var nav = NavigationItems.FirstOrDefault(n => n.Key == target);
+        if (nav is null)
             return;
 
-        SelectedNavigationItem = syncNav;
+        SelectedNavigationItem = nav;
+    }
 
-        if (target == "sync-export")
-            SyncWorkflow.ActivateExportTab();
-        else if (target == "sync-compare")
-            SyncWorkflow.ActivateCompareTab();
+    /// <summary>
+    /// 刷新待处理操作状态
+    ///</summary>
+    private void RefreshPendingState()
+    {
+        HasPendingOperation = Export.HasPendingOperation || Compare.HasPendingOperation || DirectCompare.HasPendingOperation;
     }
 
     /// <summary>

@@ -206,6 +206,16 @@ public class SnapshotExporterLoaderTests
         {
             return Task.FromResult<IReadOnlyList<DatabaseObjectModel>>([]);
         }
+
+        /// <summary>
+        /// 返回空的数据库名称列表。
+        /// </summary>
+        public Task<IReadOnlyList<string>> ListDatabasesAsync(
+            DatabaseConnection connection,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<string>>([]);
+        }
     }
 
     private sealed class FakeFingerprinter(RowHash row) : IDataFingerprinter

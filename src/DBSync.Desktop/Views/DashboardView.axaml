@@ -62,8 +62,8 @@
                       Command="{Binding GoToExportCommand}"/>
               <Button Content="快照比对" Classes="secondary" HorizontalAlignment="Stretch"
                       Command="{Binding GoToCompareCommand}"/>
-              <Button Content="直连比对" Classes="ghost" HorizontalAlignment="Stretch"
-                      IsEnabled="False" ToolTip.Tip="v2.3 版本开放"/>
+              <Button Content="直连比对" Classes="secondary" HorizontalAlignment="Stretch"
+                      Command="{Binding GoToDirectCompareCommand}"/>
               <Button Content="打开项目" Classes="ghost" HorizontalAlignment="Stretch"
                       IsEnabled="False" ToolTip.Tip="v2.2 版本开放"/>
             </StackPanel>

@@ -24,6 +24,37 @@ public static class SqlGeneratorRows
         return matched.Count > 0 ? matched : diff.RowsToInsert.Select(r => r.PrimaryKeyValues).ToList();
     }
 
+    /// <summary>
+    /// 解析所有需要生成数据 DML 的表：结构变更的表 + 纯数据差异的表
+    /// </summary>
+    public static IEnumerable<TableModel> ResolveDataTables(
+        SchemaDiff schemaDiff,
+        IReadOnlyDictionary<string, DataDiff> dataDiffs,
+        IReadOnlyDictionary<string, TableModel>? allTables)
+    {
+        var schemaTables = schemaDiff.AddedTables
+            .Concat(schemaDiff.ModifiedTables.Select(t => t.SourceTable))
+            .ToList();
+
+        var schemaTableNames = new HashSet<string>(
+            schemaTables.Select(t => t.FullName), StringComparer.OrdinalIgnoreCase);
+
+        // 纯数据差异的表（不在结构变更中）
+        if (allTables is not null)
+        {
+            foreach (var tableName in dataDiffs.Keys)
+            {
+                if (!schemaTableNames.Contains(tableName) &&
+                    allTables.TryGetValue(tableName, out var table))
+                {
+                    schemaTables.Add(table);
+                }
+            }
+        }
+
+        return schemaTables;
+    }
+
     private static string BuildPrimaryKeyString(TableModel table, IReadOnlyDictionary<string, string?> row)
     {
         return string.Join("|", table.PrimaryKeyColumns

@@ -99,6 +99,30 @@ public partial class DirectCompareViewModel : ObservableObject, IPageViewModel
     private ConnectionItemViewModel? selectedTargetConnection;
 
     /// <summary>
+    /// 是否正在加载源库数据库列表
+    ///</summary>
+    [ObservableProperty]
+    private bool isLoadingSourceDatabases;
+
+    /// <summary>
+    /// 是否正在加载目标库数据库列表
+    ///</summary>
+    [ObservableProperty]
+    private bool isLoadingTargetDatabases;
+
+    /// <summary>
+    /// 源库选中的数据库名称
+    ///</summary>
+    [ObservableProperty]
+    private string? selectedSourceDatabaseName;
+
+    /// <summary>
+    /// 目标库选中的数据库名称
+    ///</summary>
+    [ObservableProperty]
+    private string? selectedTargetDatabaseName;
+
+    /// <summary>
     /// 比对进度百分比
     ///</summary>
     [ObservableProperty]
@@ -123,6 +147,12 @@ public partial class DirectCompareViewModel : ObservableObject, IPageViewModel
     private bool useTransaction = true;
 
     /// <summary>
+    /// INSERT 语句是否排除自增列
+    ///</summary>
+    [ObservableProperty]
+    private bool excludeIdentityColumns;
+
+    /// <summary>
     /// 当前选中的差异项
     ///</summary>
     [ObservableProperty]
@@ -138,6 +168,16 @@ public partial class DirectCompareViewModel : ObservableObject, IPageViewModel
     /// 可用连接列表
     ///</summary>
     public ObservableCollection<ConnectionItemViewModel> Connections { get; } = new();
+
+    /// <summary>
+    /// 源库所有可用数据库名称（未筛选）
+    ///</summary>
+    public ObservableCollection<string> AllSourceDatabases { get; } = new();
+
+    /// <summary>
+    /// 目标库所有可用数据库名称
+    ///</summary>
+    public ObservableCollection<string> AllTargetDatabases { get; } = new();
 
     /// <summary>
     /// 两端不同
@@ -187,6 +227,88 @@ public partial class DirectCompareViewModel : ObservableObject, IPageViewModel
         Connections.Clear();
         foreach (var conn in _connectionStore.Load())
             Connections.Add(ConnectionItemViewModel.FromDatabaseConnection(conn));
+    }
+
+    /// <summary>
+    /// 源库连接变更时加载数据库列表
+    ///</summary>
+    partial void OnSelectedSourceConnectionChanged(ConnectionItemViewModel? value)
+    {
+        _ = LoadDatabasesAsync(value, AllSourceDatabases, isSource: true);
+    }
+
+    /// <summary>
+    /// 目标库连接变更时加载数据库列表
+    ///</summary>
+    partial void OnSelectedTargetConnectionChanged(ConnectionItemViewModel? value)
+    {
+        _ = LoadDatabasesAsync(value, AllTargetDatabases, isSource: false);
+    }
+
+    /// <summary>
+    /// 从指定连接获取可用的数据库列表
+    ///</summary>
+    private async Task LoadDatabasesAsync(
+        ConnectionItemViewModel? connVm,
+        ObservableCollection<string> allDatabases,
+        bool isSource)
+    {
+        allDatabases.Clear();
+        if (isSource) SelectedSourceDatabaseName = null;
+        else SelectedTargetDatabaseName = null;
+
+        var conn = connVm?.ToDatabaseConnection();
+        if (conn is null || conn.DbType == DatabaseType.Sqlite)
+            return;
+
+        try
+        {
+            if (isSource) IsLoadingSourceDatabases = true;
+            else IsLoadingTargetDatabases = true;
+
+            var databases = await _schemaReader.ListDatabasesAsync(conn);
+            foreach (var db in databases)
+                allDatabases.Add(db);
+
+            var defaultDb = allDatabases.FirstOrDefault(
+                db => string.Equals(db, connVm?.Database, StringComparison.OrdinalIgnoreCase))
+                ?? allDatabases.FirstOrDefault();
+            if (isSource) SelectedSourceDatabaseName = defaultDb;
+            else SelectedTargetDatabaseName = defaultDb;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "获取数据库列表失败");
+        }
+        finally
+        {
+            if (isSource) IsLoadingSourceDatabases = false;
+            else IsLoadingTargetDatabases = false;
+        }
+    }
+
+    /// <summary>
+    /// 源库选中数据库变更
+    ///</summary>
+    partial void OnSelectedSourceDatabaseNameChanged(string? value)
+    {
+        if (SelectedSourceConnection is not null && !string.IsNullOrEmpty(value))
+        {
+            SelectedSourceConnection.Database = value;
+            StatusText = $"源库已切换到：{value}";
+        }
+    }
+
+    /// <summary>
+    /// 目标库选中数据库变更
+    ///</summary>
+    partial void OnSelectedTargetDatabaseNameChanged(string? value)
+    {
+        if (SelectedTargetConnection is not null && !string.IsNullOrEmpty(value))
+        {
+            SelectedTargetConnection.Database = value;
+            StatusText = $"目标库已切换到：{value}";
+        }
     }
 
     /// <summary>
@@ -311,7 +433,7 @@ public partial class DirectCompareViewModel : ObservableObject, IPageViewModel
         {
             StatusText = "正在生成脚本...";
             var dbType = SelectedSourceConnection?.ToDatabaseConnection()?.DbType ?? DatabaseType.MySql;
-            var script = _sqlGenerator.GenerateUpgradeScript(dbType, _schemaDiff, _dataDiffs, null, UseTransaction);
+            var script = _sqlGenerator.GenerateUpgradeScript(dbType, _schemaDiff, _dataDiffs, null, UseTransaction, ExcludeIdentityColumns);
             await File.WriteAllTextAsync(path, script, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
             StatusText = "脚本已生成";
             LogSummary = $"已保存：{path}";

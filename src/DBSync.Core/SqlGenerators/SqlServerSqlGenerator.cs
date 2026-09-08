@@ -14,12 +14,14 @@ public sealed class SqlServerSqlGenerator : ISqlGenerator
         SchemaDiff schemaDiff,
         IReadOnlyDictionary<string, DataDiff> dataDiffs,
         IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, string?>>>? fullData = null,
-        bool useTransaction = true)
+        bool useTransaction = true,
+        bool excludeIdentityColumns = false,
+        IReadOnlyDictionary<string, TableModel>? allTables = null)
     {
         if (dbType != DatabaseType.SqlServer)
             throw new ArgumentException("SqlServerSqlGenerator 只支持 SQL Server。", nameof(dbType));
 
-        return GenerateUpgradeScript(schemaDiff, dataDiffs, fullData, useTransaction);
+        return GenerateUpgradeScript(schemaDiff, dataDiffs, fullData, useTransaction, excludeIdentityColumns, allTables);
     }
 
     public string GenerateCreateTable(DatabaseType dbType, TableModel table)
@@ -49,12 +51,13 @@ public sealed class SqlServerSqlGenerator : ISqlGenerator
     public IReadOnlyList<string> GenerateInsertStatements(
         DatabaseType dbType,
         TableModel table,
-        IReadOnlyList<IReadOnlyDictionary<string, string?>> rows)
+        IReadOnlyList<IReadOnlyDictionary<string, string?>> rows,
+        bool excludeIdentityColumns = false)
     {
         if (dbType != DatabaseType.SqlServer)
             throw new ArgumentException("SqlServerSqlGenerator 只支持 SQL Server。", nameof(dbType));
 
-        return GenerateInsertStatements(table, rows);
+        return GenerateInsertStatements(table, rows, excludeIdentityColumns);
     }
 
     /// <summary>
@@ -68,7 +71,9 @@ public sealed class SqlServerSqlGenerator : ISqlGenerator
         SchemaDiff schemaDiff,
         IReadOnlyDictionary<string, DataDiff> dataDiffs,
         IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, string?>>>? fullData = null,
-        bool useTransaction = true)
+        bool useTransaction = true,
+        bool excludeIdentityColumns = false,
+        IReadOnlyDictionary<string, TableModel>? allTables = null)
     {
         var script = new StringBuilder();
         script.AppendLine("-- DBSyncTool Upgrade.sql");
@@ -91,7 +96,7 @@ public sealed class SqlServerSqlGenerator : ISqlGenerator
             script.AppendLine();
         }
 
-        var dataTables = schemaDiff.AddedTables.Concat(schemaDiff.ModifiedTables.Select(t => t.SourceTable));
+        var dataTables = SqlGeneratorRows.ResolveDataTables(schemaDiff, dataDiffs, allTables);
         var sortedDataTables = FkTopologicalSorter.Sort(dataTables).Sorted;
         foreach (var table in sortedDataTables)
         {
@@ -99,7 +104,7 @@ public sealed class SqlServerSqlGenerator : ISqlGenerator
                 continue;
 
             var rows = SqlGeneratorRows.ResolveRowsToInsert(table, diff, fullData);
-            foreach (var insert in GenerateInsertStatements(table, rows))
+            foreach (var insert in GenerateInsertStatements(table, rows, excludeIdentityColumns))
             {
                 script.AppendLine(insert);
                 script.AppendLine();
@@ -231,15 +236,18 @@ public sealed class SqlServerSqlGenerator : ISqlGenerator
     /// <returns>INSERT SQL 语句列表</returns>
     public IReadOnlyList<string> GenerateInsertStatements(
         TableModel table,
-        IReadOnlyList<IReadOnlyDictionary<string, string?>> rows)
+        IReadOnlyList<IReadOnlyDictionary<string, string?>> rows,
+        bool excludeIdentityColumns = false)
     {
         if (rows.Count == 0)
             return [];
 
         var columns = table.Columns.OrderBy(c => c.OrdinalPosition).ToList();
+        if (excludeIdentityColumns)
+            columns = columns.Where(c => !c.IsIdentity && !c.IsAutoIncrement).ToList();
         var columnNames = string.Join(", ", columns.Select(c => QuoteIdentifier(c.Name)));
         var statements = new List<string>();
-        var hasIdentity = columns.Any(c => c.IsIdentity);
+        var hasIdentity = !excludeIdentityColumns && columns.Any(c => c.IsIdentity);
         if (hasIdentity)
             statements.Add($"SET IDENTITY_INSERT {QuoteName(table)} ON;");
 

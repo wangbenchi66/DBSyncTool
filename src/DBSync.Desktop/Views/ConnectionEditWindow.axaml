@@ -9,9 +9,10 @@
         x:DataType="vm:ConnectionEditViewModel"
         x:CompileBindings="True"
         Title="编辑连接"
-        Width="520" Height="520"
+        Width="520" Height="660"
+        MinWidth="480" MinHeight="520"
         WindowStartupLocation="CenterOwner"
-        CanResize="False">
+        CanResize="True">
   <Grid RowDefinitions="Auto,*,Auto" Background="{DynamicResource PageBackgroundBrush}">
     <!-- 顶部：名称和类型 -->
     <Border Padding="16,14" Background="White"
@@ -98,10 +99,16 @@
                         Spacing="4">
               <TextBlock Text="数据库名称" FontSize="12" FontWeight="Medium"
                          Foreground="{DynamicResource Ink600}"/>
-              <TextBox input:InputMethod.IsInputMethodEnabled="False"
-                       Text="{Binding Database, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
-                       PlaceholderText="输入数据库名"
-                       FontFamily="Consolas, Menlo, monospace"/>
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                <ComboBox IsEditable="True"
+                          Text="{Binding Database, Mode=TwoWay}"
+                          ItemsSource="{Binding AvailableDatabases}"
+                          HorizontalAlignment="Stretch"
+                          FontFamily="Consolas, Menlo, monospace"/>
+                <Button Grid.Column="1" Content="获取" Classes="ghost"
+                        Command="{Binding LoadDatabasesCommand}"
+                        IsEnabled="{Binding !IsLoadingDatabases}"/>
+              </Grid>
             </StackPanel>
 
             <!-- Windows 认证（仅 SQL Server） -->

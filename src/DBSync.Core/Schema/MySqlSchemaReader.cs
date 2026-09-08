@@ -359,4 +359,22 @@ ORDER BY TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX
     {
         return Task.FromResult<IReadOnlyList<DatabaseObjectModel>>([]);
     }
+
+    /// <summary>
+    /// 获取 MySQL 服务器上所有可用的数据库名称列表
+    ///</summary>
+    public async Task<IReadOnlyList<string>> ListDatabasesAsync(
+        DatabaseConnection connection,
+        CancellationToken cancellationToken = default)
+    {
+        await using var db = CreateConnection(connection);
+        await db.OpenAsync(cancellationToken);
+        await using var cmd = db.CreateCommand();
+        cmd.CommandText = "SHOW DATABASES";
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        var result = new List<string>();
+        while (await reader.ReadAsync(cancellationToken))
+            result.Add(reader.GetString(0));
+        return result;
+    }
 }

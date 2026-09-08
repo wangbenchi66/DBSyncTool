@@ -48,4 +48,14 @@ public interface ISchemaReader
     Task<bool> TestConnectionAsync(
         DatabaseConnection connection,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 获取服务器上所有可用的数据库名称列表
+    /// </summary>
+    /// <param name="connection">数据库连接配置（Database 字段可为空）</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    /// <returns>数据库名称列表</returns>
+    Task<IReadOnlyList<string>> ListDatabasesAsync(
+        DatabaseConnection connection,
+        CancellationToken cancellationToken = default);
 }

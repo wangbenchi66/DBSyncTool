@@ -102,7 +102,7 @@ public sealed partial class DashboardViewModel : ObservableObject, IPageViewMode
     [RelayCommand]
     private void GoToExport()
     {
-        NavigateToPage?.Invoke("sync-export");
+        NavigateToPage?.Invoke("export");
     }
 
     /// <summary>
@@ -111,7 +111,16 @@ public sealed partial class DashboardViewModel : ObservableObject, IPageViewMode
     [RelayCommand]
     private void GoToCompare()
     {
-        NavigateToPage?.Invoke("sync-compare");
+        NavigateToPage?.Invoke("compare");
+    }
+
+    /// <summary>
+    /// 快捷操作：跳转到直连比对
+    ///</summary>
+    [RelayCommand]
+    private void GoToDirectCompare()
+    {
+        NavigateToPage?.Invoke("direct-compare");
     }
 
     /// <summary>

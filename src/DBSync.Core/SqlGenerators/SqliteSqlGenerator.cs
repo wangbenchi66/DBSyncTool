@@ -12,7 +12,9 @@ public sealed class SqliteSqlGenerator : ISqlGenerator
         SchemaDiff schemaDiff,
         IReadOnlyDictionary<string, DataDiff> dataDiffs,
         IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, string?>>>? fullData = null,
-        bool useTransaction = true)
+        bool useTransaction = true,
+        bool excludeIdentityColumns = false,
+        IReadOnlyDictionary<string, TableModel>? allTables = null)
     {
         if (dbType != DatabaseType.Sqlite)
             throw new ArgumentException("SqliteSqlGenerator 只支持 SQLite。", nameof(dbType));
@@ -37,7 +39,7 @@ public sealed class SqliteSqlGenerator : ISqlGenerator
             script.AppendLine();
         }
 
-        var dataTables = schemaDiff.AddedTables.Concat(schemaDiff.ModifiedTables.Select(t => t.SourceTable));
+        var dataTables = SqlGeneratorRows.ResolveDataTables(schemaDiff, dataDiffs, allTables);
         var sortedDataTables = FkTopologicalSorter.Sort(dataTables).Sorted;
         foreach (var table in sortedDataTables)
         {
@@ -45,7 +47,7 @@ public sealed class SqliteSqlGenerator : ISqlGenerator
                 continue;
 
             var rows = SqlGeneratorRows.ResolveRowsToInsert(table, diff, fullData);
-            foreach (var insert in GenerateInsertStatements(table, rows))
+            foreach (var insert in GenerateInsertStatements(table, rows, excludeIdentityColumns))
             {
                 script.AppendLine(insert);
                 script.AppendLine();
@@ -150,12 +152,13 @@ public sealed class SqliteSqlGenerator : ISqlGenerator
     public IReadOnlyList<string> GenerateInsertStatements(
         DatabaseType dbType,
         TableModel table,
-        IReadOnlyList<IReadOnlyDictionary<string, string?>> rows)
+        IReadOnlyList<IReadOnlyDictionary<string, string?>> rows,
+        bool excludeIdentityColumns = false)
     {
         if (dbType != DatabaseType.Sqlite)
             throw new ArgumentException("SqliteSqlGenerator 只支持 SQLite。", nameof(dbType));
 
-        return GenerateInsertStatements(table, rows);
+        return GenerateInsertStatements(table, rows, excludeIdentityColumns);
     }
 
     public string GenerateCreateTable(TableModel table) => GenerateCreateTable(DatabaseType.Sqlite, table);
@@ -166,12 +169,15 @@ public sealed class SqliteSqlGenerator : ISqlGenerator
 
     public IReadOnlyList<string> GenerateInsertStatements(
         TableModel table,
-        IReadOnlyList<IReadOnlyDictionary<string, string?>> rows)
+        IReadOnlyList<IReadOnlyDictionary<string, string?>> rows,
+        bool excludeIdentityColumns = false)
     {
         if (rows.Count == 0)
             return [];
 
         var columns = table.Columns.OrderBy(c => c.OrdinalPosition).ToList();
+        if (excludeIdentityColumns)
+            columns = columns.Where(c => !c.IsAutoIncrement && !c.IsIdentity).ToList();
         var columnNames = string.Join(", ", columns.Select(c => QuoteIdentifier(c.Name)));
         return rows.Select(row => BuildInsertStatement(table, columnNames, columns, row)).ToList();
     }

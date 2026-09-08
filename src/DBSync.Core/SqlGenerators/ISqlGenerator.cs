@@ -21,7 +21,9 @@ public interface ISqlGenerator
         SchemaDiff schemaDiff,
         IReadOnlyDictionary<string, DataDiff> dataDiffs,
         IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, string?>>>? fullData = null,
-        bool useTransaction = true);
+        bool useTransaction = true,
+        bool excludeIdentityColumns = false,
+        IReadOnlyDictionary<string, TableModel>? allTables = null);
 
     /// <summary>
     /// 生成单张表的 CREATE TABLE 语句
@@ -81,5 +83,6 @@ public interface ISqlGenerator
     IReadOnlyList<string> GenerateInsertStatements(
         DatabaseType dbType,
         TableModel table,
-        IReadOnlyList<IReadOnlyDictionary<string, string?>> rows);
+        IReadOnlyList<IReadOnlyDictionary<string, string?>> rows,
+        bool excludeIdentityColumns = false);
 }

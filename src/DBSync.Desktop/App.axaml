@@ -77,6 +77,20 @@
       <Setter Property="FontSize" Value="13"/>
     </Style>
 
+    <!-- ===== 列表项默认无过渡/缩放 ===== -->
+    <Style Selector="ListBoxItem">
+      <Setter Property="Transitions" Value="{x:Null}"/>
+      <Setter Property="RenderTransform" Value="{x:Null}"/>
+    </Style>
+    <Style Selector="TreeViewItem">
+      <Setter Property="Transitions" Value="{x:Null}"/>
+      <Setter Property="RenderTransform" Value="{x:Null}"/>
+    </Style>
+    <Style Selector="DataGridRow">
+      <Setter Property="Transitions" Value="{x:Null}"/>
+      <Setter Property="RenderTransform" Value="{x:Null}"/>
+    </Style>
+
     <Style Selector="Button.compact">
       <Setter Property="Padding" Value="8,4"/>
       <Setter Property="MinWidth" Value="0"/>
@@ -218,8 +232,14 @@
     <DataTemplate DataType="vm:ConnectionListViewModel">
       <views:ConnectionListView/>
     </DataTemplate>
-    <DataTemplate DataType="vm:SyncWorkflowViewModel">
-      <views:SyncWorkflowView/>
+    <DataTemplate DataType="vm:ExportViewModel">
+      <views:ExportView/>
+    </DataTemplate>
+    <DataTemplate DataType="vm:CompareViewModel">
+      <views:CompareView/>
+    </DataTemplate>
+    <DataTemplate DataType="vm:DirectCompareViewModel">
+      <views:DirectCompareView/>
     </DataTemplate>
     <DataTemplate DataType="vm:HistoryViewModel">
       <views:HistoryView/>

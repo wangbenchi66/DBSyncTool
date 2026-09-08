@@ -158,6 +158,12 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
     private bool useTransaction = true;
 
     /// <summary>
+    /// INSERT 语句是否排除自增列（IDENTITY / AUTO_INCREMENT）
+    ///</summary>
+    [ObservableProperty]
+    private bool excludeIdentityColumns;
+
+    /// <summary>
     /// 全局开关：是否生成结构变更语句（默认开启）
     ///</summary>
     [ObservableProperty]
@@ -186,6 +192,18 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
     ///</summary>
     [ObservableProperty]
     private ConnectionItemViewModel? selectedCompareConnection;
+
+    /// <summary>
+    /// 是否正在加载数据库列表
+    ///</summary>
+    [ObservableProperty]
+    private bool isLoadingDatabases;
+
+    /// <summary>
+    /// 当前选中的数据库名称
+    ///</summary>
+    [ObservableProperty]
+    private string? selectedCompareDatabaseName;
 
     /// <summary>
     /// 是否有未保存的待处理操作
@@ -233,6 +251,12 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
     /// 与快照数据库类型匹配的可用连接列表
     ///</summary>
     public ObservableCollection<ConnectionItemViewModel> CompareConnections { get; } = new();
+
+    /// <summary>
+    /// 服务器上所有可用的数据库名称（未筛选）
+    ///</summary>
+    public ObservableCollection<string> AllCompareDatabases { get; } = new();
+
 
     /// <summary>
     /// 结构差异预览树节点集合（全量，供脚本生成使用）
@@ -361,6 +385,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
         _windowProvider = windowProvider;
         _settings = _appSettingsStore.Load();
         CompareSnapshotPath = _settings.LastSnapshotPath ?? string.Empty;
+        RefreshCompareConnections();
     }
 
     /// <summary>
@@ -627,20 +652,22 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
         {
             StatusText = "正在生成脚本...";
             var dbType = SelectedCompareConnection?.ToDatabaseConnection()?.DbType ?? _loadedSnapshot!.Manifest.DbType;
-            var script = _sqlGenerator.GenerateUpgradeScript(dbType, _loadedSchemaDiff!, _loadedDataDiffs, _loadedSnapshot!.FullData, UseTransaction);
+            var script = BuildUpgradeScriptFromNodes(dbType);
+
+            await File.WriteAllTextAsync(path, script, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+            SaveRecentHistory("脚本", Path.GetFileName(path), path, SelectedCompareConnection?.ToDatabaseConnection()?.Name);
+            var fileSize = new FileInfo(path).Length;
             var lines = script.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
             var ddlCount = lines.Count(line =>
                 line.StartsWith("CREATE ", StringComparison.OrdinalIgnoreCase) ||
                 line.StartsWith("ALTER ", StringComparison.OrdinalIgnoreCase) ||
                 line.StartsWith("DROP ", StringComparison.OrdinalIgnoreCase));
-            var insertCount = lines.Count(line => line.StartsWith("INSERT INTO", StringComparison.OrdinalIgnoreCase));
-            var estimatedRows = _loadedDataDiffs.Values.Sum(diff => diff.RowsToInsert.Count + diff.DeletedRows.Count + diff.ChangedRows.Count);
-
-            await File.WriteAllTextAsync(path, script, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
-            SaveRecentHistory("脚本", Path.GetFileName(path), path, SelectedCompareConnection?.ToDatabaseConnection()?.Name);
-            var fileSize = new FileInfo(path).Length;
+            var dmlCount = lines.Count(line =>
+                line.StartsWith("INSERT ", StringComparison.OrdinalIgnoreCase) ||
+                line.StartsWith("UPDATE ", StringComparison.OrdinalIgnoreCase) ||
+                line.StartsWith("DELETE ", StringComparison.OrdinalIgnoreCase));
             StatusText = "脚本已生成";
-            LogSummary = $"脚本已保存：{path}；DDL {ddlCount} 条，INSERT {insertCount} 条，估计行数 {estimatedRows}，大小 {FormatFileSize(fileSize)}";
+            LogSummary = $"脚本已保存：{path}；DDL {ddlCount} 条，DML {dmlCount} 条，大小 {FormatFileSize(fileSize)}";
         }
         catch (Exception ex)
         {
@@ -648,6 +675,118 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
             LogSummary = ex.Message;
             Log.Error(ex, "生成升级脚本失败");
         }
+    }
+
+    /// <summary>
+    /// 根据 UI 节点的勾选状态组装完整的升级脚本
+    ///</summary>
+    private string BuildUpgradeScriptFromNodes(DatabaseType dbType)
+    {
+        var sb = new StringBuilder();
+        var selectedNodes = AllDiffSchemaNodes.Where(n => n.IsSelected).ToList();
+
+        sb.AppendLine("-- DBSyncTool Upgrade.sql");
+        sb.AppendLine($"-- 生成时间: {DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz}");
+        sb.AppendLine("-- 工具版本: DBSyncTool");
+        sb.AppendLine($"-- 选中表数量: {selectedNodes.Count}");
+        sb.AppendLine();
+
+        if (UseTransaction)
+        {
+            var txBegin = dbType == DatabaseType.SqlServer ? "SET XACT_ABORT ON;\nBEGIN TRANSACTION;" : "START TRANSACTION;";
+            if (dbType == DatabaseType.PostgreSql) txBegin = "BEGIN;";
+            if (dbType == DatabaseType.Sqlite) txBegin = "BEGIN;";
+            sb.AppendLine(txBegin);
+            sb.AppendLine();
+        }
+
+        foreach (var node in selectedNodes)
+        {
+            var tableName = node.Title.Split('（')[0].Trim();
+
+            // 结构变更
+            if (node.GenerateSchema)
+            {
+                var addedTable = _loadedSchemaDiff!.AddedTables
+                    .FirstOrDefault(t => t.FullName.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+                if (addedTable is not null)
+                {
+                    sb.AppendLine($"-- {tableName} 新增表");
+                    sb.AppendLine(_sqlGenerator.GenerateCreateTable(dbType, addedTable));
+                    sb.AppendLine();
+                }
+
+                var modifiedTable = _loadedSchemaDiff.ModifiedTables
+                    .FirstOrDefault(t => t.SourceTable.FullName.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+                if (modifiedTable is not null)
+                {
+                    sb.AppendLine($"-- {tableName} 结构变更");
+                    foreach (var sql in _sqlGenerator.GenerateAlterTable(dbType, modifiedTable))
+                    {
+                        sb.AppendLine(sql);
+                        sb.AppendLine();
+                    }
+                }
+
+                var removedTable = _loadedSchemaDiff.RemovedTables
+                    .FirstOrDefault(t => t.FullName.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+                if (removedTable is not null)
+                {
+                    sb.AppendLine($"-- {tableName} 删除表");
+                    sb.AppendLine(_sqlGenerator.GenerateDropTable(dbType, removedTable));
+                    sb.AppendLine();
+                }
+            }
+
+            // 数据 DML
+            if (!_loadedDataDiffs.TryGetValue(tableName, out var dataDiff) || dataDiff.Skipped)
+                continue;
+
+            var table = _loadedSnapshot!.Tables.GetValueOrDefault(tableName);
+            if (table is null)
+                continue;
+
+            if (node.GenerateInsert && dataDiff.RowsToInsert.Count > 0)
+            {
+                var rows = SqlGeneratorRows.ResolveRowsToInsert(table, dataDiff, _loadedSnapshot.FullData);
+                sb.AppendLine($"-- {tableName} 数据新增 {dataDiff.RowsToInsert.Count} 行");
+                foreach (var sql in _sqlGenerator.GenerateInsertStatements(dbType, table, rows, ExcludeIdentityColumns))
+                {
+                    sb.AppendLine(sql);
+                    sb.AppendLine();
+                }
+            }
+
+            if (node.GenerateDelete && dataDiff.DeletedRows.Count > 0)
+            {
+                var pkValues = dataDiff.DeletedRows.Select(r => r.PrimaryKeyValues).ToList();
+                sb.AppendLine($"-- {tableName} 数据删除 {dataDiff.DeletedRows.Count} 行");
+                foreach (var sql in _sqlGenerator.GenerateDeleteStatements(dbType, table, pkValues))
+                {
+                    sb.AppendLine(sql);
+                    sb.AppendLine();
+                }
+            }
+
+            if (node.GenerateUpdate && dataDiff.ChangedRows.Count > 0)
+            {
+                var changedRowData = dataDiff.ChangedRows.Select(r => r.PrimaryKeyValues).ToList();
+                sb.AppendLine($"-- {tableName} 数据变更 {dataDiff.ChangedRows.Count} 行");
+                foreach (var sql in _sqlGenerator.GenerateUpdateStatements(dbType, table, changedRowData))
+                {
+                    sb.AppendLine(sql);
+                    sb.AppendLine();
+                }
+            }
+        }
+
+        if (UseTransaction)
+        {
+            var txEnd = dbType == DatabaseType.SqlServer ? "COMMIT TRANSACTION;\nGO" : "COMMIT;";
+            sb.AppendLine(txEnd);
+        }
+
+        return sb.ToString().TrimEnd();
     }
 
     /// <summary>
@@ -674,25 +813,17 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
     ///</summary>
     public void RefreshCompareConnections()
     {
-        if (_loadedSnapshot is null)
-        {
-            CompareConnections.Clear();
-            SelectedCompareConnection = null;
-            return;
-        }
-
-        var targetDbType = _loadedSnapshot?.Manifest.DbType;
         var previousSelection = SelectedCompareConnection?.Name;
 
         CompareConnections.Clear();
 
         var allConnections = _connectionStore.Load();
-        var filtered = allConnections
-            .Where(c => c.DbType == targetDbType)
-            .Select(ConnectionItemViewModel.FromDatabaseConnection);
+        var connections = _loadedSnapshot is not null
+            ? allConnections.Where(c => c.DbType == _loadedSnapshot.Manifest.DbType)
+            : allConnections;
 
-        foreach (var connection in filtered)
-            CompareConnections.Add(connection);
+        foreach (var conn in connections.Select(ConnectionItemViewModel.FromDatabaseConnection))
+            CompareConnections.Add(conn);
 
         SelectedCompareConnection = CompareConnections.FirstOrDefault(c =>
             string.Equals(c.Name, previousSelection, StringComparison.OrdinalIgnoreCase))
@@ -718,6 +849,12 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
             var dbType = SelectedCompareConnection?.ToDatabaseConnection()?.DbType ?? _loadedSnapshot.Manifest.DbType;
             var tableName = value.Title.Split('（')[0].Trim();
             var sb = new StringBuilder();
+
+            if (UseTransaction)
+            {
+                sb.AppendLine(GetTransactionBegin(dbType));
+                sb.AppendLine();
+            }
 
             if (value.GenerateSchema)
             {
@@ -754,7 +891,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
                 {
                     var rows = SqlGeneratorRows.ResolveRowsToInsert(table, dataDiff, _loadedSnapshot.FullData);
                     sb.AppendLine($"-- {tableName} 数据新增 {dataDiff.RowsToInsert.Count} 行");
-                    sb.AppendLine(string.Join(Environment.NewLine, _sqlGenerator.GenerateInsertStatements(dbType, table, rows)));
+                    sb.AppendLine(string.Join(Environment.NewLine, _sqlGenerator.GenerateInsertStatements(dbType, table, rows, ExcludeIdentityColumns)));
                 }
 
                 if (value.GenerateDelete && dataDiff.DeletedRows.Count > 0 && table is not null)
@@ -771,6 +908,9 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
                     sb.AppendLine(string.Join(Environment.NewLine, _sqlGenerator.GenerateUpdateStatements(dbType, table, changedRowData)));
                 }
             }
+
+            if (UseTransaction)
+                sb.AppendLine(GetTransactionEnd(dbType));
 
             SelectedDiffSqlText = sb.ToString().TrimEnd();
         }
@@ -795,6 +935,51 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
         _loadedSchemaDiff = null;
         _loadedDataDiffs.Clear();
         _comparedSnapshotTables = [];
+        _ = LoadCompareDatabasesAsync();
+    }
+
+    /// <summary>
+    /// 从当前选中的比对连接获取可用的数据库列表
+    ///</summary>
+    private async Task LoadCompareDatabasesAsync()
+    {
+        AllCompareDatabases.Clear();
+        SelectedCompareDatabaseName = null;
+
+        var conn = SelectedCompareConnection?.ToDatabaseConnection();
+        if (conn is null || conn.DbType == DatabaseType.Sqlite)
+            return;
+
+        try
+        {
+            IsLoadingDatabases = true;
+            var databases = await _schemaReader.ListDatabasesAsync(conn);
+            foreach (var db in databases)
+                AllCompareDatabases.Add(db);
+            SelectedCompareDatabaseName = AllCompareDatabases.FirstOrDefault(
+                db => string.Equals(db, SelectedCompareConnection?.Database, StringComparison.OrdinalIgnoreCase))
+                ?? AllCompareDatabases.FirstOrDefault();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "获取数据库列表失败");
+        }
+        finally
+        {
+            IsLoadingDatabases = false;
+        }
+    }
+
+    /// <summary>
+    /// 选中数据库变更时更新比对连接的 Database 字段
+    ///</summary>
+    partial void OnSelectedCompareDatabaseNameChanged(string? value)
+    {
+        if (SelectedCompareConnection is not null && !string.IsNullOrEmpty(value))
+        {
+            SelectedCompareConnection.Database = value;
+            StatusText = $"已切换到数据库：{value}";
+        }
     }
 
     [RelayCommand]
@@ -1221,6 +1406,9 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
             BuildCategoryDiffSql();
     }
 
+    partial void OnUseTransactionChanged(bool value) => RefreshDiffSql();
+    partial void OnExcludeIdentityColumnsChanged(bool value) => RefreshDiffSql();
+
     partial void OnGlobalGenerateSchemaChanged(bool value) { SyncGlobalToNodes(n => n.GenerateSchema = value); BuildCategoryDiffSql(); }
     partial void OnGlobalGenerateInsertChanged(bool value) { SyncGlobalToNodes(n => n.GenerateInsert = value); BuildCategoryDiffSql(); }
     partial void OnGlobalGenerateUpdateChanged(bool value) { SyncGlobalToNodes(n => n.GenerateUpdate = value); BuildCategoryDiffSql(); }
@@ -1255,6 +1443,25 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
     /// <summary>
     /// 根据当前分类下所有表生成合并的 SQL 差异文本
     ///</summary>
+    /// <summary>
+    /// 根据数据库类型获取事务开始语句
+    /// </summary>
+    private static string GetTransactionBegin(DatabaseType dbType) => dbType switch
+    {
+        DatabaseType.SqlServer => "SET XACT_ABORT ON;\nBEGIN TRANSACTION;",
+        DatabaseType.MySql => "START TRANSACTION;",
+        _ => "BEGIN;"
+    };
+
+    /// <summary>
+    /// 根据数据库类型获取事务提交语句
+    /// </summary>
+    private static string GetTransactionEnd(DatabaseType dbType) => dbType switch
+    {
+        DatabaseType.SqlServer => "COMMIT TRANSACTION;\nGO",
+        _ => "COMMIT;"
+    };
+
     private void BuildCategoryDiffSql()
     {
         if (_loadedSchemaDiff is null || _loadedSnapshot is null)
@@ -1267,6 +1474,13 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
         {
             var dbType = SelectedCompareConnection?.ToDatabaseConnection()?.DbType ?? _loadedSnapshot.Manifest.DbType;
             var sb = new StringBuilder();
+
+            if (UseTransaction)
+            {
+                sb.AppendLine(GetTransactionBegin(dbType));
+                sb.AppendLine();
+            }
+
             var processedTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var node in CurrentDiffNodes.Where(n => n.IsSelected))
@@ -1311,7 +1525,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
                     if (node.GenerateInsert && dataDiff.RowsToInsert.Count > 0 && table is not null)
                     {
                         var rows = SqlGeneratorRows.ResolveRowsToInsert(table, dataDiff, _loadedSnapshot.FullData);
-                        var insertSql = _sqlGenerator.GenerateInsertStatements(dbType, table, rows);
+                        var insertSql = _sqlGenerator.GenerateInsertStatements(dbType, table, rows, ExcludeIdentityColumns);
                         sb.AppendLine($"-- {tableName} 数据新增 {dataDiff.RowsToInsert.Count} 行");
                         sb.AppendLine(string.Join(Environment.NewLine, insertSql));
                         sb.AppendLine();
@@ -1336,6 +1550,9 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
                     }
                 }
             }
+
+            if (UseTransaction)
+                sb.AppendLine(GetTransactionEnd(dbType));
 
             SelectedDiffSqlText = sb.ToString().TrimEnd();
         }
@@ -1367,7 +1584,7 @@ public partial class CompareViewModel : ObservableObject, IPageViewModel
 
         var dbType = SelectedCompareConnection?.ToDatabaseConnection()?.DbType ?? _loadedSnapshot.Manifest.DbType;
         var rows = SqlGeneratorRows.ResolveRowsToInsert(table, diff, _loadedSnapshot.FullData);
-        return string.Join(Environment.NewLine, _sqlGenerator.GenerateInsertStatements(dbType, table, rows));
+        return string.Join(Environment.NewLine, _sqlGenerator.GenerateInsertStatements(dbType, table, rows, ExcludeIdentityColumns));
     }
 
     /// <summary>

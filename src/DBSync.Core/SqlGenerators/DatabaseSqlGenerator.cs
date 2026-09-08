@@ -13,14 +13,16 @@ public sealed class DatabaseSqlGenerator(
         SchemaDiff schemaDiff,
         IReadOnlyDictionary<string, DataDiff> dataDiffs,
         IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, string?>>>? fullData = null,
-        bool useTransaction = true)
+        bool useTransaction = true,
+        bool excludeIdentityColumns = false,
+        IReadOnlyDictionary<string, TableModel>? allTables = null)
     {
         return dbType switch
         {
-            DatabaseType.SqlServer => sqlServer.GenerateUpgradeScript(dbType, schemaDiff, dataDiffs, fullData, useTransaction),
-            DatabaseType.MySql => mySql.GenerateUpgradeScript(dbType, schemaDiff, dataDiffs, fullData, useTransaction),
-            DatabaseType.PostgreSql => postgreSql.GenerateUpgradeScript(dbType, schemaDiff, dataDiffs, fullData, useTransaction),
-            DatabaseType.Sqlite => sqlite.GenerateUpgradeScript(dbType, schemaDiff, dataDiffs, fullData, useTransaction),
+            DatabaseType.SqlServer => sqlServer.GenerateUpgradeScript(dbType, schemaDiff, dataDiffs, fullData, useTransaction, excludeIdentityColumns, allTables),
+            DatabaseType.MySql => mySql.GenerateUpgradeScript(dbType, schemaDiff, dataDiffs, fullData, useTransaction, excludeIdentityColumns, allTables),
+            DatabaseType.PostgreSql => postgreSql.GenerateUpgradeScript(dbType, schemaDiff, dataDiffs, fullData, useTransaction, excludeIdentityColumns, allTables),
+            DatabaseType.Sqlite => sqlite.GenerateUpgradeScript(dbType, schemaDiff, dataDiffs, fullData, useTransaction, excludeIdentityColumns, allTables),
             _ => throw new NotSupportedException($"不支持的数据库类型：{dbType}")
         };
     }
@@ -69,14 +71,15 @@ public sealed class DatabaseSqlGenerator(
     public IReadOnlyList<string> GenerateInsertStatements(
         DatabaseType dbType,
         TableModel table,
-        IReadOnlyList<IReadOnlyDictionary<string, string?>> rows)
+        IReadOnlyList<IReadOnlyDictionary<string, string?>> rows,
+        bool excludeIdentityColumns = false)
     {
         return dbType switch
         {
-            DatabaseType.SqlServer => sqlServer.GenerateInsertStatements(table, rows),
-            DatabaseType.MySql => mySql.GenerateInsertStatements(table, rows),
-            DatabaseType.PostgreSql => postgreSql.GenerateInsertStatements(table, rows),
-            DatabaseType.Sqlite => sqlite.GenerateInsertStatements(table, rows),
+            DatabaseType.SqlServer => sqlServer.GenerateInsertStatements(table, rows, excludeIdentityColumns),
+            DatabaseType.MySql => mySql.GenerateInsertStatements(table, rows, excludeIdentityColumns),
+            DatabaseType.PostgreSql => postgreSql.GenerateInsertStatements(table, rows, excludeIdentityColumns),
+            DatabaseType.Sqlite => sqlite.GenerateInsertStatements(table, rows, excludeIdentityColumns),
             _ => throw new NotSupportedException($"不支持的数据库类型：{dbType}")
         };
     }

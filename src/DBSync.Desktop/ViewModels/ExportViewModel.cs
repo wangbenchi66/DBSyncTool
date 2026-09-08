@@ -82,6 +82,18 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
     private string tableFilter = string.Empty;
 
     /// <summary>
+    /// 是否正在加载数据库列表
+    ///</summary>
+    [ObservableProperty]
+    private bool isLoadingDatabases;
+
+    /// <summary>
+    /// 当前选中的数据库名称
+    ///</summary>
+    [ObservableProperty]
+    private string? selectedDatabaseName;
+
+    /// <summary>
     /// 快照加密密码
     ///</summary>
     [ObservableProperty]
@@ -162,6 +174,11 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
     /// 可用的数据库连接列表
     ///</summary>
     public ObservableCollection<ConnectionItemViewModel> Connections { get; } = new();
+
+    /// <summary>
+    /// 服务器上所有可用的数据库名称（未筛选）
+    ///</summary>
+    public ObservableCollection<string> AllDatabases { get; } = new();
 
     /// <summary>
     /// 从数据库读取到的全部表列表（未筛选）
@@ -505,6 +522,51 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
             return;
 
         ExportFileName = CreateDefaultFileName(value?.Name);
+        _ = LoadDatabasesForConnectionAsync();
+    }
+
+    /// <summary>
+    /// 从当前选中的连接获取可用的数据库列表
+    ///</summary>
+    private async Task LoadDatabasesForConnectionAsync()
+    {
+        AllDatabases.Clear();
+        SelectedDatabaseName = null;
+
+        var conn = SelectedConnection?.ToDatabaseConnection();
+        if (conn is null || conn.DbType == Core.Models.DatabaseType.Sqlite)
+            return;
+
+        try
+        {
+            IsLoadingDatabases = true;
+            var databases = await _schemaReader.ListDatabasesAsync(conn);
+            foreach (var db in databases)
+                AllDatabases.Add(db);
+            SelectedDatabaseName = AllDatabases.FirstOrDefault(
+                db => string.Equals(db, SelectedConnection?.Database, StringComparison.OrdinalIgnoreCase))
+                ?? AllDatabases.FirstOrDefault();
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Warning(ex, "获取数据库列表失败");
+        }
+        finally
+        {
+            IsLoadingDatabases = false;
+        }
+    }
+
+    /// <summary>
+    /// 选中数据库变更时更新连接的 Database 字段
+    ///</summary>
+    partial void OnSelectedDatabaseNameChanged(string? value)
+    {
+        if (SelectedConnection is not null && !string.IsNullOrEmpty(value))
+        {
+            SelectedConnection.Database = value;
+            StatusText = $"已切换到数据库：{value}";
+        }
     }
 
     partial void OnExportDirectoryChanged(string value)
