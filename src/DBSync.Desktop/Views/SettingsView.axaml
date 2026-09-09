@@ -85,7 +85,7 @@
           <StackPanel Grid.Row="1" Spacing="8" Margin="16">
             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
               <TextBlock Text="版本" FontSize="12" Foreground="{DynamicResource Ink500}"/>
-              <TextBlock Grid.Column="1" Text="v2.1.0" FontSize="12" FontWeight="SemiBold"
+              <TextBlock Grid.Column="1" Text="{Binding VersionText}" FontSize="12" FontWeight="SemiBold"
                          Foreground="{DynamicResource Ink800}"/>
             </Grid>
             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">

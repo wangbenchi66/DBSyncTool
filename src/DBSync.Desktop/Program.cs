@@ -23,7 +23,7 @@ internal static class Program
         try
         {
             var hostBuilder = Host.CreateDefaultBuilder(args);
-            hostBuilder.AddSerilogHost(null, Serilog.Events.LogEventLevel.Information);
+            hostBuilder.AddSerilogHost("./logs/", Serilog.Events.LogEventLevel.Information);
             hostBuilder.ConfigureServices((_, services) =>
             {
                 services.AddRegisterDependencies();

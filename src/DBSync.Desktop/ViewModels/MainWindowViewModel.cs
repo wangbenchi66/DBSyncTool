@@ -1,9 +1,12 @@
+using System.Diagnostics;
 using Avalonia.Controls;
 using Avalonia.Controls.Notifications;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using DBSync.Desktop.Services;
+using DBSync.Core.Versioning;
 using DBSync.Desktop.Models;
+using DBSync.Desktop.Services;
+using DBSync.Desktop.Views;
 using SukiUI.Toasts;
 
 namespace DBSync.Desktop.ViewModels;
@@ -17,6 +20,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// 应用设置存储
     ///</summary>
     private readonly IAppSettingsStore _appSettingsStore;
+
+    /// <summary>
+    /// 版本更新检查服务
+    ///</summary>
+    private readonly UpdateChecker _updateChecker;
 
     /// <summary>
     /// 连接管理页面 ViewModel
@@ -100,6 +108,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private Window? _ownerWindow;
 
     /// <summary>
+    /// 当前版本显示文本（带 v 前缀）
+    ///</summary>
+    public string VersionText => "v" + AppVersion.Current;
+
+    /// <summary>
     /// 浮动提示管理器
     ///</summary>
     public ISukiToastManager ToastManager { get; } = new SukiToastManager();
@@ -112,6 +125,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <param name="compare">比对 ViewModel</param>
     /// <param name="history">历史 ViewModel</param>
     /// <param name="appSettingsStore">应用设置存储</param>
+    /// <param name="updateChecker">版本更新检查服务</param>
     public MainWindowViewModel(
         ConnectionListViewModel connectionList,
         ExportViewModel export,
@@ -120,7 +134,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         HistoryViewModel history,
         DashboardViewModel dashboard,
         SettingsViewModel settingsVm,
-        IAppSettingsStore appSettingsStore)
+        IAppSettingsStore appSettingsStore,
+        UpdateChecker updateChecker)
     {
         ConnectionList = connectionList;
         Export = export;
@@ -130,6 +145,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Dashboard = dashboard;
         Settings = settingsVm;
         _appSettingsStore = appSettingsStore;
+        _updateChecker = updateChecker;
 
         ConnectionList.ConnectionsChanged += OnConnectionsChanged;
 
@@ -223,6 +239,63 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public void AttachOwnerWindow(Window ownerWindow)
     {
         _ownerWindow = ownerWindow;
+    }
+
+    /// <summary>
+    /// 启动时后台检查更新：发现更高版本且未提醒过时弹窗引导下载；所有失败静默。
+    /// 由主窗口 Opened 事件触发（此时主窗口与 owner 引用均已就绪）。
+    ///</summary>
+    public async Task CheckForUpdatesOnStartupAsync()
+    {
+        try
+        {
+            if (_ownerWindow is not { } owner)
+                return;
+
+            var latest = await _updateChecker.GetLatestReleaseAsync();
+            if (latest is null || !latest.IsNewerThanCurrent)
+                return;
+
+            // 已提醒过该版本则不再打扰，直到出现更高版本
+            var settings = _appSettingsStore.Load();
+            if (settings.IgnoredUpdateVersion == latest.TagName)
+                return;
+
+            var action = await UpdateAvailableWindow.ShowAsync(
+                owner,
+                latest.TagName.TrimStart('v'),
+                AppVersion.Current.ToString());
+
+            if (action == UpdateAction.Later)
+            {
+                settings = settings with { IgnoredUpdateVersion = latest.TagName };
+                _appSettingsStore.Save(settings);
+            }
+            else if (action == UpdateAction.Download)
+            {
+                OpenBrowser(latest.HtmlUrl);
+            }
+        }
+        catch
+        {
+            // 检查更新失败静默，不影响主流程
+        }
+    }
+
+    /// <summary>
+    /// 用系统默认浏览器打开指定地址（打开失败静默）
+    ///</summary>
+    /// <param name="url">要打开的网址</param>
+    private static void OpenBrowser(string url)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch
+        {
+            // 打开浏览器失败静默
+        }
     }
 
     /// <summary>

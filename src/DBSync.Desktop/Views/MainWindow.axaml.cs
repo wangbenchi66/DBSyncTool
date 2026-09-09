@@ -38,5 +38,8 @@ public partial class MainWindow : SukiWindow
         DataContext = viewModel;
         viewModel.AttachOwnerWindow(this);
         windowProvider.SetMainWindow(this);
+
+        // 窗口显示后再触发更新检查（此时主窗口与 owner 均已就绪）
+        Opened += (_, _) => _ = viewModel.CheckForUpdatesOnStartupAsync();
     }
 }

@@ -36,6 +36,11 @@ public sealed record AppSettings
     public string? LastPageName { get; init; }
 
     /// <summary>
+    /// 已提醒过更新（被“稍后”）的最新版本标签，用于防打扰
+    ///</summary>
+    public string? IgnoredUpdateVersion { get; init; }
+
+    /// <summary>
     /// 默认导出目录
     ///</summary>
     public string? DefaultExportDirectory { get; init; }

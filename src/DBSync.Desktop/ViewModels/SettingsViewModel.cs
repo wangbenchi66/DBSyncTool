@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using DBSync.Core.Versioning;
 using DBSync.Desktop.Services;
 
 namespace DBSync.Desktop.ViewModels;
@@ -49,6 +50,11 @@ public sealed partial class SettingsViewModel : ObservableObject, IPageViewModel
     ///</summary>
     [ObservableProperty]
     private bool defaultUseTransaction = true;
+
+    /// <summary>
+    /// 当前版本显示文本（带 v 前缀）
+    ///</summary>
+    public string VersionText => "v" + AppVersion.Current;
 
     /// <summary>
     /// 创建设置页面 ViewModel

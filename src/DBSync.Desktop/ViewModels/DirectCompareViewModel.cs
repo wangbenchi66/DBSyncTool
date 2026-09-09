@@ -307,9 +307,28 @@ public partial class DirectCompareViewModel : ObservableObject, IPageViewModel
     ///</summary>
     public void RefreshConnections()
     {
+        var previousSource = SelectedSourceConnection?.Name;
+        var previousSourceDb = SelectedSourceDatabaseName;
+        var previousTarget = SelectedTargetConnection?.Name;
+        var previousTargetDb = SelectedTargetDatabaseName;
+
         Connections.Clear();
         foreach (var conn in _connectionStore.Load())
             Connections.Add(ConnectionItemViewModel.FromDatabaseConnection(conn));
+
+        // 恢复之前选中的源库连接（设置后会触发数据库列表加载）
+        var restoredSource = Connections.FirstOrDefault(c =>
+            string.Equals(c.Name, previousSource, StringComparison.OrdinalIgnoreCase));
+        if (restoredSource is not null && !string.IsNullOrEmpty(previousSourceDb))
+            restoredSource.Database = previousSourceDb;
+        SelectedSourceConnection = restoredSource;
+
+        // 恢复之前选中的目标库连接
+        var restoredTarget = Connections.FirstOrDefault(c =>
+            string.Equals(c.Name, previousTarget, StringComparison.OrdinalIgnoreCase));
+        if (restoredTarget is not null && !string.IsNullOrEmpty(previousTargetDb))
+            restoredTarget.Database = previousTargetDb;
+        SelectedTargetConnection = restoredTarget;
     }
 
     partial void OnSelectedSourceConnectionChanged(ConnectionItemViewModel? value)

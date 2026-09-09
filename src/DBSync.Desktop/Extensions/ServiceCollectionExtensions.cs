@@ -27,6 +27,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAppSettingsStore, JsonAppSettingsStore>();
         services.AddSingleton<IConnectionStore, LocalConnectionStore>();
         services.AddSingleton<DiffReportExporter>();
+        services.AddSingleton<UpdateChecker>();
         services.AddSingleton<WindowProvider>();
         services.AddSingleton<IWindowProvider>(sp => sp.GetRequiredService<WindowProvider>());
 

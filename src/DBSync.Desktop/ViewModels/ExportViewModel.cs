@@ -271,6 +271,9 @@ public partial class ExportViewModel : ObservableObject, IPageViewModel
                     RowCountWarningThreshold = ParseRowCountWarningThreshold(),
                     ConfirmLargeExportAsync = ConfirmLargeExportAsync
                 };
+                // 一万条以下的表自动勾选
+                if (table.EstimatedRowCount is not null and < 10_000)
+                    item.IsSelected = true;
                 item.PropertyChanged += OnExportTableItemPropertyChanged;
                 ExportTables.Add(item);
             }

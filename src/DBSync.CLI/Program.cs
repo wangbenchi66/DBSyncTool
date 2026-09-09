@@ -8,6 +8,7 @@ using DBSync.Core.Models;
 using DBSync.Core.Schema;
 using DBSync.Core.Snapshot;
 using DBSync.Core.SqlGenerators;
+using DBSync.Core.Versioning;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DBSync.CLI;
@@ -366,8 +367,8 @@ public static class Program
     ///</summary>
     private static int PrintUsage()
     {
-        Console.WriteLine("""
-            DBSyncTool CLI v3.0
+        Console.WriteLine($"""
+            DBSyncTool CLI v{AppVersion.Current}
 
             用法：dbsync <命令> [选项]
 

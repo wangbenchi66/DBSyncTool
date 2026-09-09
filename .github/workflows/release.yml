@@ -1,0 +1,71 @@
+name: 发布 Release
+
+# 推送 v* 标签（如 v1.0.0）时自动打包并发布 GitHub Release。
+# 本仓库是 Gitee 的 GitHub 镜像仓库，Gitee 侧推 tag 并同步到 GitHub 后即可触发；
+# 也可 workflow_dispatch 手动补跑（需把运行所用 ref 选到某个 v* 标签，否则各 job 条件不满足而跳过）。
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # Windows 产物：桌面版 + CLI（均 win-x64 自包含单文件）
+  build-windows:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 解析版本号
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: 发布桌面版(win-x64 自包含单文件)
+        run: >
+          dotnet publish src/DBSync.Desktop/DBSync.Desktop.csproj -c Release -r win-x64
+          --self-contained true -p:PublishSingleFile=true -p:PublishReadyToRun=true
+          -p:PublishTrimmed=true -p:TrimMode=partial -p:EnableCompressionInSingleFile=true
+          -p:DebugType=none -p:InvariantGlobalization=true -p:Version=$env:VERSION
+          -o publish/desktop
+
+      - name: 发布 CLI(win-x64 自包含单文件)
+        run: >
+          dotnet publish src/DBSync.CLI/DBSync.CLI.csproj -c Release -r win-x64
+          --self-contained true -p:PublishSingleFile=true -p:DebugType=none
+          -p:Version=$env:VERSION -o publish/cli
+
+      # 单文件 exe 之外还有旁置的原生库（Skia/SNI/SQLite/ANGLE 等），必须整目录打包
+      - name: 压缩为 zip
+        shell: pwsh
+        run: |
+          Get-ChildItem publish/desktop -File | Where-Object { $_.Extension -ne '.pdb' } | Compress-Archive -DestinationPath "DBSync.Desktop-$env:VERSION-win-x64.zip"
+          Get-ChildItem publish/cli -File | Where-Object { $_.Extension -ne '.pdb' } | Compress-Archive -DestinationPath "dbsync-$env:VERSION-win-x64.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: win
+          path: '*.zip'
+
+  # 汇总产物并创建 GitHub Release
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    needs: build-windows
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: 创建 GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" dist/*.zip --generate-notes
