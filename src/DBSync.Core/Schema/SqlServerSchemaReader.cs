@@ -111,6 +111,10 @@ public sealed class SqlServerSchemaReader : ISchemaReader
             EstimatedDataSizeMb = table.EstimatedDataSizeMb,
             Columns = columns
                 .Where(c => SameTable(c.SchemaName, c.TableName, table))
+                // 按列名精确区分大小写分组；字节相同的重复行（同一列被查两次）只保留位置最小的一行，
+                // 但同名不同大小写的两列在大小写敏感库中真实存在，会各自保留
+                .GroupBy(c => c.Name)
+                .Select(g => g.OrderBy(c => c.OrdinalPosition).First())
                 .OrderBy(c => c.OrdinalPosition)
                 .Select(ToColumnModel)
                 .ToList(),
@@ -131,7 +135,7 @@ public sealed class SqlServerSchemaReader : ISchemaReader
                 .ToList(),
             Indexes = indexes
                 .Where(i => SameTable(i.SchemaName, i.TableName, table))
-                .GroupBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+                .GroupBy(i => i.Name)
                 .Select(ToIndexModel)
                 .ToList()
         };
