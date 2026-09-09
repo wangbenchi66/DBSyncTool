@@ -34,7 +34,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: 解析版本号
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          # VERSION=完整版本（如 1.0.1-rc.1）用于产物文件名/Release；VER=纯数字前段，供 AssemblyVersion 与 Inno 内部版本（不允许预发布段）
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+          echo "VER=${V%%-*}" >> "$GITHUB_ENV"
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -45,7 +49,7 @@ jobs:
           dotnet publish src/DBSync.CLI/DBSync.CLI.csproj -c Release -r ${{ matrix.rid }}
           --self-contained true
           -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
-          -p:DebugType=none -p:Version=$VERSION
+          -p:DebugType=none -p:Version=$VER
           -o publish/cli-${{ matrix.rid }}
 
       - name: 移除 pdb
@@ -77,7 +81,11 @@ jobs:
 
       - name: 解析版本号
         shell: bash
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          # VERSION=完整版本（如 1.0.1-rc.1）用于产物文件名/Release；VER=纯数字前段，供 AssemblyVersion 与 Inno 内部版本（不允许预发布段）
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+          echo "VER=${V%%-*}" >> "$GITHUB_ENV"
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -91,7 +99,7 @@ jobs:
           --self-contained true
           -p:PublishTrimmed=true -p:TrimMode=partial
           -p:DebugType=none -p:InvariantGlobalization=true
-          -p:Version=$env:VERSION
+          -p:Version=$env:VER
           -o publish/desktop-install
 
       # B. 绿色单 exe：单文件 + 原生库内嵌（运行时自解压到 %TEMP%\.net）。
@@ -105,7 +113,7 @@ jobs:
           -p:EnableCompressionInSingleFile=true -p:DebugType=none
           -p:InvariantGlobalization=true
           -p:IncludeNativeLibrariesForSelfExtract=true
-          -p:Version=$env:VERSION
+          -p:Version=$env:VER
           -o publish/desktop-single
 
       - name: 移除 pdb
@@ -147,11 +155,15 @@ jobs:
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { throw "未找到 ISCC.exe：$iscc" }
+          # MyAppVersion 传纯数字 VER（Inno 的 VersionInfoVersion 同样不接受 -rc.x 段）；文件名随后统一为完整 VERSION
           & $iscc "build\setup.iss" `
-            "/DMyAppVersion=$env:VERSION" `
+            "/DMyAppVersion=$env:VER" `
             "/DDesktopDir=$env:GITHUB_WORKSPACE\publish\desktop-install" `
             "/DIconPath=$env:GITHUB_WORKSPACE\src\DBSync.Desktop\Assets\app-icon.ico"
-          # iss 的 OutputDir 指向仓库根，产物为 DBSyncTool-Setup-<v>-win-x64.exe
+          # iss 的 OutputDir 指向仓库根，产物为 DBSyncTool-Setup-<VER>-win-x64.exe；有 rc 后缀时重命名为完整版本名
+          if ($env:VERSION -ne $env:VER) {
+            Move-Item "DBSyncTool-Setup-$env:VER-win-x64.exe" "DBSyncTool-Setup-$env:VERSION-win-x64.exe" -Force
+          }
           Get-ChildItem "DBSyncTool-Setup-$env:VERSION-win-x64.exe" | Select-Object Name, Length
 
       # C. fd 体积版（体积优先，需目标机已装 .NET 10 Runtime）。
@@ -162,7 +174,7 @@ jobs:
           dotnet publish src/DBSync.Desktop/DBSync.Desktop.csproj -c Release -r win-x64
           --self-contained false
           -p:DebugType=none -p:InvariantGlobalization=true
-          -p:Version=$env:VERSION
+          -p:Version=$env:VER
           -o publish/desktop-fd
 
       - name: 移除 fd pdb
