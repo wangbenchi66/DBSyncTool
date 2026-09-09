@@ -151,14 +151,14 @@ dbsync execute --snapshot snapshot.dbsync --connection "..."
 | 版本包 | 适用场景 | 说明 | 下载入口 |
 | :--- | :--- | :--- | :--- |
 | **桌面端安装版（推荐）** | Windows 用户 | `DBSyncTool-Setup-<版本>-win-x64.exe`：Inno 安装向导，装到 Program Files、带开始菜单/快捷方式/卸载 | [⬇️ 下载安装包](https://github.com/wangbenchi66/DBSyncTool/releases) |
-| **桌面端便携版** | Windows 免安装 | `DBSyncTool-<版本>-win-x64.exe`：绿色单文件，双击直接运行，无需 .NET | [⬇️ 下载绿色版](https://github.com/wangbenchi66/DBSyncTool/releases) |
+| **桌面端便携版** | Windows 免安装 | `DBSyncTool-<版本>-win-x64.zip`：自包含多文件（无需 .NET），整包解压后运行 `DBSync.Desktop.exe` | [⬇️ 下载便携版](https://github.com/wangbenchi66/DBSyncTool/releases) |
 | **桌面端 fd 体积版** | 已装 .NET 10 Runtime | `DBSyncTool-<版本>-win-x64-fd.zip`：体积最小的便携版（不含 .NET 运行时），整包解压后运行 | [⬇️ 下载 fd 体积版](https://github.com/wangbenchi66/DBSyncTool/releases) |
 | **CLI 命令行** | 服务器 / 自动化 | 单文件：`dbsync-<版本>-win-x64.exe` / `-linux-x64` / `-osx-x64`，无需 .NET；Linux/macOS 先 `chmod +x` | [⬇️ 下载 dbsync](https://github.com/wangbenchi66/DBSyncTool/releases) |
 | **源码运行** | 开发者 | 需 .NET 10 SDK | 见下方[本地构建](#build) |
 
 ### 基础使用流程：
 
-1. 下载**安装包**运行向导安装后启动；或下载**绿色版**单文件放到可写目录直接双击运行；
+1. 下载**安装包**运行向导安装后启动；或下载**便携版 zip** 解压到可写目录后运行 `DBSync.Desktop.exe`；
 2. 在「连接管理」页面添加数据库连接，密码经本机加密存储；
 3. 在目标库侧「导出快照」，将 `.dbsync` 文件传递到源库侧；
 4. 在源库侧「加载对比」，查看差异清单与 SQL 预览；

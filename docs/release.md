@@ -20,21 +20,21 @@
 2. GitHub 收到 `v*` 标签后，`.github/workflows/release.yml` 自动构建并发布以下产物到 **GitHub Releases** 页（变更说明由 git 提交自动生成）：
 
    **桌面端（Windows x64）**
-   - `DBSyncTool-<版本>-win-x64.exe` —— 绿色便携**单文件**，双击直接运行，免安装、无需 .NET；Skia/SNI/SQLite/ANGLE 等原生库已内嵌 exe，首次启动自解压到系统临时目录运行，属正常现象
+   - `DBSyncTool-<版本>-win-x64.zip` —— **便携版**（自包含多文件，免安装、无需 .NET）：exe + dll + 原生库，整包解压后运行 `DBSync.Desktop.exe`。采用多文件而非“压缩单文件”，规避后者丢失 Avalonia 内嵌资源（app-icon.ico 找不到）导致启动即崩的问题
    - `DBSyncTool-<版本>-win-x64-fd.zip` —— **fd 体积版**便携整目录，体积最小（不含 .NET 运行时），需目标机已装 **.NET 10 Runtime**；整包解压后运行（内为 exe + dll + 原生库）
    - `DBSyncTool-Setup-<版本>-win-x64.exe` —— Inno Setup **安装向导**，装到 `Program Files\DBSyncTool`，带开始菜单/可选桌面快捷方式与卸载入口（需管理员权限）
 
    **CLI（x64 单文件，三平台）**
    - `dbsync-<版本>-win-x64.exe` / `dbsync-<版本>-linux-x64` / `dbsync-<版本>-osx-x64`
 
-   > 自 v1.1 起**不再发布**旧形态的“整目录 zip”；程序数据（设置 / 连接 / 日志）统一存放于用户目录 `%APPDATA%\DBSyncTool`，删除/卸载后不留残留在程序目录。
+   > 程序数据（设置 / 连接 / 日志）统一存放于用户目录 `%APPDATA%\DBSyncTool`，便携/安装版删除或卸载后均不在程序目录残留。
 
 3. 重复推送同一个标签不会覆盖，GitHub 会报错；需先删除已存在的同名 Release 与标签再重试。
 
 ## 产物下载与使用说明
 
 - **普通用户（Windows）**：下载 `DBSyncTool-Setup-<版本>-win-x64.exe` 安装，之后从开始菜单/桌面快捷方式启动。
-- **免安装 / 携带版**：下载 `DBSyncTool-<版本>-win-x64.exe` 放到任意可写目录直接双击运行。
+- **免安装 / 携带版**：下载 `DBSyncTool-<版本>-win-x64.zip`，整包解压到任意可写目录后运行 `DBSync.Desktop.exe`。
 - **已装 .NET 10 Runtime / 体积优先**：下载 `DBSyncTool-<版本>-win-x64-fd.zip`，整包解压后运行（体积最小，带 dll 与原生库）。
 - **Linux / macOS CLI**：`dbsync-<版本>-linux-x64` 等文件下载后先 `chmod +x` 再执行；macOS 因产物未做 ad-hoc 签名，首次运行需「右键 → 打开」或执行 `xattr -dr com.apple.quarantine <文件>`。
 
@@ -43,7 +43,7 @@
 ```bash
 "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" build\setup.iss ^
   /DMyAppVersion=<版本> ^
-  /DDesktopDir=<publish\desktop-install 绝对路径> ^
+  /DDesktopDir=<publish\desktop 绝对路径> ^
   /DIconPath=<src\DBSync.Desktop\Assets\app-icon.ico 绝对路径>
 ```
 

@@ -4,13 +4,16 @@ name: 发布 Release
 # 本仓库是 Gitee 的 GitHub 镜像仓库，Gitee 侧推 tag 并同步到 GitHub 后即可触发；
 # 也可 workflow_dispatch 手动补跑（需把运行所用 ref 选到某个 v* 标签，否则各 job 条件不满足而跳过）。
 #
-# 产物形态（自 v1.1 起，不再发布“整目录 zip”）：
+# 产物形态：
 #   桌面端（win-x64）：
-#     DBSyncTool-<v>-win-x64.exe          绿色单文件（原生库自解压，免安装，自包含）
-#     DBSyncTool-<v>-win-x64-fd.zip       fd 体积版整目录（不含 .NET 运行时，需目标机已装 .NET 10）
+#     DBSyncTool-<v>-win-x64.zip          便携版·自包含多文件（exe + dll + 原生库，整包解压后运行）
+#     DBSyncTool-<v>-win-x64-fd.zip       fd 体积版（不含 .NET 运行时，需目标机已装 .NET 10 Runtime）
 #     DBSyncTool-Setup-<v>-win-x64.exe    Inno Setup 安装向导（自包含）
 #   CLI（x64 三平台）：
 #     dbsync-<v>-<rid>[.exe]              单文件（win-x64 / linux-x64 / osx-x64）
+#
+# 说明：桌面便携版使用“多文件”而非“压缩单文件”——后者在部分 .NET SDK 配置下会丢失
+# Avalonia 内嵌资源（The resource /Assets/app-icon.ico could not be found）导致启动即崩。
 
 on:
   push:
@@ -28,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # CLI 不裁剪、不启用 R2R（纯 IL + 各 RID 原生资产），单台 ubuntu 即可 cross 出全平台单文件
+        # CLI 无图形资源、不裁剪、不启用 R2R（纯 IL + 各 RID 原生资产），单台 ubuntu 即可 cross 出全平台单文件
         rid: [win-x64, linux-x64, osx-x64]
     steps:
       - uses: actions/checkout@v4
@@ -36,7 +39,7 @@ jobs:
       - name: 解析版本号
         run: |
           V="${GITHUB_REF_NAME#v}"
-          # VERSION=完整版本（如 1.0.1-rc.1）用于产物文件名/Release；VER=纯数字前段，供 AssemblyVersion 与 Inno 内部版本（不允许预发布段）
+          # VERSION=完整版本（如 1.0.1-rc.1）用于产物文件名/Release；VER=纯数字前段，供 AssemblyVersion（不允许预发布段）
           echo "VERSION=$V" >> "$GITHUB_ENV"
           echo "VER=${V%%-*}" >> "$GITHUB_ENV"
 
@@ -72,7 +75,7 @@ jobs:
           name: cli-${{ matrix.rid }}
           path: publish/cli-${{ matrix.rid }}/dbsync-*
 
-  # ---------- 桌面端：win-x64，整目录(供 Inno) + 单文件(绿色版) 两形态 ----------
+  # ---------- 桌面端：win-x64，便携多文件 zip + fd 体积版 + Inno 安装包 ----------
   build-desktop:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-latest
@@ -91,60 +94,35 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      # A. 安装版输入：整目录（原生库旁置，关闭单文件）。
-      #    安装到 Program Files 后直接加载真实 dll，无自解压、启动快、杀软友好。
-      - name: 发布桌面版-整目录(供 Inno)
+      # 自包含多文件整目录（native 旁置、裁剪 partial、不压缩单文件）。
+      # 同一份产物复用为“便携 zip”与“Inno 安装包”的输入；多文件形态彻底规避压缩单文件丢失 Avalonia 内嵌资源的问题。
+      - name: 发布桌面版-自包含多文件(便携zip与Inno共用)
         run: >
           dotnet publish src/DBSync.Desktop/DBSync.Desktop.csproj -c Release -r win-x64
           --self-contained true
           -p:PublishTrimmed=true -p:TrimMode=partial
           -p:DebugType=none -p:InvariantGlobalization=true
           -p:Version=$env:VER
-          -o publish/desktop-install
-
-      # B. 绿色单 exe：单文件 + 原生库内嵌（运行时自解压到 %TEMP%\.net）。
-      #    依赖瘦身已去除 Easy.* 元包，产物不再含 aspnetcorev2_inprocess.dll。
-      - name: 发布桌面版-单文件(绿色版)
-        run: >
-          dotnet publish src/DBSync.Desktop/DBSync.Desktop.csproj -c Release -r win-x64
-          --self-contained true
-          -p:PublishSingleFile=true -p:PublishReadyToRun=true
-          -p:PublishTrimmed=true -p:TrimMode=partial
-          -p:EnableCompressionInSingleFile=true -p:DebugType=none
-          -p:InvariantGlobalization=true
-          -p:IncludeNativeLibrariesForSelfExtract=true
-          -p:Version=$env:VER
-          -o publish/desktop-single
+          -o publish/desktop
 
       - name: 移除 pdb
         shell: pwsh
-        run: |
-          Get-ChildItem publish/desktop-install -Recurse -Filter *.pdb | Remove-Item
-          Get-ChildItem publish/desktop-single  -Recurse -Filter *.pdb | Remove-Item
+        run: Get-ChildItem publish/desktop -Recurse -Filter *.pdb | Remove-Item
 
-      - name: 断言绿色版发布目录只剩 DBSync.Desktop.exe
+      - name: 便携版启动冒烟（验证裁剪后资源可正常加载）
         shell: pwsh
         run: |
-          $files = @(Get-ChildItem publish/desktop-single -File)
-          $files.Name
-          $extra = $files | Where-Object { $_.Name -ne 'DBSync.Desktop.exe' }
-          if ($extra.Count -gt 0) { throw "绿色版存在非预期旁置文件：$($extra.Name -join ', ')" }
-          if (-not (Test-Path 'publish/desktop-single/DBSync.Desktop.exe')) { throw '绿色版缺失主程序' }
-          Write-Host 'PASS：单文件成立'
-
-      - name: 绿色版启动冒烟
-        shell: pwsh
-        run: |
-          $p = Start-Process 'publish/desktop-single/DBSync.Desktop.exe' -PassThru
-          Start-Sleep -Seconds 12
-          if ($p.HasExited) { throw "绿色版启动即退出 code=$($p.ExitCode)" }
+          $p = Start-Process 'publish/desktop/DBSync.Desktop.exe' -PassThru
+          Start-Sleep -Seconds 10
+          if ($p.HasExited) { throw "便携版启动即退出 code=$($p.ExitCode)" }
           Write-Host 'PASS：冒烟运行正常'
           Stop-Process -Id $p.Id -Force
 
-      - name: 复制为带版本号产物名（绿色版）
+      - name: 压缩便携 zip
         shell: pwsh
         run: |
-          Copy-Item 'publish/desktop-single/DBSync.Desktop.exe' "DBSyncTool-$env:VERSION-win-x64.exe"
+          Compress-Archive -Path publish/desktop/* -DestinationPath "DBSyncTool-$env:VERSION-win-x64.zip" -Force
+          Get-ChildItem "DBSyncTool-$env:VERSION-win-x64.zip" | Select-Object Name, Length
 
       - name: 安装 Inno Setup
         shell: pwsh
@@ -158,7 +136,7 @@ jobs:
           # MyAppVersion 传纯数字 VER（Inno 的 VersionInfoVersion 同样不接受 -rc.x 段）；文件名随后统一为完整 VERSION
           & $iscc "build\setup.iss" `
             "/DMyAppVersion=$env:VER" `
-            "/DDesktopDir=$env:GITHUB_WORKSPACE\publish\desktop-install" `
+            "/DDesktopDir=$env:GITHUB_WORKSPACE\publish\desktop" `
             "/DIconPath=$env:GITHUB_WORKSPACE\src\DBSync.Desktop\Assets\app-icon.ico"
           # iss 的 OutputDir 指向仓库根，产物为 DBSyncTool-Setup-<VER>-win-x64.exe；有 rc 后缀时重命名为完整版本名
           if ($env:VERSION -ne $env:VER) {
@@ -166,9 +144,9 @@ jobs:
           }
           Get-ChildItem "DBSyncTool-Setup-$env:VERSION-win-x64.exe" | Select-Object Name, Length
 
-      # C. fd 体积版（体积优先，需目标机已装 .NET 10 Runtime）。
+      # fd 体积版（体积优先，需目标机已装 .NET 10 Runtime）。
       #     .NET 不允许裁剪非独立应用（NETSDK1102），故不裁剪；
-      #     以整目录 zip 发布（内含 exe + dll + 原生库），压缩后体积明显小于自包含单文件。
+      #     以整目录 zip 发布（内含 exe + dll + 原生库），不含 .NET 运行时所以体积最小。
       - name: 发布桌面版-fd体积版(整目录)
         run: >
           dotnet publish src/DBSync.Desktop/DBSync.Desktop.csproj -c Release -r win-x64
@@ -191,7 +169,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: desktop
-          # 同时命中三个产物：绿色单文件、安装包、fd 体积版 zip
+          # 同时命中三个产物：便携多文件 zip、fd 体积版 zip、Inno 安装包 exe
           path: |
             DBSyncTool-*.exe
             DBSyncTool-*.zip

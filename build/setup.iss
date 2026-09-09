@@ -16,7 +16,7 @@
   #define MyAppVersion "1.0.0"
 #endif
 #ifndef DesktopDir
-  #define DesktopDir "..\publish\desktop-install"
+  #define DesktopDir "..\publish\desktop"
 #endif
 #ifndef IconPath
   #define IconPath "..\src\DBSync.Desktop\Assets\app-icon.ico"
