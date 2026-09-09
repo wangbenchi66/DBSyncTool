@@ -22,17 +22,17 @@
   #define IconPath "..\src\DBSync.Desktop\Assets\app-icon.ico"
 #endif
 
-; Windows 文件版本号需要 4 段（major.minor.build.revision），版本号按 X.Y.Z 尾补 .0
-#define MyAppVersionQuad "{#MyAppVersion}.0"
+; Windows 文件版本号需要 4 段（major.minor.build.revision），版本号按 X.Y.Z 在 VersionInfo* 处直接尾补 .0
+;（注意：Inno 预处理器不会对 #define 内嵌套的 {#...} 递归求值，故不能使用间接宏拼 4 段版本）
 
 [Setup]
 AppId={{7E6F2B8A-3D4C-4A51-9D0E-5B1C8F2A6E77}
 AppName=DBSyncTool
 AppVerName=DBSyncTool {#MyAppVersion}
 AppVersion={#MyAppVersion}
-VersionInfoVersion={#MyAppVersionQuad}
+VersionInfoVersion={#MyAppVersion}.0
 VersionInfoProductName=DBSyncTool
-VersionInfoProductVersion={#MyAppVersionQuad}
+VersionInfoProductVersion={#MyAppVersion}.0
 AppPublisher=DBSyncTool
 AppComments=数据库同步工作台
 DefaultDirName={autopf}\DBSyncTool
