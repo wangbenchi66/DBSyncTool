@@ -31,4 +31,14 @@
     <ProjectReference Include="..\DBSync.Core\DBSync.Core.csproj" />
   </ItemGroup>
 
+  <!-- 发布完成后清理产物目录中的 *.pdb：
+       libSkiaSharp/libHarfBuzzSharp 等原生库自带的 pdb 会随发布复制，DBSync.Core.pdb 等
+       依赖项目符号也会出现；这里统一删除，保证发布产物不含任何调试符号。 -->
+  <Target Name="RemovePdbAfterPublish" AfterTargets="Publish" Condition="'$(Configuration)' == 'Release'">
+    <ItemGroup>
+      <_PublishPdbFiles Include="$(PublishDir)**\*.pdb" />
+    </ItemGroup>
+    <Delete Files="@(_PublishPdbFiles)" />
+  </Target>
+
 </Project>
