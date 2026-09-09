@@ -19,9 +19,10 @@
     <PackageReference Include="Avalonia.Markup.Xaml.Loader" Version="12.1.2" PrivateAssets="All" Publish="True" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.2" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-    <PackageReference Include="Easy.Serilog.Core" Version="2026.9.2" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
     <PackageReference Include="HotAvalonia" Version="3.1.4" PrivateAssets="All" Publish="True" />
+    <PackageReference Include="Serilog" Version="4.4.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageReference Include="SukiUI" Version="7.0.1" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
   </ItemGroup>

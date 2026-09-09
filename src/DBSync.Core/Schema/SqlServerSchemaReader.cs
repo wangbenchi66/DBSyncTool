@@ -1,5 +1,5 @@
+using DBSync.Core.Extensions;
 using DBSync.Core.Models;
-using Easy.SqlSugar.Core.Common;
 using SqlSugar;
 
 namespace DBSync.Core.Schema;

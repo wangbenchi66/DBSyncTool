@@ -1,5 +1,13 @@
 # 内存占用和打包体积优化方案
 
+## 实施进展（2026-09）
+
+- 已移除 `Easy.Cache.Core`（连带 Redis / Castle / Autofac / MVC 等传递依赖）。
+- 已移除 `Easy.SqlSugar.Core` 与 `Easy.Serilog.Core` 两个元包，改为**原生 sqlSugarCore** + **原生 Serilog（+ Serilog.Sinks.File）**：两者各自带入的 ASP.NET Core 共享框架串扰（`Microsoft.AspNetCore.*` 约 22 MB 及 `aspnetcorev2_inprocess.dll`）随之消失，桌面绿色单文件 exe 已不含任何旁置 dll。连接串补全扩展内联为 `Extensions/ConnectionStringExtensions.cs`；日志初始化迁至 `Program.cs` 并改存 `%APPDATA%\DBSyncTool\logs`。
+- 发布形态已改为：桌面绿色单文件 + Inno 安装包 + CLI 跨平台（win/linux/osx x64）单文件，见 `.github/workflows/release.yml`、`build/setup.iss`、`docs/release.md`。
+
+> 下文「现状分析」的数字与“第三优先级”方案为**历史基线**，实际已部分执行。
+
 ## 现状分析
 
 - 发布产物总大小：**257 MB**
@@ -58,9 +66,9 @@
 
 ### 第三优先级：深度依赖瘦身（改动大）
 
-- `Easy.SqlSugar.Core` → SqlSugarCore 捆绑了 Oracle、DM、KingbaseES 等用不到的驱动，无法单独移除
-- `Easy.Serilog.Core` → 可能拉入不必要的 Sink，可直接引用 Serilog + 需要的 Sink
-- `Easy.Common.Core` → 拉入 Mapster（对象映射），如果只用了少量工具方法可考虑替换
+- `Easy.SqlSugar.Core` → 已替换为原生 `sqlSugarCore`（2026-09）；其捆绑的 Oracle / DM / KingbaseES 等驱动仍随包保留（sqlSugarCore 硬依赖），如需进一步瘦身见下表“移除 SqlSugarCore”行
+- `Easy.Serilog.Core` → 已替换为原生 `Serilog` + `Serilog.Sinks.File`（2026-09）
+- `Easy.Common.Core` → 拉入 Mapster（对象映射），已随 Easy.SqlSugar.Core 一并移除，不再被引用
 
 ### 不建议做的
 
@@ -68,7 +76,7 @@
 |------|------|
 | NativeAOT | Avalonia 12 + SukiUI 对 AOT 支持有限 |
 | 重新启用 ListBox 虚拟化 | 已确认会导致 SukiUI 渐入动画问题 |
-| 移除 SqlSugarCore | SQL Server 的 SchemaReader 依赖它，替换成本高 |
+| 移除 SqlSugarCore | 目前仅在 SqlServerSchemaReader / ScriptExecutor 两处作薄桥使用；若要再省约 11 MB 国产驱动体积，可改写为原生 ADO.NET（成本约 1-2 个文件），列为可选后续，本次未做 |
 
 ## 验证方法
 

@@ -7,8 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Easy.Serilog.Core" Version="2026.7.2" />
-    <PackageReference Include="Easy.SqlSugar.Core" Version="2026.6.25.1" />
+    <!-- 瘦身：不再使用 Easy.SqlSugar.Core 元包（连带 Easy.Common.Core→ASP.NET Core 串扰），改用原生 sqlSugarCore；
+         连接串补全（CheckTrustServerCertificate/CheckEncrypt）已内联到 Extensions/ConnectionStringExtensions.cs -->
+    <PackageReference Include="sqlSugarCore" Version="5.1.4.214" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
   </ItemGroup>
 

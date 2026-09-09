@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Threading;
 using DBSync.Desktop.Extensions;
-using Easy.Serilog.Core;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 
@@ -18,12 +17,23 @@ internal static class Program
     [STAThread]
     public static void Main(string[] args)
     {
-        RegisterGlobalExceptionHandlers();
-
         try
         {
+            // 日志目录统一放到用户数据目录（%APPDATA%\DBSyncTool\logs），
+            // 以支持安装版部署到 Program Files（程序目录对普通用户不可写）。
+            var logDirectory = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "DBSyncTool", "logs");
+            Log.Logger = new LoggerConfiguration()
+                .MinimumLevel.Information()
+                .WriteTo.File(Path.Combine(logDirectory, "log-.txt"),
+                    rollingInterval: RollingInterval.Day,
+                    outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level}] {Message}{NewLine}{Exception}")
+                .CreateLogger();
+
+            RegisterGlobalExceptionHandlers();
+
             var hostBuilder = Host.CreateDefaultBuilder(args);
-            hostBuilder.AddSerilogHost("./logs/", Serilog.Events.LogEventLevel.Information);
             hostBuilder.ConfigureServices((_, services) =>
             {
                 services.AddRegisterDependencies();

@@ -311,7 +311,7 @@ DBSyncTool/
 ### Phase 5：增强与打磨（预计 2 周）
 
 - 差异报告导出（HTML）
-- 安装包制作（Inno Setup / .deb / .dmg）
+- 安装包制作：Windows 已实现（Inno Setup，见 `build/setup.iss` 与 `.github/workflows/release.yml`，CLI 已跨平台单文件分发）；`.deb` / `.dmg` 安装包尚未实现
 - 文档和示例
 
 ## 10. 开源计划
