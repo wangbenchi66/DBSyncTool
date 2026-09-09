@@ -43,11 +43,13 @@ jobs:
           -p:Version=$env:VERSION -o publish/cli
 
       # 单文件 exe 之外还有旁置的原生库（Skia/SNI/SQLite/ANGLE 等），必须整目录打包
-      - name: 压缩为 zip
+      - name: 移除 pdb 并压缩为 zip
         shell: pwsh
         run: |
-          Get-ChildItem publish/desktop -File | Where-Object { $_.Extension -ne '.pdb' } | Compress-Archive -DestinationPath "DBSync.Desktop-$env:VERSION-win-x64.zip"
-          Get-ChildItem publish/cli -File | Where-Object { $_.Extension -ne '.pdb' } | Compress-Archive -DestinationPath "dbsync-$env:VERSION-win-x64.zip"
+          Get-ChildItem publish/desktop -Recurse -Filter *.pdb | Remove-Item
+          Get-ChildItem publish/cli -Recurse -Filter *.pdb | Remove-Item
+          Compress-Archive -Path publish/desktop/* -DestinationPath "DBSync.Desktop-$env:VERSION-win-x64.zip"
+          Compress-Archive -Path publish/cli/* -DestinationPath "dbsync-$env:VERSION-win-x64.zip"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -60,6 +62,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-windows
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           path: dist
