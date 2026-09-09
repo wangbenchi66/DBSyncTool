@@ -10,13 +10,13 @@
                  Width="1100"
                  Height="760"
                  WindowState="Maximized"
-                 Icon="/Assets/app-icon.ico"
                  TitleBarControlSize="12"
                  RootCornerRadius="2"
                  ShowBottomBorder="True">
+  <!-- 说明：窗口与侧栏不再运行时加载 /Assets/app-icon.ico（exe 图标由 csproj 的 ApplicationIcon 编译期嵌入 Win32 资源）。
+       运行时通过 avares 读取内嵌图片在压缩/裁剪发布下会丢失（The resource /Assets/app-icon.ico could not be found），故 UI 不再引用该图。 -->
   <suki:SukiWindow.LogoContent>
     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-      <Image Source="/Assets/app-icon.ico" Width="22" Height="22"/>
       <StackPanel Spacing="0">
         <TextBlock Text="DBSyncTool" FontSize="13" FontWeight="SemiBold"
                    Foreground="{DynamicResource Ink900}"/>
