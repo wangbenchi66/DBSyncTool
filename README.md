@@ -239,8 +239,8 @@ DBSyncTool/
 | 运行时 | .NET 10 |
 | 桌面 UI | Avalonia UI 12 + SukiUI 主题 |
 | MVVM | CommunityToolkit.Mvvm |
-| 数据访问 | SqlSugar（Easy.SqlSugar.Core） |
-| 日志 | Serilog（Easy.Serilog.Core） |
+| 数据访问 | SqlSugar（sqlSugarCore） |
+| 日志 | Serilog（Serilog.Sinks.File） |
 | 测试 | xUnit |
 | 发布 | GitHub Actions（tag 触发自动打包） |
 

@@ -13,24 +13,32 @@ public static class SchemaComparer
     /// <param name="baseline">基线表集合（来自目标库快照，通常为生产库）</param>
     /// <param name="source">源库当前表集合（通常为测试库）</param>
     /// <param name="filter">过滤选项，控制忽略哪些差异</param>
+    /// <param name="ignoreSchemaPrefix">是否忽略库名（Schema）前缀只按表名配对；两端库名不同时需开启才能配对</param>
+    /// <param name="caseSensitive">是否区分大小写；开启后表名、列名、索引名按精确大小写配对</param>
     /// <returns>结构差异汇总，含新增表、删除表、变更表及循环依赖组</returns>
     public static SchemaDiff Compare(
         IEnumerable<TableModel> baseline,
         IEnumerable<TableModel> source,
-        FilterOptions? filter = null)
+        FilterOptions? filter = null,
+        bool ignoreSchemaPrefix = false,
+        bool caseSensitive = false)
     {
-        // 表名配对不区分大小写（多数数据库表名大小写不敏感，两端书写可能不同，应视为同一张表）
-        var baselineMap = ToKeyedDictionary(baseline, t => t.FullName, StringComparer.OrdinalIgnoreCase);
-        var sourceMap = ToKeyedDictionary(source, t => t.FullName, StringComparer.OrdinalIgnoreCase);
+        // 表名配对默认不区分大小写（多数数据库表名大小写不敏感，两端书写可能不同，应视为同一张表），
+        // 默认按“库名.表名”配对；开启忽略库名前缀后只按表名配对，跨库比对时同名表才能配上对
+        var nameComparer = caseSensitive ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
+        Func<TableModel, string> keySelector = ignoreSchemaPrefix ? t => t.Name : t => t.FullName;
 
-        var added = sourceMap.Keys.Except(baselineMap.Keys, StringComparer.OrdinalIgnoreCase)
+        var baselineMap = ToKeyedDictionary(baseline, keySelector, nameComparer);
+        var sourceMap = ToKeyedDictionary(source, keySelector, nameComparer);
+
+        var added = sourceMap.Keys.Except(baselineMap.Keys, nameComparer)
             .Select(n => sourceMap[n]).ToList();
-        var removed = baselineMap.Keys.Except(sourceMap.Keys, StringComparer.OrdinalIgnoreCase)
+        var removed = baselineMap.Keys.Except(sourceMap.Keys, nameComparer)
             .Select(n => baselineMap[n]).ToList();
 
         var modified = baselineMap.Keys
-            .Intersect(sourceMap.Keys, StringComparer.OrdinalIgnoreCase)
-            .Select(name => DiffTable(baselineMap[name], sourceMap[name], filter))
+            .Intersect(sourceMap.Keys, nameComparer)
+            .Select(name => DiffTable(baselineMap[name], sourceMap[name], nameComparer, filter))
             .Where(d => d.HasChanges)
             .ToList();
 
@@ -50,8 +58,14 @@ public static class SchemaComparer
     /// </summary>
     /// <param name="baseline">基线版本的表结构</param>
     /// <param name="source">源库版本的表结构</param>
+    /// <param name="nameComparer">列名、索引名的配对比较器（区分大小写时为精确比较）</param>
+    /// <param name="filter">过滤选项，控制忽略哪些差异</param>
     /// <returns>TableDiff，若无差异则 HasChanges 为 false</returns>
-    private static TableDiff DiffTable(TableModel baseline, TableModel source, FilterOptions? filter = null)
+    private static TableDiff DiffTable(
+        TableModel baseline,
+        TableModel source,
+        StringComparer nameComparer,
+        FilterOptions? filter = null)
     {
         // 列键按精确大小写存放：大小写敏感（CS）排序规则的库中，同名不同大小写的两列是真实不同的列，
         // 必须各自保留（不能按忽略大小写建字典，否则会撞键抛异常）；配对查找时再忽略大小写。
@@ -63,7 +77,7 @@ public static class SchemaComparer
 
         foreach (var (name, s) in sourceCols.Select(kv => (kv.Key, kv.Value)))
         {
-            var bKey = FirstUnmatchedKey(baselineCols, matchedBaselineCols, name);
+            var bKey = FirstUnmatchedKey(baselineCols, matchedBaselineCols, name, nameComparer);
             if (bKey is null)
             {
                 columnDiffs.Add(new ColumnDiff { Before = null, After = s, DiffType = ColumnDiffType.Added });
@@ -95,7 +109,7 @@ public static class SchemaComparer
 
             foreach (var (name, s) in sourceIdxMap.Select(kv => (kv.Key, kv.Value)))
             {
-                var bKey = FirstUnmatchedKey(baselineIdxMap, matchedBaselineIdx, name);
+                var bKey = FirstUnmatchedKey(baselineIdxMap, matchedBaselineIdx, name, nameComparer);
                 if (bKey is null)
                 {
                     indexDiffs.Add(new IndexDiff { Before = null, After = s, DiffType = IndexDiffType.Added });
@@ -103,7 +117,7 @@ public static class SchemaComparer
                 }
                 matchedBaselineIdx.Add(bKey);
                 var b = baselineIdxMap[bKey];
-                if (!IndexesEqual(b, s))
+                if (!IndexesEqual(b, s, nameComparer))
                     indexDiffs.Add(new IndexDiff { Before = b, After = s, DiffType = IndexDiffType.Modified });
             }
 
@@ -122,7 +136,7 @@ public static class SchemaComparer
             SourceTable = source,
             ColumnDiffs = columnDiffs,
             IndexDiffs = indexDiffs,
-            PrimaryKeyChanged = !baseline.PrimaryKeyColumns.SequenceEqual(source.PrimaryKeyColumns, StringComparer.OrdinalIgnoreCase),
+            PrimaryKeyChanged = !baseline.PrimaryKeyColumns.SequenceEqual(source.PrimaryKeyColumns, nameComparer),
             CommentChanged = !ignoreComments && !string.Equals(NormalizeComment(baseline.Comment), NormalizeComment(source.Comment), StringComparison.Ordinal)
         };
     }
@@ -148,27 +162,34 @@ public static class SchemaComparer
     /// </summary>
     /// <param name="a">第一索引</param>
     /// <param name="b">第二索引</param>
+    /// <param name="nameComparer">索引列名的比较器</param>
     /// <returns>结构完全相同时返回 true</returns>
-    private static bool IndexesEqual(IndexModel a, IndexModel b) =>
+    private static bool IndexesEqual(IndexModel a, IndexModel b, StringComparer nameComparer) =>
         a.IsUnique == b.IsUnique &&
         a.IsClustered == b.IsClustered &&
         a.IsPrimaryKey == b.IsPrimaryKey &&
-        a.ColumnNames.SequenceEqual(b.ColumnNames, StringComparer.OrdinalIgnoreCase);
+        a.ColumnNames.SequenceEqual(b.ColumnNames, nameComparer);
 
     /// <summary>
-    /// 在按精确大小写键建的字典中，为指定名称查找首个尚未被占用的匹配键（比较时忽略大小写）。
-    /// 这样既能容纳大小写敏感库中“仅大小写不同的多列/索引”，也能让两端书写大小写不同时正常配对。
+    /// 在按精确大小写键建的字典中，为指定名称查找首个尚未被占用的匹配键。
+    /// 这样既能容纳大小写敏感库中“仅大小写不同的多列/索引”，也能让两端书写大小写不同时正常配对；
+    /// 开启区分大小写后比较器为精确比较，只配对同名同大小写的项。
     /// </summary>
     /// <typeparam name="T">值类型</typeparam>
     /// <param name="map">精确键字典</param>
     /// <param name="matchedKeys">已参与配对的键集合</param>
     /// <param name="name">待匹配的名称</param>
+    /// <param name="nameComparer">名称比较器（区分大小写时为精确比较）</param>
     /// <returns>命中的键；未找到或全部被占用时返回 null</returns>
-    private static string? FirstUnmatchedKey<T>(Dictionary<string, T> map, HashSet<string> matchedKeys, string name)
+    private static string? FirstUnmatchedKey<T>(
+        Dictionary<string, T> map,
+        HashSet<string> matchedKeys,
+        string name,
+        StringComparer nameComparer)
     {
         foreach (var key in map.Keys)
         {
-            if (!matchedKeys.Contains(key) && string.Equals(key, name, StringComparison.OrdinalIgnoreCase))
+            if (!matchedKeys.Contains(key) && nameComparer.Equals(key, name))
                 return key;
         }
         return null;

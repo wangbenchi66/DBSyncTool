@@ -166,6 +166,10 @@
               <TextBlock Text="{Binding CompareSummaryText}" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource Ink800}" TextWrapping="Wrap"/>
               <ProgressBar Minimum="0" Maximum="100" Value="{Binding CompareProgress}" Height="4" CornerRadius="2"/>
               <TextBlock Text="{Binding CompareProgressText}" FontSize="11" Foreground="{DynamicResource Ink500}"/>
+              <CheckBox Content="忽略库名前缀" IsChecked="{Binding IgnoreSchemaPrefix, Mode=TwoWay}" FontSize="12"
+                        ToolTip.Tip="跨库比对时按表名配对，两端库名不同也能认出是同一张表；生成脚本时表名也不带库名。修改后需重新比对"/>
+              <CheckBox Content="区分大小写" IsChecked="{Binding CaseSensitive, Mode=TwoWay}" FontSize="12"
+                        ToolTip.Tip="表名、列名、索引名按精确大小写配对；不勾选时大小写不同的名称视为同一项。修改后需重新比对"/>
               <CheckBox Content="启用事务" IsChecked="{Binding UseTransaction, Mode=TwoWay}" FontSize="12"/>
               <CheckBox Content="排除自增列" IsChecked="{Binding ExcludeIdentityColumns, Mode=TwoWay}" FontSize="12"/>
             </StackPanel>

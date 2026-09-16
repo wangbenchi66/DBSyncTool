@@ -65,6 +65,36 @@ public sealed class DirectCompareViewModelTests
         Assert.Contains(directCompare.OnlyTargetNodes, node => node.Title.StartsWith("target_only_table", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public async Task RunCompare_IgnoreSchemaPrefix_MatchesSameTableNameAcrossDatabases()
+    {
+        // 两端库名不同（MySQL 的 Schema 即库名），同名表应认作同一张表
+        var sourceTables = new[] { CreateTable("sys_city", "fund_operation_admin") };
+        var targetTables = new[] { CreateTable("sys_city", "vol_net10") };
+
+        var directCompare = CreateDirectCompareViewModel(
+            [CreateConnection("源库", DatabaseType.MySql), CreateConnection("目标库", DatabaseType.MySql)],
+            sourceTables,
+            targetTables);
+
+        directCompare.RefreshConnections();
+        directCompare.SelectedSourceConnection = directCompare.Connections.First(c => c.Name == "源库");
+        directCompare.SelectedTargetConnection = directCompare.Connections.First(c => c.Name == "目标库");
+
+        // 默认忽略库名前缀：不再一增一删
+        await directCompare.RunCompareCommand.ExecuteAsync(null);
+
+        Assert.Empty(directCompare.OnlySourceNodes);
+        Assert.Empty(directCompare.OnlyTargetNodes);
+
+        // 关掉开关：退回按“库名.表名”配对，两端各报一张
+        directCompare.IgnoreSchemaPrefix = false;
+        await directCompare.RunCompareCommand.ExecuteAsync(null);
+
+        Assert.Single(directCompare.OnlySourceNodes);
+        Assert.Single(directCompare.OnlyTargetNodes);
+    }
+
     private static DirectCompareViewModel CreateDirectCompareViewModel(
         IReadOnlyList<DatabaseConnection> connections,
         IReadOnlyList<TableModel>? sourceTables = null,
@@ -115,12 +145,12 @@ public sealed class DirectCompareViewModelTests
         return connection with { ConnectionString = connection.BuildConnectionString() };
     }
 
-    private static TableModel CreateTable(string name)
+    private static TableModel CreateTable(string name, string schema = "")
     {
         return new TableModel
         {
             Name = name,
-            Schema = "",
+            Schema = schema,
             Columns =
             [
                 new ColumnModel

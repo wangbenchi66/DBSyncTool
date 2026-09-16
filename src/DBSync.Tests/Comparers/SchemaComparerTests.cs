@@ -234,4 +234,57 @@ public class SchemaComparerTests
         Assert.Equal("audit.Users", result.AddedTables[0].FullName);
         Assert.Equal("dbo.Users", result.RemovedTables[0].FullName);
     }
+
+    // ── 表名匹配开关：忽略库名前缀 ──────────────────────────────────────────
+
+    [Fact]
+    public void Compare_IgnoreSchemaPrefix_TreatsSameTableNameAcrossDatabasesAsSameTable()
+    {
+        // 源库 fund_operation_admin.sys_city 与目标库 vol_net10.sys_city 应视为同一张表
+        var baseline = new[] { TableModelFactory.Simple("sys_city", schema: "vol_net10") };
+        var source = new[] { TableModelFactory.Simple("sys_city", schema: "fund_operation_admin") };
+
+        var result = SchemaComparer.Compare(baseline, source, ignoreSchemaPrefix: true);
+
+        Assert.Empty(result.AddedTables);
+        Assert.Empty(result.RemovedTables);
+        Assert.Empty(result.ModifiedTables);
+    }
+
+    // ── 表名匹配开关：区分大小写 ────────────────────────────────────────────
+
+    [Fact]
+    public void Compare_CaseSensitive_TreatsDifferentCaseAsDifferentTables()
+    {
+        var baseline = new[] { TableModelFactory.Simple("users") };
+        var source = new[] { TableModelFactory.Simple("Users") };
+
+        var result = SchemaComparer.Compare(baseline, source, caseSensitive: true);
+
+        Assert.Equal("Users", Assert.Single(result.AddedTables).Name);
+        Assert.Equal("users", Assert.Single(result.RemovedTables).Name);
+    }
+
+    [Fact]
+    public void Compare_CaseSensitive_ReportsColumnNameCaseDifference()
+    {
+        var baseline = new[]
+        {
+            TableModelFactory.WithColumns("Users", [TableModelFactory.Col("Email", DbColumnType.Text)])
+        };
+        var source = new[]
+        {
+            TableModelFactory.WithColumns("Users", [TableModelFactory.Col("email", DbColumnType.Text)])
+        };
+
+        // 默认忽略大小写：同一列，无差异
+        var insensitive = SchemaComparer.Compare(baseline, source);
+        // 区分大小写：Email 与 email 是两列，一个删除一个新增
+        var sensitive = SchemaComparer.Compare(baseline, source, caseSensitive: true);
+
+        Assert.Empty(insensitive.ModifiedTables);
+        var columnDiffs = Assert.Single(sensitive.ModifiedTables).ColumnDiffs;
+        Assert.Single(columnDiffs, d => d.DiffType == ColumnDiffType.Added);
+        Assert.Single(columnDiffs, d => d.DiffType == ColumnDiffType.Removed);
+    }
 }

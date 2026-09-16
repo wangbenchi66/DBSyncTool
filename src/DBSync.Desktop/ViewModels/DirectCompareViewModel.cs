@@ -59,12 +59,12 @@ public partial class DirectCompareViewModel : ObservableObject, IPageViewModel
     private SchemaDiff? _schemaDiff;
 
     /// <summary>
-    /// 缓存的数据差异
+    /// 缓存的数据差异，键为比对使用的表名（TableKey），写入与读取来自同一批字符串，按精确大小写匹配
     ///</summary>
-    private readonly Dictionary<string, DataDiff> _dataDiffs = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, DataDiff> _dataDiffs = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// 缓存的源库表结构
+    /// 缓存的源库表结构，键为比对使用的表名（TableKey）
     ///</summary>
     private Dictionary<string, TableModel> _sourceTableMap = new(StringComparer.OrdinalIgnoreCase);
 
@@ -149,6 +149,18 @@ public partial class DirectCompareViewModel : ObservableObject, IPageViewModel
     ///</summary>
     [ObservableProperty]
     private string compareSummaryText = "请选择源库和目标库后开始比对";
+
+    /// <summary>
+    /// 比对时是否忽略库名（Schema）前缀只按表名配对；两端库名不同时需开启才能配上对
+    ///</summary>
+    [ObservableProperty]
+    private bool ignoreSchemaPrefix = true;
+
+    /// <summary>
+    /// 比对时是否区分大小写，开启后表名、列名、索引名按精确大小写配对
+    ///</summary>
+    [ObservableProperty]
+    private bool caseSensitive;
 
     /// <summary>
     /// 启用事务
@@ -396,6 +408,27 @@ public partial class DirectCompareViewModel : ObservableObject, IPageViewModel
     partial void OnTargetTableFilterChanged(string value) => ApplyTableFilter(TargetTables, FilteredTargetTables, value);
 
     /// <summary>
+    /// 忽略库名前缀开关变化时提示需要重新比对
+    /// </summary>
+    partial void OnIgnoreSchemaPrefixChanged(bool value) => NotifyMatchRuleChanged();
+
+    /// <summary>
+    /// 区分大小写开关变化时提示需要重新比对
+    /// </summary>
+    partial void OnCaseSensitiveChanged(bool value) => NotifyMatchRuleChanged();
+
+    /// <summary>
+    /// 已有比对结果时，提示表名匹配规则已变化、需要重新比对，避免沿用旧结果生成脚本
+    /// </summary>
+    private void NotifyMatchRuleChanged()
+    {
+        if (_schemaDiff is null)
+            return;
+
+        CompareSummaryText = "表名匹配规则已修改，请重新比对";
+    }
+
+    /// <summary>
     /// 加载源库和目标库的表列表
     ///</summary>
     [RelayCommand]
@@ -482,12 +515,12 @@ public partial class DirectCompareViewModel : ObservableObject, IPageViewModel
     }
 
     /// <summary>
-    /// 源库表勾选变更时联动目标库同名表
+    /// 源库表勾选变更时联动目标库同名表（按当前匹配规则判定同名）
     ///</summary>
     private void OnSourceTableSelectionChanged(CompareTableSelectionViewModel source)
     {
         var target = TargetTables.FirstOrDefault(t =>
-            string.Equals(t.FullName, source.FullName, StringComparison.OrdinalIgnoreCase));
+            TableNameComparer.Equals(TableKey(t), TableKey(source)));
         if (target is not null)
             target.IsSelected = source.IsSelected;
     }
@@ -535,6 +568,9 @@ public partial class DirectCompareViewModel : ObservableObject, IPageViewModel
             CompareProgressText = "正在读取源库结构";
             ClearResults();
 
+            // 因忽略库名前缀而重名、只能取其一参与比对的表数量
+            var duplicateNameCount = 0;
+
             IReadOnlyList<TableModel> sourceTables;
             IReadOnlyList<TableModel> targetTables;
 
@@ -542,11 +578,11 @@ public partial class DirectCompareViewModel : ObservableObject, IPageViewModel
             if (SourceTables.Count > 0 && TargetTables.Count > 0)
             {
                 var selectedSourceNames = new HashSet<string>(
-                    SourceTables.Where(t => t.IsSelected).Select(t => t.FullName), StringComparer.OrdinalIgnoreCase);
+                    SourceTables.Where(t => t.IsSelected).Select(t => TableKey(t)), TableNameComparer);
                 var selectedTargetNames = new HashSet<string>(
-                    TargetTables.Where(t => t.IsSelected).Select(t => t.FullName), StringComparer.OrdinalIgnoreCase);
-                sourceTables = SourceTables.Where(t => selectedSourceNames.Contains(t.FullName)).Select(t => t.Table).ToList();
-                targetTables = TargetTables.Where(t => selectedTargetNames.Contains(t.FullName)).Select(t => t.Table).ToList();
+                    TargetTables.Where(t => t.IsSelected).Select(t => TableKey(t)), TableNameComparer);
+                sourceTables = SourceTables.Where(t => selectedSourceNames.Contains(TableKey(t))).Select(t => t.Table).ToList();
+                targetTables = TargetTables.Where(t => selectedTargetNames.Contains(TableKey(t))).Select(t => t.Table).ToList();
             }
             else
             {
@@ -555,23 +591,26 @@ public partial class DirectCompareViewModel : ObservableObject, IPageViewModel
                 targetTables = await _schemaReader.ReadAllTablesAsync(targetConn);
             }
 
-            _sourceTableMap = sourceTables.ToDictionary(t => t.FullName, t => t, StringComparer.OrdinalIgnoreCase);
-            var targetTableMap = targetTables.ToDictionary(t => t.FullName, t => t, StringComparer.OrdinalIgnoreCase);
+            _sourceTableMap = ToTableMap(sourceTables);
+            var targetTableMap = ToTableMap(targetTables);
 
             CompareProgressText = "正在比对结构";
-            _schemaDiff = SchemaComparer.Compare(targetTables, sourceTables);
+            _schemaDiff = SchemaComparer.Compare(targetTables, sourceTables, null, IgnoreSchemaPrefix, CaseSensitive);
 
             var commonTables = _sourceTableMap.Keys
-                .Intersect(targetTableMap.Keys, StringComparer.OrdinalIgnoreCase)
+                .Intersect(targetTableMap.Keys, TableNameComparer)
                 .OrderBy(n => n)
                 .ToList();
 
+            // 忽略库名前缀时，同侧不同 schema 下的同名表只会保留一张参与比对，统计出来在摘要里提示
+            duplicateNameCount = CountDuplicatedNames(sourceTables) + CountDuplicatedNames(targetTables);
+
             // 确定哪些表需要比对数据
-            var dataCompareNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var dataCompareNames = new HashSet<string>(TableNameComparer);
             if (SourceTables.Count > 0)
             {
                 foreach (var t in SourceTables.Where(t => t.IsSelected && t.CompareData))
-                    dataCompareNames.Add(t.FullName);
+                    dataCompareNames.Add(TableKey(t));
             }
 
             var tablesToCompareData = commonTables.Where(t => dataCompareNames.Count == 0 || dataCompareNames.Contains(t)).ToList();
@@ -612,7 +651,8 @@ public partial class DirectCompareViewModel : ObservableObject, IPageViewModel
             var removed = _schemaDiff.RemovedTables.Count;
             var modified = _schemaDiff.ModifiedTables.Count;
             var dataOnlyCount = DataDiffNodes.Count;
-            CompareSummaryText = $"结构：新增 {added}，删除 {removed}，变更 {modified}；数据差异 {dataOnlyCount} 表";
+            CompareSummaryText = $"结构：新增 {added}，删除 {removed}，变更 {modified}；数据差异 {dataOnlyCount} 表"
+                + (duplicateNameCount > 0 ? $"；注意：有 {duplicateNameCount} 张同名表因忽略库名前缀只取其一参与比对" : "");
             StatusText = "直连比对完成";
             LogSummary = CompareSummaryText;
             HasPendingOperation = true;
@@ -704,27 +744,27 @@ public partial class DirectCompareViewModel : ObservableObject, IPageViewModel
 
             if (value.GenerateSchema)
             {
-                var mod = _schemaDiff.ModifiedTables.FirstOrDefault(t => t.SourceTable.FullName.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+                var mod = _schemaDiff.ModifiedTables.FirstOrDefault(t => TableNameComparer.Equals(TableKey(t.SourceTable), tableName));
                 if (mod is not null)
                 {
                     sb.AppendLine($"-- {tableName} 结构变更");
-                    sb.AppendLine(string.Join(Environment.NewLine, _sqlGenerator.GenerateAlterTable(dbType, mod)));
+                    sb.AppendLine(string.Join(Environment.NewLine, _sqlGenerator.GenerateAlterTable(dbType, ScriptDiff(mod))));
                     sb.AppendLine();
                 }
 
-                var added = _schemaDiff.AddedTables.FirstOrDefault(t => t.FullName.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+                var added = _schemaDiff.AddedTables.FirstOrDefault(t => TableNameComparer.Equals(TableKey(t), tableName));
                 if (added is not null)
                 {
                     sb.AppendLine($"-- {tableName} 新增表");
-                    sb.AppendLine(_sqlGenerator.GenerateCreateTable(dbType, added));
+                    sb.AppendLine(_sqlGenerator.GenerateCreateTable(dbType, ScriptTable(added)));
                     sb.AppendLine();
                 }
 
-                var removed = _schemaDiff.RemovedTables.FirstOrDefault(t => t.FullName.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+                var removed = _schemaDiff.RemovedTables.FirstOrDefault(t => TableNameComparer.Equals(TableKey(t), tableName));
                 if (removed is not null)
                 {
                     sb.AppendLine($"-- {tableName} 删除表");
-                    sb.AppendLine(_sqlGenerator.GenerateDropTable(dbType, removed));
+                    sb.AppendLine(_sqlGenerator.GenerateDropTable(dbType, ScriptTable(removed)));
                     sb.AppendLine();
                 }
             }
@@ -794,7 +834,7 @@ public partial class DirectCompareViewModel : ObservableObject, IPageViewModel
                 sb.AppendLine();
             }
 
-            var processedTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var processedTables = new HashSet<string>(TableNameComparer);
             foreach (var node in CurrentDiffNodes.Where(n => n.IsSelected))
             {
                 var tableName = node.Title.Split('（')[0].Trim();
@@ -802,27 +842,27 @@ public partial class DirectCompareViewModel : ObservableObject, IPageViewModel
 
                 if (node.GenerateSchema)
                 {
-                    var mod = _schemaDiff.ModifiedTables.FirstOrDefault(t => t.SourceTable.FullName.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+                    var mod = _schemaDiff.ModifiedTables.FirstOrDefault(t => TableNameComparer.Equals(TableKey(t.SourceTable), tableName));
                     if (mod is not null)
                     {
                         sb.AppendLine($"-- {tableName} 结构变更");
-                        sb.AppendLine(string.Join(Environment.NewLine, _sqlGenerator.GenerateAlterTable(dbType, mod)));
+                        sb.AppendLine(string.Join(Environment.NewLine, _sqlGenerator.GenerateAlterTable(dbType, ScriptDiff(mod))));
                         sb.AppendLine();
                     }
 
-                    var added = _schemaDiff.AddedTables.FirstOrDefault(t => t.FullName.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+                    var added = _schemaDiff.AddedTables.FirstOrDefault(t => TableNameComparer.Equals(TableKey(t), tableName));
                     if (added is not null)
                     {
                         sb.AppendLine($"-- {tableName} 新增表");
-                        sb.AppendLine(_sqlGenerator.GenerateCreateTable(dbType, added));
+                        sb.AppendLine(_sqlGenerator.GenerateCreateTable(dbType, ScriptTable(added)));
                         sb.AppendLine();
                     }
 
-                    var removed = _schemaDiff.RemovedTables.FirstOrDefault(t => t.FullName.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+                    var removed = _schemaDiff.RemovedTables.FirstOrDefault(t => TableNameComparer.Equals(TableKey(t), tableName));
                     if (removed is not null)
                     {
                         sb.AppendLine($"-- {tableName} 删除表");
-                        sb.AppendLine(_sqlGenerator.GenerateDropTable(dbType, removed));
+                        sb.AppendLine(_sqlGenerator.GenerateDropTable(dbType, ScriptTable(removed)));
                         sb.AppendLine();
                     }
                 }
@@ -866,30 +906,30 @@ public partial class DirectCompareViewModel : ObservableObject, IPageViewModel
 
             if (node.GenerateSchema)
             {
-                var added = _schemaDiff!.AddedTables.FirstOrDefault(t => t.FullName.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+                var added = _schemaDiff!.AddedTables.FirstOrDefault(t => TableNameComparer.Equals(TableKey(t), tableName));
                 if (added is not null)
                 {
                     sb.AppendLine($"-- {tableName} 新增表");
-                    sb.AppendLine(_sqlGenerator.GenerateCreateTable(dbType, added));
+                    sb.AppendLine(_sqlGenerator.GenerateCreateTable(dbType, ScriptTable(added)));
                     sb.AppendLine();
                 }
 
-                var mod = _schemaDiff.ModifiedTables.FirstOrDefault(t => t.SourceTable.FullName.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+                var mod = _schemaDiff.ModifiedTables.FirstOrDefault(t => TableNameComparer.Equals(TableKey(t.SourceTable), tableName));
                 if (mod is not null)
                 {
                     sb.AppendLine($"-- {tableName} 结构变更");
-                    foreach (var sql in _sqlGenerator.GenerateAlterTable(dbType, mod))
+                    foreach (var sql in _sqlGenerator.GenerateAlterTable(dbType, ScriptDiff(mod)))
                     {
                         sb.AppendLine(sql);
                         sb.AppendLine();
                     }
                 }
 
-                var removed = _schemaDiff.RemovedTables.FirstOrDefault(t => t.FullName.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+                var removed = _schemaDiff.RemovedTables.FirstOrDefault(t => TableNameComparer.Equals(TableKey(t), tableName));
                 if (removed is not null)
                 {
                     sb.AppendLine($"-- {tableName} 删除表");
-                    sb.AppendLine(_sqlGenerator.GenerateDropTable(dbType, removed));
+                    sb.AppendLine(_sqlGenerator.GenerateDropTable(dbType, ScriptTable(removed)));
                     sb.AppendLine();
                 }
             }
@@ -911,8 +951,11 @@ public partial class DirectCompareViewModel : ObservableObject, IPageViewModel
         if (!_dataDiffs.TryGetValue(tableName, out var dataDiff) || dataDiff.Skipped)
             return;
 
-        if (!_sourceTableMap.TryGetValue(tableName, out var table))
+        if (!_sourceTableMap.TryGetValue(tableName, out var sourceTable))
             return;
+
+        // 生成数据语句时按当前匹配规则处理表名（忽略库名前缀时不带库名）
+        var table = ScriptTable(sourceTable);
 
         if (node.GenerateInsert && dataDiff.RowsToInsert.Count > 0)
         {
@@ -970,7 +1013,7 @@ public partial class DirectCompareViewModel : ObservableObject, IPageViewModel
     ///</summary>
     private void BuildSchemaPreview(SchemaDiff diff)
     {
-        foreach (var table in diff.AddedTables.OrderBy(t => t.FullName))
+        foreach (var table in diff.AddedTables.OrderBy(t => TableKey(t)))
         {
             var node = new CompareSchemaNodeViewModel
             {
@@ -985,7 +1028,7 @@ public partial class DirectCompareViewModel : ObservableObject, IPageViewModel
             OnlySourceNodes.Add(node);
         }
 
-        foreach (var table in diff.RemovedTables.OrderBy(t => t.FullName))
+        foreach (var table in diff.RemovedTables.OrderBy(t => TableKey(t)))
         {
             var node = new CompareSchemaNodeViewModel
             {
@@ -1000,9 +1043,9 @@ public partial class DirectCompareViewModel : ObservableObject, IPageViewModel
             OnlyTargetNodes.Add(node);
         }
 
-        foreach (var mod in diff.ModifiedTables.OrderBy(t => t.SourceTable.FullName))
+        foreach (var mod in diff.ModifiedTables.OrderBy(t => TableKey(t.SourceTable)))
         {
-            var tableName = mod.SourceTable.FullName;
+            var tableName = TableKey(mod.SourceTable);
             var hasData = _dataDiffs.TryGetValue(tableName, out var dataDiff) && !dataDiff.Skipped;
             var node = new CompareSchemaNodeViewModel
             {
@@ -1023,10 +1066,10 @@ public partial class DirectCompareViewModel : ObservableObject, IPageViewModel
 
         // 纯数据差异的表（结构相同）
         var schemaTableNames = new HashSet<string>(
-            diff.AddedTables.Select(t => t.FullName)
-                .Concat(diff.RemovedTables.Select(t => t.FullName))
-                .Concat(diff.ModifiedTables.Select(t => t.SourceTable.FullName)),
-            StringComparer.OrdinalIgnoreCase);
+            diff.AddedTables.Select(t => TableKey(t))
+                .Concat(diff.RemovedTables.Select(t => TableKey(t)))
+                .Concat(diff.ModifiedTables.Select(t => TableKey(t.SourceTable))),
+            TableNameComparer);
 
         foreach (var (tableName, dataDiff) in _dataDiffs.OrderBy(kv => kv.Key))
         {
@@ -1110,10 +1153,72 @@ public partial class DirectCompareViewModel : ObservableObject, IPageViewModel
         _ => "COMMIT;"
     };
 
-    private static string FormatTableTitle(TableModel table)
+    private string FormatTableTitle(TableModel table)
     {
+        var tableName = TableKey(table);
         return string.IsNullOrWhiteSpace(table.Comment)
-            ? table.FullName
-            : $"{table.FullName}（{table.Comment}）";
+            ? tableName
+            : $"{tableName}（{table.Comment}）";
     }
+
+    /// <summary>
+    /// 当前比对使用的名称比较器，区分大小写时为精确比较
+    ///</summary>
+    private StringComparer TableNameComparer =>
+        CaseSensitive ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
+
+    /// <summary>
+    /// 取表在比对中的唯一键：忽略库名前缀时只取表名，否则取“库名.表名”。
+    /// 比对配对、勾选联动、节点标题与脚本组装必须统一走此方法，否则会各查各的、互相找不到。
+    /// </summary>
+    /// <param name="table">表结构模型</param>
+    /// <returns>用于配对和查找的键</returns>
+    private string TableKey(TableModel table) => IgnoreSchemaPrefix ? table.Name : table.FullName;
+
+    /// <summary>
+    /// 取表选择项在比对中的唯一键
+    /// </summary>
+    /// <param name="table">表选择项</param>
+    /// <returns>用于配对和查找的键</returns>
+    private string TableKey(CompareTableSelectionViewModel table) => TableKey(table.Table);
+
+    /// <summary>
+    /// 按当前匹配规则建立表名字典；重复键（忽略库名前缀时同侧出现的同名表）保留首张，避免抛重复键异常
+    /// </summary>
+    /// <param name="tables">表结构集合</param>
+    /// <returns>以基准表名为键的字典</returns>
+    private Dictionary<string, TableModel> ToTableMap(IEnumerable<TableModel> tables)
+    {
+        var map = new Dictionary<string, TableModel>(TableNameComparer);
+        foreach (var table in tables)
+            map.TryAdd(TableKey(table), table);
+        return map;
+    }
+
+    /// <summary>
+    /// 统计一组表中因当前匹配规则而重名的表数量（忽略库名前缀时同侧不同 schema 的同名表只会取其一）
+    /// </summary>
+    /// <param name="tables">表结构集合</param>
+    /// <returns>重名的多余表张数</returns>
+    private int CountDuplicatedNames(IEnumerable<TableModel> tables) =>
+        tables.GroupBy(t => TableKey(t), TableNameComparer).Sum(g => g.Count() - 1);
+
+    /// <summary>
+    /// 取生成 SQL 用的表对象：忽略库名前缀时清空 Schema，脚本里输出裸表名，由连接串的 Database 决定目标库，
+    /// 避免脚本带上源库名在目标库执行时跨库操作
+    /// </summary>
+    /// <param name="table">源表结构模型</param>
+    /// <returns>用于生成语句的表结构模型</returns>
+    private TableModel ScriptTable(TableModel table) =>
+        IgnoreSchemaPrefix ? table with { Schema = string.Empty } : table;
+
+    /// <summary>
+    /// 取生成 SQL 用的表差异对象，表结构部分按生成规则处理
+    /// </summary>
+    /// <param name="diff">表结构差异</param>
+    /// <returns>用于生成语句的表结构差异</returns>
+    private TableDiff ScriptDiff(TableDiff diff) =>
+        IgnoreSchemaPrefix
+            ? diff with { BaselineTable = ScriptTable(diff.BaselineTable), SourceTable = ScriptTable(diff.SourceTable) }
+            : diff;
 }

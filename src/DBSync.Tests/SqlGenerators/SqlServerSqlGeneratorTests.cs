@@ -44,6 +44,21 @@ public class SqlServerSqlGeneratorTests
         Assert.Equal("DROP TABLE IF EXISTS [dbo].[Users];", sql);
     }
 
+    [Theory]
+    [InlineData(DatabaseType.SqlServer)]
+    [InlineData(DatabaseType.MySql)]
+    public void GenerateDropTable_EmptySchema_OmitsSchemaPrefix(DatabaseType dbType)
+    {
+        // 直连比对开启“忽略库名前缀”时，生成脚本用的表模型 Schema 被清空，语句里不应再带库名/模式名
+        ISqlGenerator generator = dbType == DatabaseType.SqlServer ? new SqlServerSqlGenerator() : new MySqlSqlGenerator();
+        var table = TableModelFactory.Simple("Users") with { Schema = string.Empty };
+
+        var sql = generator.GenerateDropTable(dbType, table);
+
+        Assert.Contains("Users", sql);
+        Assert.DoesNotContain("dbo", sql);
+    }
+
     [Fact]
     public void GenerateAlterTable_ModifiedColumn_GeneratesAlterColumn()
     {
