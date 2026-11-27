@@ -24,6 +24,10 @@ export function Compare(req: service$0.CompareRequest): $CancellablePromise<serv
     return $Call.ByID(2918510540, req);
 }
 
+export function CompareMulti(req: service$0.MultiRequest): $CancellablePromise<service$0.MultiView | null> {
+    return $Call.ByID(2338627641, req);
+}
+
 export function CreateSnapshot(ep: service$0.Endpoint, output: string, withData: boolean): $CancellablePromise<snapshot$0.Manifest> {
     return $Call.ByID(634292717, ep, output, withData);
 }

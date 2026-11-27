@@ -40,6 +40,12 @@ func (a *App) Compare(req service.CompareRequest) (*service.CompareView, error) 
 	return a.svc.Compare(ctx, req)
 }
 
+func (a *App) CompareMulti(req service.MultiRequest) (*service.MultiView, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	return a.svc.CompareMulti(ctx, req)
+}
+
 func (a *App) Plan(runID string, allowDestructive bool) (*service.PlanView, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

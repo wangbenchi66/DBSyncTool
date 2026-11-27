@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -37,6 +38,25 @@ type CompareRequest struct {
 	Target           Endpoint `json:"target"`
 	CompareData      bool     `json:"compareData"`
 	AllowDestructive bool     `json:"allowDestructive"`
+}
+
+type MultiRequest struct {
+	Source           Endpoint   `json:"source"`
+	Targets          []Endpoint `json:"targets"`
+	CompareData      bool       `json:"compareData"`
+	AllowDestructive bool       `json:"allowDestructive"`
+}
+
+type MultiTarget struct {
+	Name  string       `json:"name"`
+	RunID string       `json:"runId"`
+	Error string       `json:"error,omitempty"`
+	View  *CompareView `json:"view,omitempty"`
+}
+
+type MultiView struct {
+	Source  string        `json:"source"`
+	Targets []MultiTarget `json:"targets"`
 }
 
 type CompareView struct {
@@ -257,7 +277,40 @@ func (s *Service) ListDatabases(ctx context.Context, ep Endpoint) ([]string, err
 	return out, rows.Err()
 }
 
-// Compare 打开两端、读取结构、按需读数据，返回 runId 供后续只读预览。
+// CompareMulti 一套源对多个目标；单个目标失败不影响其他目标。
+func (s *Service) CompareMulti(ctx context.Context, req MultiRequest) (*MultiView, error) {
+	if len(req.Targets) == 0 {
+		return nil, fmt.Errorf("至少一个目标")
+	}
+	out := &MultiView{Source: endpointLabel(req.Source), Targets: []MultiTarget{}}
+	for _, t := range req.Targets {
+		mt := MultiTarget{Name: endpointLabel(t)}
+		v, err := s.Compare(ctx, CompareRequest{
+			Source: req.Source, Target: t,
+			CompareData: req.CompareData, AllowDestructive: req.AllowDestructive,
+		})
+		if err != nil {
+			mt.Error = err.Error()
+		} else {
+			mt.RunID = v.RunID
+			mt.View = v
+		}
+		out.Targets = append(out.Targets, mt)
+	}
+	return out, nil
+}
+
+func endpointLabel(ep Endpoint) string {
+	switch ep.Kind {
+	case "snapshot", "sqlite":
+		return ep.Kind + ":" + filepath.Base(ep.Path)
+	default:
+		if ep.Schema != "" {
+			return ep.Kind + ":" + ep.Schema
+		}
+		return ep.Kind
+	}
+}
 func (s *Service) Compare(ctx context.Context, req CompareRequest) (*CompareView, error) {
 	so, err := openEndpoint(ctx, req.Source)
 	if err != nil {

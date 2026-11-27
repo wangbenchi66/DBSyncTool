@@ -38,6 +38,7 @@
     <input id="snapshotOut" placeholder="快照输出路径，如 src.dbsync"/>
     <button id="btnSnapshot" class="ghost">导出源端快照</button>
     <button id="btnLibrary" class="ghost">快照库</button>
+    <button id="btnMulti" class="ghost">多目标</button>
     <button id="btnCompare" class="primary">比较</button>
   </div>
 </section>
@@ -77,6 +78,21 @@
     <div class="modal-head"><b>快照库</b><button id="closeLibrary" class="ghost">关闭</button></div>
     <div class="modal-path" id="libraryPath"></div>
     <div id="libraryList" class="library-list"></div>
+  </div>
+</div>
+
+<div id="multiModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head"><b>多目标比较</b><button id="closeMulti" class="ghost">关闭</button></div>
+    <div class="multi-body">
+      <div class="row">
+        <select id="multiKind"><option value="mysql">MySQL</option><option value="postgres">PostgreSQL</option><option value="sqlserver">SQL Server</option><option value="sqlite">SQLite</option><option value="snapshot">快照</option></select>
+        <input id="multiSchema" placeholder="库名（可空，全部目标共用）"/>
+      </div>
+      <textarea id="multiTargets" placeholder="每行一个目标 DSN / SQLite 文件 / 快照路径"></textarea>
+      <button id="runMulti" class="primary">比较全部目标</button>
+      <div id="multiList" class="library-list"></div>
+    </div>
   </div>
 </div>
 

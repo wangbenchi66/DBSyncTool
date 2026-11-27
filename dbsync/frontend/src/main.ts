@@ -172,6 +172,39 @@ async function saveReport() {
   }
 }
 
+async function runMulti() {
+  const kind = select("multiKind").value;
+  const schema = input("multiSchema").value.trim();
+  const lines = (document.getElementById("multiTargets") as HTMLTextAreaElement).value
+    .split("\n").map((s) => s.trim()).filter(Boolean);
+  if (!lines.length) { setMsg("请填写至少一个目标", true); return; }
+  const targets = lines.map((line) => ({
+    kind, schema,
+    dsn: kind === "sqlite" || kind === "snapshot" ? "" : line,
+    path: kind === "sqlite" || kind === "snapshot" ? line : "",
+  }));
+  try {
+    setMsg("");
+    setStatus("多目标比较中...");
+    const res = await App.CompareMulti({
+      source: endpoint("source"),
+      targets,
+      compareData: input("compareData").checked,
+      allowDestructive: input("allowDestructive").checked,
+    });
+    const list = $("multiList");
+    list.innerHTML = (res?.targets ?? []).map((t: any) => {
+      if (t.error) return `<div class="lib-item"><span class="name">${esc(t.name)}</span><span class="reason">${esc(t.error)}</span></div>`;
+      const v = t.view;
+      return `<div class="lib-item"><span class="name">${esc(t.name)}</span><span class="meta">${v.added} 增 / ${v.removed} 删 / ${v.changed} 变 / ${v.same} 同</span></div>`;
+    }).join("");
+    setStatus(`多目标完成：${res?.targets?.length ?? 0} 个目标`);
+  } catch (e) {
+    setStatus("多目标比较失败");
+    setMsg(String(e), true);
+  }
+}
+
 async function openLibrary() {
   try {
     const dir = await App.SnapshotLibraryDir();
@@ -303,6 +336,9 @@ $("btnPlan").addEventListener("click", buildPlan);
 $("btnSnapshot").addEventListener("click", createSnapshot);
 $("btnLibrary").addEventListener("click", openLibrary);
 $("btnReport").addEventListener("click", saveReport);
+$("btnMulti").addEventListener("click", () => $("multiModal").classList.remove("hidden"));
+$("closeMulti").addEventListener("click", () => $("multiModal").classList.add("hidden"));
+$("runMulti").addEventListener("click", runMulti);
 $("closeLibrary").addEventListener("click", () => $("libraryModal").classList.add("hidden"));
 $("libraryModal").addEventListener("click", (e) => {
   if (e.target === $("libraryModal")) $("libraryModal").classList.add("hidden");

@@ -141,3 +141,8 @@ button.ghost { padding: 2px 6px; font-size: 11px; color: var(--muted); }
 }
 .lib-item .name { font-family: var(--mono); flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .lib-item .meta { color: var(--muted); white-space: nowrap; }
+.multi-body { padding: 10px 12px; display: grid; gap: 8px; }
+.multi-body textarea {
+  width: 100%; min-height: 130px; resize: vertical; font-family: var(--mono); font-size: 12px;
+  border: 1px solid var(--line); border-radius: 6px; padding: 7px;
+}

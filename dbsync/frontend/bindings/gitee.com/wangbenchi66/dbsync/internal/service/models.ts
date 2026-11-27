@@ -97,6 +97,25 @@ export interface IndexBrief {
     "status": string;
 }
 
+export interface MultiRequest {
+    "source": Endpoint;
+    "targets": Endpoint[] | null;
+    "compareData": boolean;
+    "allowDestructive": boolean;
+}
+
+export interface MultiTarget {
+    "name": string;
+    "runId": string;
+    "error"?: string;
+    "view"?: CompareView | null;
+}
+
+export interface MultiView {
+    "source": string;
+    "targets": MultiTarget[] | null;
+}
+
 export interface ObjectBrief {
     "name": string;
     "kind": string;

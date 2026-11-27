@@ -9,6 +9,43 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+func TestSQLiteMultiTarget(t *testing.T) {
+	dir := t.TempDir()
+	mk := func(name, rows string) string {
+		path := filepath.Join(dir, name)
+		db, err := sql.Open("sqlite", path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer db.Close()
+		if _, err := db.Exec(`CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT NOT NULL); INSERT INTO t VALUES ` + rows); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	src := mk("src.db", "(1,'a')")
+	t1 := mk("t1.db", "(1,'a')")
+	t2 := mk("t2.db", "(1,'b'),(2,'c')")
+	svc := New()
+	v, err := svc.CompareMulti(context.Background(), MultiRequest{
+		Source:      Endpoint{Kind: "sqlite", Path: src},
+		Targets:     []Endpoint{{Kind: "sqlite", Path: t1}, {Kind: "sqlite", Path: t2}},
+		CompareData: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(v.Targets) != 2 {
+		t.Fatalf("targets=%d", len(v.Targets))
+	}
+	if v.Targets[0].Error != "" || v.Targets[1].Error != "" {
+		t.Fatalf("errors: %+v", v.Targets)
+	}
+	if v.Targets[0].View.Changed != 0 {
+		t.Fatalf("t1 应无结构差异: %+v", v.Targets[0].View)
+	}
+}
+
 func TestSQLiteCompareAndReadOnlyPreview(t *testing.T) {
 	dir := t.TempDir()
 	srcPath := filepath.Join(dir, "src.db")
