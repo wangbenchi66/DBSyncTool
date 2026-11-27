@@ -7,7 +7,7 @@ DBSyncTool v2 的 Go 实现（Windows 桌面工作台，MySQL 8.0.16 优先）�
 ## 当前状态
 
 - M1：值模型、MySQL 结构读取、快照 v2（**结构+数据**，默认明文）
-- M2：MySQL 结构与数据差异、只读 SQL 预览；SQLite 结构与数据差异（SQL 预览仅 MySQL）
+- M2：MySQL 结构与数据差异、只读 SQL 预览；SQLite / PostgreSQL 结构与数据差异（SQL 预览仅 MySQL）
 - M3：Wails v3 桌面工作台（比较/差异/SQL 预览、导出源端快照，只读）
 - 单元测试：`go test ./...`
 - 集成测试：需要设置 `DBSYNC_TEST_MYSQL_DSN`，并加 `-tags integration`

@@ -181,6 +181,22 @@ func quoteIdent(s string) string {
 	return "`" + strings.ReplaceAll(s, "`", "``") + "`"
 }
 
+func quoteIdentFor(kind, s string) string {
+	if kind == "postgres" {
+		return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
+	}
+	return quoteIdent(s)
+}
+
+func isTextType(t model.Type) bool {
+	switch t.ID {
+	case model.TypeString, model.TypeText, model.TypeEnum, model.TypeSet:
+		return true
+	default:
+		return false
+	}
+}
+
 // ReadRows 读取整表（MySQL 排序规则）。M2 先物化到内存；后续换流式归并。
 func ReadRows(ctx context.Context, db *sql.DB, t *model.Table) ([]diff.Row, error) {
 	return ReadRowsKind(ctx, db, t, "mysql")
@@ -192,10 +208,10 @@ func ReadRowsKind(ctx context.Context, db *sql.DB, t *model.Table, kind string) 
 	}
 	var cols []string
 	for _, c := range t.Columns {
-		cols = append(cols, "`"+strings.ReplaceAll(c.Name, "`", "``")+"`")
+		cols = append(cols, quoteIdentFor(kind, c.Name))
 	}
 	query := "SELECT " + strings.Join(cols, ",") + " FROM " +
-		quoteIdent(t.Schema) + "." + quoteIdent(t.Name)
+		quoteIdentFor(kind, t.Schema) + "." + quoteIdentFor(kind, t.Name)
 	pk := PKColumns(t)
 	if len(pk) > 0 {
 		var order []string
@@ -204,9 +220,14 @@ func ReadRowsKind(ctx context.Context, db *sql.DB, t *model.Table, kind string) 
 			if c == nil {
 				continue
 			}
-			expr := "`" + strings.ReplaceAll(name, "`", "``") + "`"
-			if kind == "mysql" && (c.Type.ID == model.TypeString || c.Type.ID == model.TypeText || c.Type.ID == model.TypeEnum || c.Type.ID == model.TypeSet) {
-				expr += " COLLATE utf8mb4_bin"
+			expr := quoteIdentFor(kind, name)
+			if isTextType(c.Type) {
+				switch kind {
+				case "mysql":
+					expr += " COLLATE utf8mb4_bin"
+				case "postgres":
+					expr += ` COLLATE "C"`
+				}
 			}
 			order = append(order, expr)
 		}

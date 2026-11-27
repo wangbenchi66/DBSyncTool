@@ -16,7 +16,7 @@
   <div class="endpoint">
     <div class="ep-head"><b>源</b><span>期望结构</span><button id="testSource" class="ghost">测试</button></div>
     <div class="row">
-      <select id="sourceKind"><option value="mysql">MySQL</option><option value="sqlite">SQLite</option><option value="snapshot">快照</option></select>
+      <select id="sourceKind"><option value="mysql">MySQL</option><option value="postgres">PostgreSQL</option><option value="sqlite">SQLite</option><option value="snapshot">快照</option></select>
       <input id="sourceSchema" placeholder="库名（可空）"/>
     </div>
     <input id="sourceDSN" placeholder="root:***@tcp(host:3306)/?parseTime=true"/>
@@ -26,7 +26,7 @@
   <div class="endpoint">
     <div class="ep-head"><b>目标</b><span>现状，将被修改</span><button id="testTarget" class="ghost">测试</button></div>
     <div class="row">
-      <select id="targetKind"><option value="mysql">MySQL</option><option value="sqlite">SQLite</option><option value="snapshot">快照</option></select>
+      <select id="targetKind"><option value="mysql">MySQL</option><option value="postgres">PostgreSQL</option><option value="sqlite">SQLite</option><option value="snapshot">快照</option></select>
       <input id="targetSchema" placeholder="库名（可空）"/>
     </div>
     <input id="targetDSN" placeholder="root:***@tcp(host:3306)/?parseTime=true"/>
