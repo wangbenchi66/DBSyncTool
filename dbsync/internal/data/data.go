@@ -182,10 +182,14 @@ func quoteIdent(s string) string {
 }
 
 func quoteIdentFor(kind, s string) string {
-	if kind == "postgres" {
+	switch kind {
+	case "postgres":
 		return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
+	case "sqlserver":
+		return "[" + strings.ReplaceAll(s, "]", "]]") + "]"
+	default:
+		return quoteIdent(s)
 	}
-	return quoteIdent(s)
 }
 
 func isTextType(t model.Type) bool {
@@ -227,6 +231,8 @@ func ReadRowsKind(ctx context.Context, db *sql.DB, t *model.Table, kind string) 
 					expr += " COLLATE utf8mb4_bin"
 				case "postgres":
 					expr += ` COLLATE "C"`
+				case "sqlserver":
+					expr += " COLLATE Latin1_General_100_BIN2"
 				}
 			}
 			order = append(order, expr)

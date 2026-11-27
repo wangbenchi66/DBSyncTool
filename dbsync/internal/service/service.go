@@ -14,6 +14,7 @@ import (
 	"gitee.com/wangbenchi66/dbsync/internal/dialect/mysql"
 	"gitee.com/wangbenchi66/dbsync/internal/dialect/postgres"
 	"gitee.com/wangbenchi66/dbsync/internal/dialect/sqlite"
+	"gitee.com/wangbenchi66/dbsync/internal/dialect/sqlserver"
 	"gitee.com/wangbenchi66/dbsync/internal/diff"
 	"gitee.com/wangbenchi66/dbsync/internal/model"
 	"gitee.com/wangbenchi66/dbsync/internal/plan"
@@ -193,6 +194,17 @@ func (s *Service) TestConnection(ctx context.Context, ep Endpoint) (ConnInfo, er
 			d = "public"
 		}
 		return ConnInfo{Version: "PostgreSQL " + v, Database: d}, nil
+	case "sqlserver":
+		db, err := sqlserver.Open(ep.DSN)
+		if err != nil {
+			return ConnInfo{}, err
+		}
+		defer db.Close()
+		v, err := sqlserver.Version(ctx, db)
+		if err != nil {
+			return ConnInfo{}, err
+		}
+		return ConnInfo{Version: v, Database: ep.Schema}, nil
 	default:
 		return ConnInfo{}, fmt.Errorf("未知端点类型 %q", ep.Kind)
 	}
@@ -379,6 +391,21 @@ func openEndpoint(ctx context.Context, ep Endpoint) (*opened, error) {
 			return nil, err
 		}
 		return &opened{kind: "postgres", schema: s, db: db}, nil
+	case "sqlserver":
+		db, err := sqlserver.Open(ep.DSN)
+		if err != nil {
+			return nil, err
+		}
+		schema := ep.Schema
+		if schema == "" {
+			schema = "dbo"
+		}
+		s, err := sqlserver.Introspect(ctx, db, schema)
+		if err != nil {
+			db.Close()
+			return nil, err
+		}
+		return &opened{kind: "sqlserver", schema: s, db: db}, nil
 	case "snapshot":
 		sn, err := snapshot.Read(ep.Path)
 		if err != nil {
