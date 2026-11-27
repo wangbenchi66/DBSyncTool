@@ -1095,7 +1095,7 @@ renames:
 
 ## 13. 变更计划与 SQL 预览（只读）
 
-> 当前实现：**结构 DDL 预览只支持 MySQL**；**数据 DML 预览覆盖 MySQL/SQLite/PostgreSQL/SQL Server**。所有 SQL 只查看/导出，不执行。
+> 当前实现：**结构 DDL 预览支持 MySQL + SQLite**（SQLite 改列/主键需重建表，只提示不生成危险 SQL）；**数据 DML 预览覆盖 MySQL/SQLite/PostgreSQL/SQL Server**。所有 SQL 只查看/导出，不执行。
 
 > 本节的“阶段”只用于**差异 SQL 预览的排序**，不代表工具会执行。工具没有 apply/execute；`plan.sql`/`plan.json` 只能导出查看，不能在应用内运行。
 
