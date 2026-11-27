@@ -10,6 +10,7 @@ import (
 type Node struct {
 	Name   string `json:"name"`
 	Schema string `json:"schema,omitempty"`
+	Kind   string `json:"kind,omitempty"`
 }
 
 type Edge struct {
@@ -17,6 +18,7 @@ type Edge struct {
 	To         string `json:"to"`
 	Constraint string `json:"constraint"`
 	Schema     string `json:"schema,omitempty"`
+	Kind       string `json:"kind,omitempty"`
 }
 
 type Graph struct {
@@ -34,10 +36,10 @@ func Build(schemas ...*model.Schema) Graph {
 			continue
 		}
 		for _, t := range s.Tables {
-			key := t.Schema + "." + t.Name
+			key := "table:" + t.Schema + "." + t.Name
 			if !seenNode[key] {
 				seenNode[key] = true
-				g.Nodes = append(g.Nodes, Node{Name: t.Name, Schema: t.Schema})
+				g.Nodes = append(g.Nodes, Node{Name: t.Name, Schema: t.Schema, Kind: "table"})
 			}
 			for _, c := range t.Constraints {
 				if c.Kind != model.ConstraintFK || c.RefTable == "" {
@@ -49,7 +51,22 @@ func Build(schemas ...*model.Schema) Graph {
 					continue
 				}
 				seenEdge[ek] = true
-				g.Edges = append(g.Edges, Edge{From: t.Name, To: c.RefTable, Constraint: fk, Schema: t.Schema})
+				g.Edges = append(g.Edges, Edge{From: t.Name, To: c.RefTable, Constraint: fk, Schema: t.Schema, Kind: "table"})
+			}
+		}
+		for _, v := range s.Views {
+			key := "view:" + v.Schema + "." + v.Name
+			if !seenNode[key] {
+				seenNode[key] = true
+				g.Nodes = append(g.Nodes, Node{Name: v.Name, Schema: v.Schema, Kind: "view"})
+			}
+			for _, dep := range v.Dependencies {
+				ek := key + "->table:" + dep + "#view"
+				if seenEdge[ek] {
+					continue
+				}
+				seenEdge[ek] = true
+				g.Edges = append(g.Edges, Edge{From: v.Name, To: dep, Constraint: "view", Schema: v.Schema, Kind: "view"})
 			}
 		}
 	}

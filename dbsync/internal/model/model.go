@@ -95,9 +95,10 @@ type Table struct {
 }
 
 type View struct {
-	Schema     string
-	Name       string
-	Definition string
+	Schema       string
+	Name         string
+	Definition   string
+	Dependencies []string
 }
 
 type Routine struct {

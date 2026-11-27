@@ -132,6 +132,9 @@ CREATE PROCEDURE p_parent() SELECT 1;
 	if len(s.Views) != 1 || s.Views[0].Name != "v_parent" {
 		t.Fatalf("视图不符: %+v", s.Views)
 	}
+	if len(s.Views[0].Dependencies) != 1 || s.Views[0].Dependencies[0] != "parent" {
+		t.Fatalf("视图依赖不符: %+v", s.Views[0])
+	}
 	if len(s.Routines) != 1 || s.Routines[0].Name != "p_parent" {
 		t.Fatalf("例程不符: %+v", s.Routines)
 	}

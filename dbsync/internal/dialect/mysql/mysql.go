@@ -363,17 +363,36 @@ func readViews(ctx context.Context, db *sql.DB, schema string) ([]model.View, er
 	if err != nil {
 		return nil, fmt.Errorf("读取视图: %w", err)
 	}
-	defer rows.Close()
 	var out []model.View
 	for rows.Next() {
 		var name string
 		var def sql.NullString
 		if err := rows.Scan(&name, &def); err != nil {
+			rows.Close()
 			return nil, err
 		}
 		out = append(out, model.View{Schema: schema, Name: name, Definition: def.String})
 	}
-	return out, rows.Err()
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// MySQL 可直接从 VIEW_TABLE_USAGE 得到视图 -> 表依赖。
+	deps := map[string][]string{}
+	dr, err := db.QueryContext(ctx, `SELECT VIEW_NAME, TABLE_NAME FROM information_schema.VIEW_TABLE_USAGE WHERE VIEW_SCHEMA = ? AND TABLE_SCHEMA = ? ORDER BY VIEW_NAME, TABLE_NAME`, schema, schema)
+	if err == nil {
+		for dr.Next() {
+			var v, t string
+			if err := dr.Scan(&v, &t); err == nil {
+				deps[v] = append(deps[v], t)
+			}
+		}
+		dr.Close()
+	}
+	for i := range out {
+		out[i].Dependencies = deps[out[i].Name]
+	}
+	return out, nil
 }
 
 func readRoutines(ctx context.Context, db *sql.DB, schema string) ([]model.Routine, error) {

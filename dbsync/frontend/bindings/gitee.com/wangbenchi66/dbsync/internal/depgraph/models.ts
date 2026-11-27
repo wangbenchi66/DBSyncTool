@@ -6,6 +6,7 @@ export interface Edge {
     "to": string;
     "constraint": string;
     "schema"?: string;
+    "kind"?: string;
 }
 
 export interface Graph {
@@ -17,4 +18,5 @@ export interface Graph {
 export interface Node {
     "name": string;
     "schema"?: string;
+    "kind"?: string;
 }
