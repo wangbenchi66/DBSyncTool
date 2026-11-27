@@ -34,7 +34,7 @@ func Attach(ctx context.Context, sourceDB, targetDB *sql.DB, sd *diff.SchemaDiff
 				return fmt.Errorf("%s: %w", td.Name, err)
 			}
 			td.Data = &diff.DataDiff{
-				KeyColumns:  pkColumns(td.Source),
+				KeyColumns:  PKColumns(td.Source),
 				SourceCount: len(rows),
 				Inserts:     rows,
 			}
@@ -46,11 +46,11 @@ func Attach(ctx context.Context, sourceDB, targetDB *sql.DB, sd *diff.SchemaDiff
 		if td.Source == nil || td.Target == nil {
 			continue
 		}
-		key := pkColumns(td.Source)
+		key := PKColumns(td.Source)
 		if len(key) == 0 {
-			key = pkColumns(td.Target)
+			key = PKColumns(td.Target)
 		}
-		common := comparedColumns(td.Source)
+		common := ComparedColumns(td.Source)
 		dd := &diff.DataDiff{KeyColumns: key, CommonColumns: common}
 		td.Data = dd
 		if len(key) == 0 {
@@ -67,12 +67,12 @@ func Attach(ctx context.Context, sourceDB, targetDB *sql.DB, sd *diff.SchemaDiff
 		}
 		dd.SourceCount = len(srcRows)
 		dd.TargetCount = len(tgtRows)
-		diffRows(dd, srcRows, tgtRows)
+		DiffRows(dd, srcRows, tgtRows)
 	}
 	return nil
 }
 
-func pkColumns(t *model.Table) []string {
+func PKColumns(t *model.Table) []string {
 	for _, c := range t.Constraints {
 		if c.Kind == model.ConstraintPK {
 			return append([]string(nil), c.Columns...)
@@ -90,7 +90,7 @@ func pkColumns(t *model.Table) []string {
 	return nil
 }
 
-func comparedColumns(s *model.Table) []string {
+func ComparedColumns(s *model.Table) []string {
 	var out []string
 	for _, c := range s.Columns {
 		if c.Generated {
@@ -101,7 +101,7 @@ func comparedColumns(s *model.Table) []string {
 	return out
 }
 
-func diffRows(dd *diff.DataDiff, src, tgt []diff.Row) {
+func DiffRows(dd *diff.DataDiff, src, tgt []diff.Row) {
 	sm := map[string]diff.Row{}
 	tm := map[string]diff.Row{}
 	for _, r := range src {
@@ -177,8 +177,16 @@ func rowKey(r diff.Row, pk []string) string {
 
 func sortStrings(s []string) { sort.Strings(s) }
 
-// ReadRows 读取整表。M2 先物化到内存；M2 后期换流式归并。
+func quoteIdent(s string) string {
+	return "`" + strings.ReplaceAll(s, "`", "``") + "`"
+}
+
+// ReadRows 读取整表（MySQL 排序规则）。M2 先物化到内存；后续换流式归并。
 func ReadRows(ctx context.Context, db *sql.DB, t *model.Table) ([]diff.Row, error) {
+	return ReadRowsKind(ctx, db, t, "mysql")
+}
+
+func ReadRowsKind(ctx context.Context, db *sql.DB, t *model.Table, kind string) ([]diff.Row, error) {
 	if len(t.Columns) == 0 {
 		return nil, nil
 	}
@@ -186,10 +194,9 @@ func ReadRows(ctx context.Context, db *sql.DB, t *model.Table) ([]diff.Row, erro
 	for _, c := range t.Columns {
 		cols = append(cols, "`"+strings.ReplaceAll(c.Name, "`", "``")+"`")
 	}
-	query := "SELECT " + strings.Join(cols, ",") + " FROM `" +
-		strings.ReplaceAll(t.Schema, "`", "``") + "`.`" +
-		strings.ReplaceAll(t.Name, "`", "``") + "`"
-	pk := pkColumns(t)
+	query := "SELECT " + strings.Join(cols, ",") + " FROM " +
+		quoteIdent(t.Schema) + "." + quoteIdent(t.Name)
+	pk := PKColumns(t)
 	if len(pk) > 0 {
 		var order []string
 		for _, name := range pk {
@@ -198,7 +205,7 @@ func ReadRows(ctx context.Context, db *sql.DB, t *model.Table) ([]diff.Row, erro
 				continue
 			}
 			expr := "`" + strings.ReplaceAll(name, "`", "``") + "`"
-			if c.Type.ID == model.TypeString || c.Type.ID == model.TypeText || c.Type.ID == model.TypeEnum || c.Type.ID == model.TypeSet {
+			if kind == "mysql" && (c.Type.ID == model.TypeString || c.Type.ID == model.TypeText || c.Type.ID == model.TypeEnum || c.Type.ID == model.TypeSet) {
 				expr += " COLLATE utf8mb4_bin"
 			}
 			order = append(order, expr)
@@ -256,6 +263,8 @@ func convert(raw any, typ model.Type) (value.Value, error) {
 			return value.Bool(x != 0), nil
 		case []byte:
 			return value.Bool(string(x) != "0"), nil
+		case string:
+			return value.Bool(x != "0" && x != ""), nil
 		}
 	case model.TypeInt:
 		switch x := raw.(type) {
@@ -300,6 +309,10 @@ func convert(raw any, typ model.Type) (value.Value, error) {
 			return value.Decimal(string(x))
 		case string:
 			return value.Decimal(x)
+		case int64:
+			return value.Decimal(strconv.FormatInt(x, 10))
+		case float64:
+			return value.Decimal(strconv.FormatFloat(x, 'f', -1, 64))
 		}
 	case model.TypeString, model.TypeText, model.TypeEnum, model.TypeSet, model.TypeJSON:
 		switch x := raw.(type) {

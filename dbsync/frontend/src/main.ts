@@ -61,10 +61,13 @@ function endpoint(prefix: "source" | "target"): Endpoint {
   return ep;
 }
 function syncKind(prefix: "source" | "target") {
-  const snap = select(`${prefix}Kind`).value === "snapshot";
-  input(`${prefix}DSN`).classList.toggle("hidden", snap);
-  input(`${prefix}Path`).classList.toggle("hidden", !snap);
-  input(`${prefix}Schema`).placeholder = snap ? "库名（可空）" : "库名（可空）";
+  const kind = select(`${prefix}Kind`).value;
+  const file = kind === "snapshot" || kind === "sqlite";
+  input(`${prefix}DSN`).classList.toggle("hidden", file);
+  input(`${prefix}Path`).classList.toggle("hidden", !file);
+  input(`${prefix}Schema`).classList.toggle("hidden", kind === "sqlite" || kind === "snapshot");
+  input(`${prefix}Path`).placeholder = kind === "sqlite" ? "SQLite 文件路径" : "baseline.dbsync 路径";
+  input(`${prefix}Schema`).placeholder = "库名（可空）";
 }
 
 async function test(prefix: "source" | "target") {
@@ -136,6 +139,22 @@ function renderDetail() {
   el.innerHTML = html;
 }
 
+async function createSnapshot() {
+  const out = input("snapshotOut").value.trim();
+  if (!out) { setMsg("请填写快照输出路径", true); return; }
+  try {
+    setMsg("");
+    setStatus("导出快照中...");
+    const m = await App.CreateSnapshot(endpoint("source"), out, true);
+    const rows = (m.tables ?? []).reduce((n: number, t: any) => n + (t.rowCount ?? 0), 0);
+    setStatus(`快照已导出：${m.tableCount} 表 / ${rows} 行（默认不加密）`);
+    setMsg("快照写入完成；不会修改数据库", false);
+  } catch (e) {
+    setStatus("导出快照失败");
+    setMsg(String(e), true);
+  }
+}
+
 async function compare() {
   try {
     setMsg("");
@@ -196,5 +215,6 @@ for (const p of ["source", "target"] as const) {
 }
 $("btnCompare").addEventListener("click", compare);
 $("btnPlan").addEventListener("click", buildPlan);
+$("btnSnapshot").addEventListener("click", createSnapshot);
 setStatus("只读模式 · 不执行任何 SQL");
 $("viewport").textContent = "只读比对";

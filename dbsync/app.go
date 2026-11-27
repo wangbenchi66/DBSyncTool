@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"gitee.com/wangbenchi66/dbsync/internal/service"
+	"gitee.com/wangbenchi66/dbsync/internal/snapshot"
 )
 
 // App 是 Wails 绑定层：只做超时/生命周期，不实现业务。
@@ -42,4 +43,10 @@ func (a *App) Plan(runID string, allowDestructive bool) (*service.PlanView, erro
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	return a.svc.Plan(ctx, runID, allowDestructive)
+}
+
+func (a *App) CreateSnapshot(ep service.Endpoint, output string, withData bool) (snapshot.Manifest, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	return a.svc.SnapshotCreate(ctx, ep, output, withData)
 }

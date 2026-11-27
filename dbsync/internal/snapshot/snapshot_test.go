@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"gitee.com/wangbenchi66/dbsync/internal/model"
+	"gitee.com/wangbenchi66/dbsync/internal/value"
 )
 
 func testSchema() *model.Schema {
@@ -47,6 +48,34 @@ func TestWriteReadSchema(t *testing.T) {
 	}
 	if err := Verify(path); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestWriteReadData(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "with-data.dbsync")
+	data := map[string]RowSet{
+		"users": {
+			Columns: []string{"id", "email"},
+			Rows: []Row{
+				{"id": value.Int(1), "email": value.String("a@x")},
+				{"id": value.Int(2), "email": value.String("b@x")},
+			},
+		},
+	}
+	if err := Write(path, testSchema(), WriteOptions{Data: data}); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Read(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !s.Manifest.HasData || len(s.Manifest.Tables) != 1 || s.Manifest.Tables[0].RowCount != 2 {
+		t.Fatalf("manifest 数据元信息不符: %+v", s.Manifest)
+	}
+	rs := s.Data["users"]
+	if len(rs.Rows) != 2 || !value.Equal(rs.Rows[1]["email"], value.String("b@x")) {
+		t.Fatalf("数据 round-trip 不符: %+v", rs)
 	}
 }
 

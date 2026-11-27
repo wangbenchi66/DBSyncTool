@@ -12,6 +12,7 @@ import (
 
 	"gitee.com/wangbenchi66/dbsync/internal/data"
 	"gitee.com/wangbenchi66/dbsync/internal/dialect/mysql"
+	"gitee.com/wangbenchi66/dbsync/internal/dialect/sqlite"
 	"gitee.com/wangbenchi66/dbsync/internal/diff"
 	"gitee.com/wangbenchi66/dbsync/internal/model"
 	"gitee.com/wangbenchi66/dbsync/internal/plan"
@@ -165,6 +166,17 @@ func (s *Service) TestConnection(ctx context.Context, ep Endpoint) (ConnInfo, er
 			return ConnInfo{}, err
 		}
 		return ConnInfo{Version: fmt.Sprintf("snapshot v%d", m.FormatVersion), Database: m.SchemaName}, nil
+	case "sqlite":
+		db, err := sqlite.Open(ep.Path)
+		if err != nil {
+			return ConnInfo{}, err
+		}
+		defer db.Close()
+		v, err := sqlite.Version(ctx, db)
+		if err != nil {
+			return ConnInfo{}, err
+		}
+		return ConnInfo{Version: "SQLite " + v, Database: "main"}, nil
 	default:
 		return ConnInfo{}, fmt.Errorf("未知端点类型 %q", ep.Kind)
 	}
@@ -199,25 +211,25 @@ func (s *Service) ListDatabases(ctx context.Context, ep Endpoint) ([]string, err
 	return out, rows.Err()
 }
 
-// Compare 打开两端、读取结构、按需读数据，返回 runId 供后续 Plan/Apply。
+// Compare 打开两端、读取结构、按需读数据，返回 runId 供后续只读预览。
 func (s *Service) Compare(ctx context.Context, req CompareRequest) (*CompareView, error) {
-	ss, sdb, err := openSchema(ctx, req.Source)
+	so, err := openEndpoint(ctx, req.Source)
 	if err != nil {
 		return nil, fmt.Errorf("源端: %w", err)
 	}
-	if sdb != nil {
-		defer sdb.Close()
+	if so.db != nil {
+		defer so.db.Close()
 	}
-	ts, tdb, err := openSchema(ctx, req.Target)
+	to, err := openEndpoint(ctx, req.Target)
 	if err != nil {
 		return nil, fmt.Errorf("目标端: %w", err)
 	}
-	if tdb != nil {
-		defer tdb.Close()
+	if to.db != nil {
+		defer to.db.Close()
 	}
-	d := diff.CompareSchema(ss, ts)
-	if req.CompareData && sdb != nil && tdb != nil {
-		if err := data.Attach(ctx, sdb, tdb, d); err != nil {
+	d := diff.CompareSchema(so.schema, to.schema)
+	if req.CompareData {
+		if err := attachMixed(ctx, so, to, d); err != nil {
 			return nil, err
 		}
 		d.HasData = true
@@ -226,7 +238,7 @@ func (s *Service) Compare(ctx context.Context, req CompareRequest) (*CompareView
 	s.mu.Lock()
 	s.sessions[runID] = &session{
 		source: req.Source, target: req.Target,
-		sourceSchema: ss, targetSchema: ts, diff: d,
+		sourceSchema: so.schema, targetSchema: to.schema, diff: d,
 		allowDrop: req.AllowDestructive,
 	}
 	s.mu.Unlock()
@@ -240,6 +252,13 @@ func (s *Service) Plan(ctx context.Context, runID string, allowDestructive bool)
 	if sess == nil {
 		return nil, fmt.Errorf("运行 %s 不存在，请重新比较", runID)
 	}
+	if sess.source.Kind != "mysql" || sess.target.Kind != "mysql" {
+		return &PlanView{
+			RunID: runID, Blocked: false,
+			Diagnostics: []Diagnostic{{Severity: "warning", Code: "PREVIEW_MYSQL_ONLY", Message: "SQL 预览目前只支持 MySQL；差异本身仍可查看"}},
+			Phases:      []PhaseView{},
+		}, nil
+	}
 	p := plan.Build(sess.diff, sess.sourceSchema, sess.targetSchema, plan.Options{
 		AllowDestructive: allowDestructive || sess.allowDrop,
 		CompareData:      sess.diff.HasData,
@@ -250,36 +269,138 @@ func (s *Service) Plan(ctx context.Context, runID string, allowDestructive bool)
 	return toPlanView(runID, p), nil
 }
 
-func openSchema(ctx context.Context, ep Endpoint) (*model.Schema, *sql.DB, error) {
+// SnapshotCreate 从端点导出快照；withData=false 时只导结构。快照写入不是数据库变更。
+func (s *Service) SnapshotCreate(ctx context.Context, ep Endpoint, output string, withData bool) (snapshot.Manifest, error) {
+	if output == "" {
+		return snapshot.Manifest{}, fmt.Errorf("输出路径为空")
+	}
+	o, err := openEndpoint(ctx, ep)
+	if err != nil {
+		return snapshot.Manifest{}, err
+	}
+	if o.db != nil {
+		defer o.db.Close()
+	}
+	var dataMap map[string]snapshot.RowSet
+	if withData {
+		if o.db == nil {
+			return snapshot.Manifest{}, fmt.Errorf("只有活库端点支持导出数据快照")
+		}
+		dataMap = map[string]snapshot.RowSet{}
+		for i := range o.schema.Tables {
+			t := &o.schema.Tables[i]
+			rows, err := data.ReadRows(ctx, o.db, t)
+			if err != nil {
+				return snapshot.Manifest{}, fmt.Errorf("%s: %w", t.Name, err)
+			}
+			cols := make([]string, 0, len(t.Columns))
+			for _, c := range t.Columns {
+				cols = append(cols, c.Name)
+			}
+			dataMap[t.Name] = snapshot.RowSet{Columns: cols, Rows: rows}
+		}
+	}
+	if err := snapshot.Write(output, o.schema, snapshot.WriteOptions{
+		Source: ep.Kind + ":" + ep.Schema,
+		Data:   dataMap,
+	}); err != nil {
+		return snapshot.Manifest{}, err
+	}
+	return snapshot.Inspect(output)
+}
+
+type opened struct {
+	kind   string
+	schema *model.Schema
+	db     *sql.DB
+	data   map[string]snapshot.RowSet
+}
+
+func openEndpoint(ctx context.Context, ep Endpoint) (*opened, error) {
 	switch ep.Kind {
 	case "mysql":
 		db, err := mysql.Open(ep.DSN)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		schema := ep.Schema
 		if schema == "" {
 			schema, err = mysql.Database(ctx, db)
 			if err != nil || schema == "" {
 				db.Close()
-				return nil, nil, fmt.Errorf("无法确定 schema，请显式填写")
+				return nil, fmt.Errorf("无法确定 schema，请显式填写")
 			}
 		}
 		s, err := mysql.Introspect(ctx, db, schema)
 		if err != nil {
 			db.Close()
-			return nil, nil, err
+			return nil, err
 		}
-		return s, db, nil
+		return &opened{kind: "mysql", schema: s, db: db}, nil
+	case "sqlite":
+		db, err := sqlite.Open(ep.Path)
+		if err != nil {
+			return nil, err
+		}
+		s, err := sqlite.Introspect(ctx, db, "main")
+		if err != nil {
+			db.Close()
+			return nil, err
+		}
+		return &opened{kind: "sqlite", schema: s, db: db}, nil
 	case "snapshot":
 		sn, err := snapshot.Read(ep.Path)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
-		return sn.Schema, nil, nil
+		return &opened{kind: "snapshot", schema: sn.Schema, data: sn.Data}, nil
 	default:
-		return nil, nil, fmt.Errorf("未知端点类型 %q", ep.Kind)
+		return nil, fmt.Errorf("未知端点类型 %q", ep.Kind)
 	}
+}
+
+func rowsOf(ctx context.Context, o *opened, t *model.Table) ([]diff.Row, error) {
+	if o.db != nil {
+		return data.ReadRowsKind(ctx, o.db, t, o.kind)
+	}
+	rs, ok := o.data[t.Name]
+	if !ok {
+		return nil, fmt.Errorf("快照不含表 %s 的数据；请用带数据的快照", t.Name)
+	}
+	return rs.Rows, nil
+}
+
+func attachMixed(ctx context.Context, so, to *opened, d *diff.SchemaDiff) error {
+	for i := range d.Tables {
+		td := &d.Tables[i]
+		if td.Status == diff.Removed || td.Source == nil {
+			continue
+		}
+		key := data.PKColumns(td.Source)
+		if len(key) == 0 && td.Target != nil {
+			key = data.PKColumns(td.Target)
+		}
+		dd := &diff.DataDiff{KeyColumns: key, CommonColumns: data.ComparedColumns(td.Source)}
+		td.Data = dd
+		if len(key) == 0 {
+			dd.UnsupportedKey = true
+			continue
+		}
+		src, err := rowsOf(ctx, so, td.Source)
+		if err != nil {
+			return err
+		}
+		var tgt []diff.Row
+		if td.Target != nil {
+			tgt, err = rowsOf(ctx, to, td.Target)
+			if err != nil {
+				return err
+			}
+		}
+		dd.SourceCount, dd.TargetCount = len(src), len(tgt)
+		data.DiffRows(dd, src, tgt)
+	}
+	return nil
 }
 
 func toCompareView(runID string, d *diff.SchemaDiff) *CompareView {

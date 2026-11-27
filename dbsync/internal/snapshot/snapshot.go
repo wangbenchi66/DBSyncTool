@@ -1,5 +1,5 @@
-// Package snapshot 实现 .dbsync v2 容器：ZIP + manifest + schema.ndjson + CHECKSUMS。
-// M1 只写结构；数据行在后续里程碑追加 data/<table>.ndjson。
+// Package snapshot 实现 .dbsync v2 容器：ZIP + manifest + schema.ndjson + data/*.ndjson + CHECKSUMS。
+// 只读：快照只被读取/比较，不会被工具执行。
 package snapshot
 
 import (
@@ -10,42 +10,67 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
+	"gitee.com/wangbenchi66/dbsync/internal/diff"
 	"gitee.com/wangbenchi66/dbsync/internal/model"
 )
 
 const FormatVersion = 2
 
+type Row = diff.Row
+
+type RowSet struct {
+	Columns []string
+	Rows    []Row
+}
+
+type TableData struct {
+	Name     string   `json:"name"`
+	File     string   `json:"file"`
+	Columns  []string `json:"columns"`
+	RowCount int      `json:"rowCount"`
+	Hash     string   `json:"hash"`
+}
+
 type Manifest struct {
-	FormatVersion int    `json:"formatVersion"`
-	CreatedAt     string `json:"createdAt"`
-	Source        string `json:"source"`
-	SchemaName    string `json:"schemaName"`
-	SchemaHash    string `json:"schemaHash"`
-	TableCount    int    `json:"tableCount"`
-	ViewCount     int    `json:"viewCount"`
-	RoutineCount  int    `json:"routineCount"`
-	TriggerCount  int    `json:"triggerCount"`
-	HasData       bool   `json:"hasData"`
-	Encrypted     bool   `json:"encrypted"`
+	FormatVersion int         `json:"formatVersion"`
+	CreatedAt     string      `json:"createdAt"`
+	Source        string      `json:"source"`
+	SchemaName    string      `json:"schemaName"`
+	SchemaHash    string      `json:"schemaHash"`
+	TableCount    int         `json:"tableCount"`
+	ViewCount     int         `json:"viewCount"`
+	RoutineCount  int         `json:"routineCount"`
+	TriggerCount  int         `json:"triggerCount"`
+	Tables        []TableData `json:"tables,omitempty"`
+	HasData       bool        `json:"hasData"`
+	Encrypted     bool        `json:"encrypted"`
 }
 
 type Snapshot struct {
 	Manifest Manifest
 	Schema   *model.Schema
+	Data     map[string]RowSet
 }
 
 type WriteOptions struct {
 	Source    string
 	CreatedAt time.Time
+	Data      map[string]RowSet
 }
 
 func WriteSchema(path string, schema *model.Schema, opts WriteOptions) error {
+	opts.Data = nil
+	return Write(path, schema, opts)
+}
+
+func Write(path string, schema *model.Schema, opts WriteOptions) error {
 	if schema == nil {
 		return fmt.Errorf("schema 为空")
 	}
@@ -65,29 +90,57 @@ func WriteSchema(path string, schema *model.Schema, opts WriteOptions) error {
 		ViewCount:     len(schema.Views),
 		RoutineCount:  len(schema.Routines),
 		TriggerCount:  len(schema.Triggers),
-		HasData:       false,
+		HasData:       len(opts.Data) > 0,
 		Encrypted:     false,
 	}
 	if opts.CreatedAt.IsZero() {
 		m.CreatedAt = time.Unix(0, 0).UTC().Format(time.RFC3339Nano)
 	}
+	files := make([]zipEntry, 0, 3+len(opts.Data))
+	var checksums strings.Builder
+	schemaFileBytes := append(append([]byte(nil), schemaBytes...), '\n')
+	schemaFileSum := sha256.Sum256(schemaFileBytes)
+	fmt.Fprintf(&checksums, "%s  schema.ndjson\n", hex.EncodeToString(schemaFileSum[:]))
+
+	names := make([]string, 0, len(opts.Data))
+	for name := range opts.Data {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		rs := opts.Data[name]
+		var buf bytes.Buffer
+		for _, row := range rs.Rows {
+			b, err := json.Marshal(row)
+			if err != nil {
+				return fmt.Errorf("编码数据 %s: %w", name, err)
+			}
+			buf.Write(b)
+			buf.WriteByte('\n')
+		}
+		h := sha256.Sum256(buf.Bytes())
+		file := "data/" + url.PathEscape(name) + ".ndjson"
+		m.Tables = append(m.Tables, TableData{
+			Name: name, File: file, Columns: rs.Columns,
+			RowCount: len(rs.Rows), Hash: hex.EncodeToString(h[:]),
+		})
+		fmt.Fprintf(&checksums, "%s  %s\n", hex.EncodeToString(h[:]), file)
+		files = append(files, zipEntry{name: file, data: buf.Bytes()})
+	}
+
 	manifestBytes, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return fmt.Errorf("编码 manifest: %w", err)
 	}
 	manifestBytes = append(manifestBytes, '\n')
-	checksums := []byte(hex.EncodeToString(sum[:]) + "  schema.ndjson\n")
+	files = append([]zipEntry{
+		{name: "manifest.json", data: manifestBytes},
+		{name: "schema.ndjson", data: schemaFileBytes},
+		{name: "CHECKSUMS.txt", data: []byte(checksums.String())},
+	}, files...)
 
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
-	files := []struct {
-		name string
-		data []byte
-	}{
-		{"manifest.json", manifestBytes},
-		{"schema.ndjson", append(schemaBytes, '\n')},
-		{"CHECKSUMS.txt", checksums},
-	}
 	for _, f := range files {
 		h := &zip.FileHeader{Name: f.name, Method: zip.Deflate}
 		h.Modified = time.Unix(0, 0).UTC()
@@ -122,6 +175,11 @@ func WriteSchema(path string, schema *model.Schema, opts WriteOptions) error {
 		return err
 	}
 	return os.Rename(tmpName, path)
+}
+
+type zipEntry struct {
+	name string
+	data []byte
 }
 
 func Read(path string) (*Snapshot, error) {
@@ -166,7 +224,30 @@ func Read(path string) (*Snapshot, error) {
 		return nil, fmt.Errorf("解析 schema: %w", err)
 	}
 	schema.Sort()
-	return &Snapshot{Manifest: m, Schema: &schema}, nil
+	s := &Snapshot{Manifest: m, Schema: &schema, Data: map[string]RowSet{}}
+	for _, td := range m.Tables {
+		f := files[td.File]
+		if f == nil {
+			return nil, fmt.Errorf("快照缺少数据文件 %s", td.File)
+		}
+		b, err := readZipFile(f)
+		if err != nil {
+			return nil, err
+		}
+		rs := RowSet{Columns: td.Columns}
+		for _, line := range bytes.Split(bytes.TrimSpace(b), []byte{'\n'}) {
+			if len(bytes.TrimSpace(line)) == 0 {
+				continue
+			}
+			var row Row
+			if err := json.Unmarshal(line, &row); err != nil {
+				return nil, fmt.Errorf("解析 %s: %w", td.File, err)
+			}
+			rs.Rows = append(rs.Rows, row)
+		}
+		s.Data[td.Name] = rs
+	}
+	return s, nil
 }
 
 func Inspect(path string) (Manifest, error) {
@@ -219,7 +300,6 @@ func verifyChecksums(files map[string]*zip.File) error {
 	if len(lines) == 0 {
 		return fmt.Errorf("CHECKSUMS.txt 为空")
 	}
-	names := make([]string, 0, len(lines))
 	for _, line := range lines {
 		fields := strings.Fields(line)
 		if len(fields) != 2 {
@@ -234,12 +314,10 @@ func verifyChecksums(files map[string]*zip.File) error {
 		if err != nil {
 			return err
 		}
-		sum := sha256.Sum256(bytes.TrimSpace(data))
+		sum := sha256.Sum256(data)
 		if hex.EncodeToString(sum[:]) != fields[0] {
 			return fmt.Errorf("%s 校验失败", name)
 		}
-		names = append(names, name)
 	}
-	sort.Strings(names)
 	return nil
 }
