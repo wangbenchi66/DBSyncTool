@@ -106,6 +106,9 @@ func TestIntrospectSQLServer(t *testing.T) {
 	if len(s.Views) != 1 || len(s.Routines) != 1 || len(s.Triggers) != 1 {
 		t.Fatalf("对象不符: views=%d routines=%d triggers=%d", len(s.Views), len(s.Routines), len(s.Triggers))
 	}
+	if len(s.Views[0].Dependencies) != 1 || s.Views[0].Dependencies[0] != "users" {
+		t.Fatalf("视图依赖不符: %+v", s.Views[0])
+	}
 }
 
 func dsnWithDB(dsn, db string) string {

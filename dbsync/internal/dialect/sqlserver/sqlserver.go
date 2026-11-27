@@ -336,17 +336,42 @@ WHERE s.name=@p1 ORDER BY v.name`
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	var out []model.View
 	for rows.Next() {
 		var n string
 		var d sql.NullString
 		if err := rows.Scan(&n, &d); err != nil {
+			rows.Close()
 			return nil, err
 		}
 		out = append(out, model.View{Schema: schema, Name: n, Definition: d.String})
 	}
-	return out, rows.Err()
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	deps := map[string][]string{}
+	dr, err := db.QueryContext(ctx, `
+SELECT v.name, o.name
+FROM sys.sql_expression_dependencies d
+JOIN sys.views v ON v.object_id=d.referencing_id
+JOIN sys.objects o ON o.object_id=d.referenced_id
+JOIN sys.schemas s ON s.schema_id=v.schema_id
+WHERE s.name=@p1 AND o.type IN ('U','V')
+ORDER BY 1,2`, schema)
+	if err == nil {
+		for dr.Next() {
+			var v, t string
+			if err := dr.Scan(&v, &t); err == nil {
+				deps[v] = append(deps[v], t)
+			}
+		}
+		dr.Close()
+	}
+	for i := range out {
+		out[i].Dependencies = deps[out[i].Name]
+	}
+	return out, nil
 }
 
 func readRoutines(ctx context.Context, db *sql.DB, schema string) ([]model.Routine, error) {

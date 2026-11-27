@@ -71,4 +71,7 @@ CREATE TRIGGER trg_parent AFTER INSERT ON parent BEGIN UPDATE parent SET name = 
 	if len(s.Views) != 1 || len(s.Triggers) != 1 {
 		t.Fatalf("视图/触发器不符: %+v %+v", s.Views, s.Triggers)
 	}
+	if len(s.Views[0].Dependencies) != 1 || s.Views[0].Dependencies[0] != "parent" {
+		t.Fatalf("视图依赖不符: %+v", s.Views[0])
+	}
 }

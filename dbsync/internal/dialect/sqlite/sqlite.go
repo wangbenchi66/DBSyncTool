@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -13,6 +14,8 @@ import (
 
 	"gitee.com/wangbenchi66/dbsync/internal/model"
 )
+
+var viewRef = regexp.MustCompile(`(?is)\b(?:from|join)\s+["\\x60\\[]?([A-Za-z_][A-Za-z0-9_$]*)`)
 
 func Open(path string) (*sql.DB, error) {
 	u := "file:" + url.PathEscape(path) + "?mode=ro&_pragma=query_only(1)"
@@ -233,9 +236,23 @@ func readViews(ctx context.Context, db *sql.DB) ([]model.View, error) {
 		if err := rows.Scan(&name, &def); err != nil {
 			return nil, err
 		}
-		out = append(out, model.View{Schema: "main", Name: name, Definition: def.String})
+		out = append(out, model.View{Schema: "main", Name: name, Definition: def.String, Dependencies: refs(def.String)})
 	}
 	return out, rows.Err()
+}
+
+func refs(definition string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, m := range viewRef.FindAllStringSubmatch(definition, -1) {
+		n := m[1]
+		if n == "" || strings.EqualFold(n, "select") || seen[n] {
+			continue
+		}
+		seen[n] = true
+		out = append(out, n)
+	}
+	return out
 }
 
 func readTriggers(ctx context.Context, db *sql.DB) ([]model.Trigger, error) {

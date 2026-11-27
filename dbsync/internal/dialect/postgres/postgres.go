@@ -338,16 +338,47 @@ func readViews(ctx context.Context, db *sql.DB, schema string) ([]model.View, er
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	var out []model.View
 	for rows.Next() {
 		var n, d string
 		if err := rows.Scan(&n, &d); err != nil {
+			rows.Close()
 			return nil, err
 		}
 		out = append(out, model.View{Schema: schema, Name: n, Definition: d})
 	}
-	return out, rows.Err()
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	deps := map[string][]string{}
+	dr, err := db.QueryContext(ctx, `
+SELECT DISTINCT v.relname, t.relname
+FROM pg_depend d
+JOIN pg_rewrite r ON r.oid=d.objid
+JOIN pg_class v ON v.oid=r.ev_class
+JOIN pg_class t ON t.oid=d.refobjid
+JOIN pg_namespace nv ON nv.oid=v.relnamespace
+WHERE d.classid='pg_rewrite'::regclass
+  AND d.refclassid='pg_class'::regclass
+  AND v.relkind='v'
+  AND t.relkind IN ('r','v')
+  AND t.oid <> v.oid
+  AND nv.nspname=$1
+ORDER BY 1,2`, schema)
+	if err == nil {
+		for dr.Next() {
+			var v, t string
+			if err := dr.Scan(&v, &t); err == nil {
+				deps[v] = appendUnique(deps[v], t)
+			}
+		}
+		dr.Close()
+	}
+	for i := range out {
+		out[i].Dependencies = deps[out[i].Name]
+	}
+	return out, nil
 }
 
 func readRoutines(ctx context.Context, db *sql.DB, schema string) ([]model.Routine, error) {
@@ -393,3 +424,12 @@ ORDER BY t.tgname`
 }
 
 func Quote(s string) string { return `"` + strings.ReplaceAll(s, `"`, `""`) + `"` }
+
+func appendUnique(xs []string, v string) []string {
+	for _, x := range xs {
+		if x == v {
+			return xs
+		}
+	}
+	return append(xs, v)
+}
