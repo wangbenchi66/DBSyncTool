@@ -1621,6 +1621,8 @@ func (e *Error) Unwrap() error
 
 **先跑 MySQL 矩阵**（M1 主方言，目标 8.0.16），再跑 SQL Server / PostgreSQL / SQLite。docker compose 起 `mysql:8.0.16`（或直连 8.0.16 测试库）、`mcr.microsoft.com/mssql/server:2022-latest`、`postgres:16`、SQLite（文件）。每个方言在自己的 source↔target 配对里跑（同方言），跨方言只跑"结构报告"用例（只读、不断言可执行）：
 
+> 集成测试只连**专用、可清理**的测试库/临时 schema，测试前后自行建删；**禁止指向生产**。连接信息走本地环境变量或未跟踪配置，不写入仓库。
+
 1. 建源/目标 schema（含外键环、自引用、跨 schema 同名表、二进制、换行、`\N`、时区、collation 差异）；
 2. `plan` → `apply` → 再 `diff`；
 3. 断言：第二次 diff 为空、无阻断项。
