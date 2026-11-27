@@ -259,6 +259,19 @@ async function saveRules() {
   }
 }
 
+async function importSnapshot() {
+  const path = input("importSnapshot").value.trim();
+  if (!path) { setMsg("请填写快照文件路径", true); return; }
+  try {
+    await App.SnapshotImport(path);
+    input("importSnapshot").value = "";
+    await openLibrary();
+    setStatus("快照已导入库");
+  } catch (e) {
+    setMsg(String(e), true);
+  }
+}
+
 async function openLibrary() {
   try {
     const dir = await App.SnapshotLibraryDir();
@@ -390,6 +403,7 @@ $("btnCompare").addEventListener("click", compare);
 $("btnPlan").addEventListener("click", buildPlan);
 $("btnSnapshot").addEventListener("click", createSnapshot);
 $("btnLibrary").addEventListener("click", openLibrary);
+$("btnImportSnapshot").addEventListener("click", importSnapshot);
 $("btnReport").addEventListener("click", saveReport);
 $("btnMulti").addEventListener("click", () => $("multiModal").classList.remove("hidden"));
 $("closeMulti").addEventListener("click", () => $("multiModal").classList.add("hidden"));

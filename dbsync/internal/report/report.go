@@ -104,11 +104,69 @@ func Render(d *diff.SchemaDiff, p *plan.Plan, format string) (string, error) {
 		return string(b) + "\n", err
 	case "html":
 		return renderHTML(doc), nil
+	case "sarif":
+		return renderSARIF(doc)
 	case "md", "markdown", "":
 		return renderMarkdown(doc), nil
 	default:
 		return "", fmt.Errorf("不支持的报告格式 %q", format)
 	}
+}
+
+func renderSARIF(doc Document) (string, error) {
+	type result struct {
+		RuleID  string `json:"ruleId"`
+		Level   string `json:"level"`
+		Message struct {
+			Text string `json:"text"`
+		} `json:"message"`
+	}
+	out := struct {
+		Version string `json:"version"`
+		Schema  string `json:"$schema"`
+		Runs    []struct {
+			Tool struct {
+				Driver struct {
+					Name    string `json:"name"`
+					Version string `json:"version"`
+				} `json:"driver"`
+			} `json:"tool"`
+			Results []result `json:"results"`
+		} `json:"runs"`
+	}{Version: "2.1.0", Schema: "https://json.schemastore.org/sarif-2.1.0.json"}
+	out.Runs = make([]struct {
+		Tool struct {
+			Driver struct {
+				Name    string `json:"name"`
+				Version string `json:"version"`
+			} `json:"driver"`
+		} `json:"tool"`
+		Results []result `json:"results"`
+	}, 1)
+	out.Runs[0].Tool.Driver.Name = "DBSync"
+	out.Runs[0].Tool.Driver.Version = "0.1.0"
+	for _, t := range doc.Tables {
+		if t.Status == "same" {
+			continue
+		}
+		var r result
+		r.RuleID = "table." + t.Status
+		r.Level = "note"
+		r.Message.Text = fmt.Sprintf("表 %s：%s（列 %d / 索引 %d / 约束 %d；INSERT %d / UPDATE %d / DELETE %d）", t.Name, t.Status, t.Columns, t.Indexes, t.Constraints, t.Inserts, t.Updates, t.Deletes)
+		out.Runs[0].Results = append(out.Runs[0].Results, r)
+	}
+	for _, d := range doc.Diagnostics {
+		var r result
+		r.RuleID = d.Code
+		r.Level = "warning"
+		if d.Severity == "error" {
+			r.Level = "error"
+		}
+		r.Message.Text = d.Message
+		out.Runs[0].Results = append(out.Runs[0].Results, r)
+	}
+	b, err := json.MarshalIndent(out, "", "  ")
+	return string(b) + "\n", err
 }
 
 func renderMarkdown(doc Document) string {

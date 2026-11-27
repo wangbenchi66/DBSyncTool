@@ -47,4 +47,8 @@ func TestRender(t *testing.T) {
 	if doc.Source != "src" || len(doc.Tables) != 1 {
 		t.Fatalf("json 不符: %+v", doc)
 	}
+	sarif, err := Render(sample(), nil, "sarif")
+	if err != nil || !strings.Contains(sarif, `"version": "2.1.0"`) {
+		t.Fatalf("sarif 不符: %v %s", err, sarif)
+	}
 }

@@ -63,7 +63,7 @@
       <span class="muted">只读，不执行</span>
     </div>
     <div class="report-actions">
-      <select id="reportFormat"><option value="md">Markdown</option><option value="html">HTML</option><option value="json">JSON</option></select>
+      <select id="reportFormat"><option value="md">Markdown</option><option value="html">HTML</option><option value="json">JSON</option><option value="sarif">SARIF</option></select>
       <input id="reportPath" placeholder="报告保存路径，如 report.md"/>
       <button id="btnReport" class="ghost">保存报告</button>
     </div>
@@ -79,6 +79,9 @@
   <div class="modal-card">
     <div class="modal-head"><b>快照库</b><button id="closeLibrary" class="ghost">关闭</button></div>
     <div class="modal-path" id="libraryPath"></div>
+    <div class="multi-body">
+      <div class="row"><input id="importSnapshot" placeholder="要导入的快照文件路径"/><button id="btnImportSnapshot" class="ghost">导入</button></div>
+    </div>
     <div id="libraryList" class="library-list"></div>
   </div>
 </div>
