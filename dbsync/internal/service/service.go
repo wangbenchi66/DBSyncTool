@@ -15,6 +15,7 @@ import (
 
 	"gitee.com/wangbenchi66/dbsync/internal/data"
 	"gitee.com/wangbenchi66/dbsync/internal/depgraph"
+	"gitee.com/wangbenchi66/dbsync/internal/dialect/ddl"
 	"gitee.com/wangbenchi66/dbsync/internal/dialect/mysql"
 	"gitee.com/wangbenchi66/dbsync/internal/dialect/postgres"
 	"gitee.com/wangbenchi66/dbsync/internal/dialect/sqlite"
@@ -211,6 +212,12 @@ func (s *Service) TestConnection(ctx context.Context, ep Endpoint) (ConnInfo, er
 			return ConnInfo{}, err
 		}
 		return ConnInfo{Version: fmt.Sprintf("snapshot v%d", m.FormatVersion), Database: m.SchemaName}, nil
+	case "dir":
+		s, err := ddl.ReadDir(ep.Path)
+		if err != nil {
+			return ConnInfo{}, err
+		}
+		return ConnInfo{Version: fmt.Sprintf("DDL dir · %d tables", len(s.Tables)), Database: "dir"}, nil
 	case "sqlite":
 		db, err := sqlite.Open(ep.Path)
 		if err != nil {
@@ -339,6 +346,9 @@ func (s *Service) Compare(ctx context.Context, req CompareRequest) (*CompareView
 		}
 	}
 	if req.CompareData {
+		if so.kind == "dir" || to.kind == "dir" {
+			return nil, fmt.Errorf("脚本目录没有数据行，不能做数据比对；请只比较结构")
+		}
 		if err := attachMixed(ctx, so, to, d); err != nil {
 			return nil, err
 		}
@@ -494,6 +504,12 @@ func openEndpoint(ctx context.Context, ep Endpoint) (*opened, error) {
 			return nil, err
 		}
 		return &opened{kind: "snapshot", schema: sn.Schema, data: sn.Data}, nil
+	case "dir":
+		s, err := ddl.ReadDir(ep.Path)
+		if err != nil {
+			return nil, err
+		}
+		return &opened{kind: "dir", schema: s}, nil
 	default:
 		return nil, fmt.Errorf("未知端点类型 %q", ep.Kind)
 	}

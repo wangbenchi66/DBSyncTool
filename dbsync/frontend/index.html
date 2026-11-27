@@ -16,7 +16,7 @@
   <div class="endpoint">
     <div class="ep-head"><b>源</b><span>期望结构</span><button id="testSource" class="ghost">测试</button></div>
     <div class="row">
-      <select id="sourceKind"><option value="mysql">MySQL</option><option value="postgres">PostgreSQL</option><option value="sqlserver">SQL Server</option><option value="sqlite">SQLite</option><option value="snapshot">快照</option></select>
+      <select id="sourceKind"><option value="mysql">MySQL</option><option value="postgres">PostgreSQL</option><option value="sqlserver">SQL Server</option><option value="sqlite">SQLite</option><option value="snapshot">快照</option><option value="dir">脚本目录</option></select>
       <input id="sourceSchema" placeholder="库名（可空）"/>
     </div>
     <input id="sourceDSN" placeholder="root:***@tcp(host:3306)/?parseTime=true"/>
@@ -26,7 +26,7 @@
   <div class="endpoint">
     <div class="ep-head"><b>目标</b><span>现状，将被修改</span><button id="testTarget" class="ghost">测试</button></div>
     <div class="row">
-      <select id="targetKind"><option value="mysql">MySQL</option><option value="postgres">PostgreSQL</option><option value="sqlserver">SQL Server</option><option value="sqlite">SQLite</option><option value="snapshot">快照</option></select>
+      <select id="targetKind"><option value="mysql">MySQL</option><option value="postgres">PostgreSQL</option><option value="sqlserver">SQL Server</option><option value="sqlite">SQLite</option><option value="snapshot">快照</option><option value="dir">脚本目录</option></select>
       <input id="targetSchema" placeholder="库名（可空）"/>
     </div>
     <input id="targetDSN" placeholder="root:***@tcp(host:3306)/?parseTime=true"/>
@@ -99,7 +99,7 @@
     <div class="modal-head"><b>多目标比较</b><button id="closeMulti" class="ghost">关闭</button></div>
     <div class="multi-body">
       <div class="row">
-        <select id="multiKind"><option value="mysql">MySQL</option><option value="postgres">PostgreSQL</option><option value="sqlserver">SQL Server</option><option value="sqlite">SQLite</option><option value="snapshot">快照</option></select>
+        <select id="multiKind"><option value="mysql">MySQL</option><option value="postgres">PostgreSQL</option><option value="sqlserver">SQL Server</option><option value="sqlite">SQLite</option><option value="snapshot">快照</option><option value="dir">脚本目录</option></select>
         <input id="multiSchema" placeholder="库名（可空，全部目标共用）"/>
       </div>
       <textarea id="multiTargets" placeholder="每行一个目标 DSN / SQLite 文件 / 快照路径"></textarea>

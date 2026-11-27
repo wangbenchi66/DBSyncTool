@@ -71,11 +71,11 @@ function endpoint(prefix: "source" | "target"): Endpoint {
 }
 function syncKind(prefix: "source" | "target") {
   const kind = select(`${prefix}Kind`).value;
-  const file = kind === "snapshot" || kind === "sqlite";
+  const file = kind === "snapshot" || kind === "sqlite" || kind === "dir";
   input(`${prefix}DSN`).classList.toggle("hidden", file);
   input(`${prefix}Path`).classList.toggle("hidden", !file);
-  input(`${prefix}Schema`).classList.toggle("hidden", kind === "sqlite" || kind === "snapshot");
-  input(`${prefix}Path`).placeholder = kind === "sqlite" ? "SQLite 文件路径" : "baseline.dbsync 路径";
+  input(`${prefix}Schema`).classList.toggle("hidden", kind === "sqlite" || kind === "snapshot" || kind === "dir");
+  input(`${prefix}Path`).placeholder = kind === "sqlite" ? "SQLite 文件路径" : kind === "dir" ? "DDL 目录路径" : "baseline.dbsync 路径";
   input(`${prefix}Schema`).placeholder = "库名（可空）";
 }
 
@@ -197,8 +197,8 @@ async function runMulti() {
   if (!lines.length) { setMsg("请填写至少一个目标", true); return; }
   const targets = lines.map((line) => ({
     kind, schema,
-    dsn: kind === "sqlite" || kind === "snapshot" ? "" : line,
-    path: kind === "sqlite" || kind === "snapshot" ? line : "",
+    dsn: kind === "sqlite" || kind === "snapshot" || kind === "dir" ? "" : line,
+    path: kind === "sqlite" || kind === "snapshot" || kind === "dir" ? line : "",
   }));
   try {
     setMsg("");
