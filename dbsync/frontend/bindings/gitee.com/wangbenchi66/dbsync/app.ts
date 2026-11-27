@@ -36,6 +36,14 @@ export function Plan(runID: string, allowDestructive: boolean): $CancellableProm
     return $Call.ByID(224320538, runID, allowDestructive);
 }
 
+export function Report(runID: string, format: string): $CancellablePromise<string> {
+    return $Call.ByID(3751069251, runID, format);
+}
+
+export function SaveReport(runID: string, format: string, path: string): $CancellablePromise<void> {
+    return $Call.ByID(358675690, runID, format, path);
+}
+
 export function SnapshotDelete(path: string): $CancellablePromise<void> {
     return $Call.ByID(2300066890, path);
 }

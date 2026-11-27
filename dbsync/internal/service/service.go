@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -20,6 +21,7 @@ import (
 	"gitee.com/wangbenchi66/dbsync/internal/library"
 	"gitee.com/wangbenchi66/dbsync/internal/model"
 	"gitee.com/wangbenchi66/dbsync/internal/plan"
+	"gitee.com/wangbenchi66/dbsync/internal/report"
 	"gitee.com/wangbenchi66/dbsync/internal/snapshot"
 )
 
@@ -504,6 +506,25 @@ func (s *Service) SnapshotDelete(path string) error {
 		return err
 	}
 	return library.Delete(dir, path)
+}
+
+// Report 生成只读差异报告（md/html/json）。
+func (s *Service) Report(runID, format string) (string, error) {
+	s.mu.Lock()
+	sess := s.sessions[runID]
+	s.mu.Unlock()
+	if sess == nil {
+		return "", fmt.Errorf("运行 %s 不存在", runID)
+	}
+	return report.Render(sess.diff, sess.plan, format)
+}
+
+func (s *Service) SaveReport(runID, format, path string) error {
+	body, err := s.Report(runID, format)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(body), 0o644)
 }
 
 func toCompareView(runID string, d *diff.SchemaDiff) *CompareView {

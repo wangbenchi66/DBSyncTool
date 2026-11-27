@@ -111,6 +111,9 @@ button.ghost { padding: 2px 6px; font-size: 11px; color: var(--muted); }
 .stmt { background: #f7f8fa; border: 1px solid var(--line); border-radius: 4px; padding: 5px 6px; margin-bottom: 4px; white-space: pre-wrap; word-break: break-word; }
 .plan-actions { border-top: 1px solid var(--line); padding: 8px; display: flex; align-items: center; gap: 8px; }
 .plan-actions .primary { flex: 1; }
+.report-actions { border-top: 1px solid var(--line); padding: 8px; display: flex; gap: 6px; align-items: center; }
+.report-actions select { width: 100px; }
+.report-actions input { flex: 1; }
 .statusbar {
   display: flex; justify-content: space-between; align-items: center;
   padding: 0 16px; border-top: 1px solid var(--line); background: #fff;

@@ -67,3 +67,11 @@ func (a *App) SnapshotImport(path string) (library.Entry, error) {
 func (a *App) SnapshotDelete(path string) error {
 	return a.svc.SnapshotDelete(path)
 }
+
+func (a *App) Report(runID, format string) (string, error) {
+	return a.svc.Report(runID, format)
+}
+
+func (a *App) SaveReport(runID, format, path string) error {
+	return a.svc.SaveReport(runID, format, path)
+}

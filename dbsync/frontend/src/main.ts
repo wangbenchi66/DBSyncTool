@@ -157,6 +157,20 @@ function renderDetail() {
   el.innerHTML = html;
 }
 
+async function saveReport() {
+  if (!view) { setMsg("请先比较", true); return; }
+  const path = input("reportPath").value.trim();
+  if (!path) { setMsg("请填写报告保存路径", true); return; }
+  try {
+    setMsg("");
+    await App.SaveReport(view.runId, select("reportFormat").value, path);
+    setStatus(`报告已保存：${path}`);
+  } catch (e) {
+    setStatus("保存报告失败");
+    setMsg(String(e), true);
+  }
+}
+
 async function openLibrary() {
   try {
     const dir = await App.SnapshotLibraryDir();
@@ -274,6 +288,7 @@ $("btnCompare").addEventListener("click", compare);
 $("btnPlan").addEventListener("click", buildPlan);
 $("btnSnapshot").addEventListener("click", createSnapshot);
 $("btnLibrary").addEventListener("click", openLibrary);
+$("btnReport").addEventListener("click", saveReport);
 $("closeLibrary").addEventListener("click", () => $("libraryModal").classList.add("hidden"));
 $("libraryModal").addEventListener("click", (e) => {
   if (e.target === $("libraryModal")) $("libraryModal").classList.add("hidden");
