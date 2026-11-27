@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"gitee.com/wangbenchi66/dbsync/internal/data"
+	"gitee.com/wangbenchi66/dbsync/internal/depgraph"
 	"gitee.com/wangbenchi66/dbsync/internal/dialect/mysql"
 	"gitee.com/wangbenchi66/dbsync/internal/dialect/postgres"
 	"gitee.com/wangbenchi66/dbsync/internal/dialect/sqlite"
@@ -63,18 +64,19 @@ type MultiView struct {
 }
 
 type CompareView struct {
-	RunID      string        `json:"runId"`
-	SourceName string        `json:"sourceName"`
-	TargetName string        `json:"targetName"`
-	Tables     []TableBrief  `json:"tables"`
-	Views      []ObjectBrief `json:"views"`
-	Routines   []ObjectBrief `json:"routines"`
-	Triggers   []ObjectBrief `json:"triggers"`
-	Added      int           `json:"added"`
-	Removed    int           `json:"removed"`
-	Changed    int           `json:"changed"`
-	Same       int           `json:"same"`
-	HasData    bool          `json:"hasData"`
+	RunID        string         `json:"runId"`
+	SourceName   string         `json:"sourceName"`
+	TargetName   string         `json:"targetName"`
+	Tables       []TableBrief   `json:"tables"`
+	Views        []ObjectBrief  `json:"views"`
+	Routines     []ObjectBrief  `json:"routines"`
+	Triggers     []ObjectBrief  `json:"triggers"`
+	Added        int            `json:"added"`
+	Removed      int            `json:"removed"`
+	Changed      int            `json:"changed"`
+	Same         int            `json:"same"`
+	HasData      bool           `json:"hasData"`
+	Dependencies depgraph.Graph `json:"dependencies"`
 }
 
 type TableBrief struct {
@@ -350,7 +352,7 @@ func (s *Service) Compare(ctx context.Context, req CompareRequest) (*CompareView
 		allowDrop: req.AllowDestructive,
 	}
 	s.mu.Unlock()
-	return toCompareView(runID, d), nil
+	return toCompareView(runID, d, so.schema, to.schema), nil
 }
 
 func (s *Service) Plan(ctx context.Context, runID string, allowDestructive bool) (*PlanView, error) {
@@ -601,10 +603,11 @@ func (s *Service) SaveReport(runID, format, path string) error {
 	return os.WriteFile(path, []byte(body), 0o644)
 }
 
-func toCompareView(runID string, d *diff.SchemaDiff) *CompareView {
+func toCompareView(runID string, d *diff.SchemaDiff, schemas ...*model.Schema) *CompareView {
 	v := &CompareView{
 		RunID: runID, SourceName: d.SourceName, TargetName: d.TargetName, HasData: d.HasData,
 		Tables: []TableBrief{}, Views: []ObjectBrief{}, Routines: []ObjectBrief{}, Triggers: []ObjectBrief{},
+		Dependencies: depgraph.Build(schemas...),
 	}
 	v.Added, v.Removed, v.Changed, v.Same = d.Summary()
 	for _, t := range d.Tables {

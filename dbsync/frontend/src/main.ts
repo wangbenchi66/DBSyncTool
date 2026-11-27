@@ -14,6 +14,9 @@ type Table = {
 type CompareView = {
   runId: string; sourceName: string; targetName: string;
   tables: Table[]; views: { name: string; status: string }[];
+  routines?: { name: string; status: string }[];
+  triggers?: { name: string; status: string }[];
+  dependencies?: { nodes: { name: string; schema?: string }[]; edges: { from: string; to: string; constraint: string; schema?: string }[]; cycles: string[][] };
   added: number; removed: number; changed: number; same: number; hasData: boolean;
 };
 type PlanView = {
@@ -117,6 +120,20 @@ function renderDetail() {
   el.className = "detail";
   $("detailTitle").textContent = `结构差异 · ${t.name}`;
   let html = `<h3>${esc(t.name)} ${badge(t.status)}</h3>`;
+  const deps = view?.dependencies;
+  if (deps) {
+    const out = deps.edges.filter((e) => e.from === t.name);
+    const inb = deps.edges.filter((e) => e.to === t.name);
+    if (out.length || inb.length) {
+      html += `<h3>依赖影响</h3><table><thead><tr><th>方向</th><th>约束</th><th>表</th></tr></thead><tbody>`;
+      for (const e of out) html += `<tr><td>引用</td><td class="mono">${esc(e.constraint)}</td><td>${esc(e.to)}</td></tr>`;
+      for (const e of inb) html += `<tr><td>被引用</td><td class="mono">${esc(e.constraint)}</td><td>${esc(e.from)}</td></tr>`;
+      html += `</tbody></table>`;
+    }
+    const cyc = deps.cycles.find((c) => c.includes(t.name));
+    if (cyc) html += `<p class="reason">存在外键环：${esc(cyc.join(" → "))}</p>`;
+  }
+
   if (t.data) {
     const d = t.data;
     html += `<p class="muted">数据：源 ${d.sourceCount} 行，目标 ${d.targetCount} 行；INSERT ${d.inserts} / UPDATE ${d.updates} / DELETE ${d.deletes}${d.unsupportedKey ? ' <span class="reason">（无主键，不能生成逐行 DML）</span>' : ""}</p>`;
