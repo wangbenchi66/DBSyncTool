@@ -700,6 +700,8 @@ type Capabilities struct {
 
 **每连接初始化**：`SET XACT_ABORT ON`（SQL Server）、`PRAGMA foreign_keys=ON`（SQLite）、`SET search_path`（PG）、`SET SESSION information_schema_stats_expiry=0`（MySQL）都是**连接级**设置，`db.Exec` 只影响池里一条连接。由 `Dialect.SessionInit()` 返回语句列表，打开 `*sql.Conn` 时逐条执行。
 
+**内省与执行都走 `*sql.Conn`**（不是 `*sql.DB`）：取连接 → 跑 `SessionInit` → 查询/执行 → 归还。否则池里不同连接的 `search_path`/`foreign_keys`/`XACT_ABORT` 可能不一致，元数据与写入行为会"看运气"。
+
 - 密码优先来自环境变量/文件，其次才允许出现在 DSN。
 - 所有日志与报告对 DSN 做**脱敏**（用户名保留、密码替换为 `***`），由 `logging.RedactDSN` 统一处理。
 - 连接池：每 endpoint 独立 `*sql.DB`；`SetMaxOpenConns(--max-conns)`（默认 8）、`SetMaxIdleConns` 与 max 相同，`SetConnMaxLifetime` 30 分钟。并发约束见 §18.1：**`--max-conns ≥ 2 × --parallel + 2`**（预留内省与进度）。
