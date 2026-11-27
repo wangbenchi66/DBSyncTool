@@ -91,8 +91,8 @@ func TestSQLiteCompareAndReadOnlyPreview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(p.Diagnostics) == 0 {
-		t.Fatalf("非 MySQL 应给结构预览限制提示: %+v", p)
+	if p.Blocked {
+		t.Fatalf("同结构数据差异不应阻断: %+v", p)
 	}
 	var dml int
 	for _, ph := range p.Phases {

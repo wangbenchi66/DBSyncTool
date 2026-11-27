@@ -384,6 +384,12 @@ func (s *Service) Plan(ctx context.Context, runID string, allowDestructive bool)
 			AllowDestructive: allowDestructive || sess.allowDrop,
 			CompareData:      sess.diff.HasData,
 		})
+		if kind == "sqlite" {
+			p = plan.BuildSQLite(sess.diff, sess.sourceSchema, sess.targetSchema, plan.Options{
+				AllowDestructive: allowDestructive || sess.allowDrop,
+				CompareData:      sess.diff.HasData,
+			})
+		}
 		s.mu.Lock()
 		sess.plan = p
 		s.mu.Unlock()
