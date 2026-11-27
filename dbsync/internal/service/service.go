@@ -17,6 +17,7 @@ import (
 	"gitee.com/wangbenchi66/dbsync/internal/dialect/sqlite"
 	"gitee.com/wangbenchi66/dbsync/internal/dialect/sqlserver"
 	"gitee.com/wangbenchi66/dbsync/internal/diff"
+	"gitee.com/wangbenchi66/dbsync/internal/library"
 	"gitee.com/wangbenchi66/dbsync/internal/model"
 	"gitee.com/wangbenchi66/dbsync/internal/plan"
 	"gitee.com/wangbenchi66/dbsync/internal/snapshot"
@@ -474,6 +475,35 @@ func attachMixed(ctx context.Context, so, to *opened, d *diff.SchemaDiff) error 
 		data.DiffRows(dd, src, tgt)
 	}
 	return nil
+}
+
+// SnapshotLibrary 列出本地快照库。
+func (s *Service) SnapshotLibrary() ([]library.Entry, error) {
+	dir, err := library.DefaultDir()
+	if err != nil {
+		return nil, err
+	}
+	return library.List(dir)
+}
+
+func (s *Service) SnapshotLibraryDir() (string, error) {
+	return library.DefaultDir()
+}
+
+func (s *Service) SnapshotImport(path string) (library.Entry, error) {
+	dir, err := library.DefaultDir()
+	if err != nil {
+		return library.Entry{}, err
+	}
+	return library.Import(dir, path)
+}
+
+func (s *Service) SnapshotDelete(path string) error {
+	dir, err := library.DefaultDir()
+	if err != nil {
+		return err
+	}
+	return library.Delete(dir, path)
 }
 
 func toCompareView(runID string, d *diff.SchemaDiff) *CompareView {

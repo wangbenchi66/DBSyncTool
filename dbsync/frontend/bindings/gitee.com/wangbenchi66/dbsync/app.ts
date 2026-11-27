@@ -12,6 +12,9 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as library$0 from "./internal/library/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as service$0 from "./internal/service/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -31,6 +34,22 @@ export function ListDatabases(ep: service$0.Endpoint): $CancellablePromise<strin
 
 export function Plan(runID: string, allowDestructive: boolean): $CancellablePromise<service$0.PlanView | null> {
     return $Call.ByID(224320538, runID, allowDestructive);
+}
+
+export function SnapshotDelete(path: string): $CancellablePromise<void> {
+    return $Call.ByID(2300066890, path);
+}
+
+export function SnapshotImport(path: string): $CancellablePromise<library$0.Entry> {
+    return $Call.ByID(847284436, path);
+}
+
+export function SnapshotLibrary(): $CancellablePromise<library$0.Entry[] | null> {
+    return $Call.ByID(189555664);
+}
+
+export function SnapshotLibraryDir(): $CancellablePromise<string> {
+    return $Call.ByID(721098055);
 }
 
 export function TestConnection(ep: service$0.Endpoint): $CancellablePromise<service$0.ConnInfo> {

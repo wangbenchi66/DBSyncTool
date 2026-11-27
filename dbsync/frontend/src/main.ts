@@ -22,6 +22,11 @@ type PlanView = {
   phases: { phase: number; statements: { sql: string; object: string; destructive: boolean }[] }[];
 };
 
+type LibraryEntry = {
+  path: string; name: string; schema: string; createdAt: string;
+  tables: number; rows: number; hasData: boolean; size: number; error?: string;
+};
+
 const $ = (id: string) => document.getElementById(id) as HTMLElement;
 const input = (id: string) => document.getElementById(id) as HTMLInputElement;
 const select = (id: string) => document.getElementById(id) as HTMLSelectElement;
@@ -152,6 +157,45 @@ function renderDetail() {
   el.innerHTML = html;
 }
 
+async function openLibrary() {
+  try {
+    const dir = await App.SnapshotLibraryDir();
+    $("libraryPath").textContent = dir;
+    const entries = await App.SnapshotLibrary();
+    const list = $("libraryList");
+    list.innerHTML = (entries ?? []).length
+      ? (entries as LibraryEntry[]).map((e) => `
+        <div class="lib-item">
+          <span class="name">${esc(e.name)}</span>
+          <span class="meta">${esc(e.schema)} · ${e.tables} 表 · ${e.rows} 行 · ${e.hasData ? "含数据" : "仅结构"}</span>
+          <button data-path="${esc(e.path)}" class="ghost use">使用</button>
+          <button data-path="${esc(e.path)}" class="ghost del">删除</button>
+        </div>`).join("")
+      : '<div class="empty">快照库为空。先用“导出源端快照”生成，或把 .dbsync 文件放进库目录。</div>';
+    list.querySelectorAll<HTMLButtonElement>("button.use").forEach((b) => {
+      b.onclick = () => useSnapshot(b.dataset.path!);
+    });
+    list.querySelectorAll<HTMLButtonElement>("button.del").forEach((b) => {
+      b.onclick = async () => {
+        if (!confirm("删除这个快照文件？")) return;
+        await App.SnapshotDelete(b.dataset.path!);
+        await openLibrary();
+      };
+    });
+    $("libraryModal").classList.remove("hidden");
+  } catch (e) {
+    setMsg(String(e), true);
+  }
+}
+
+function useSnapshot(path: string) {
+  select("sourceKind").value = "snapshot";
+  input("sourcePath").value = path;
+  syncKind("source");
+  $("libraryModal").classList.add("hidden");
+  setStatus(`已选择快照：${path}`);
+}
+
 async function createSnapshot() {
   const out = input("snapshotOut").value.trim();
   if (!out) { setMsg("请填写快照输出路径", true); return; }
@@ -229,5 +273,10 @@ for (const p of ["source", "target"] as const) {
 $("btnCompare").addEventListener("click", compare);
 $("btnPlan").addEventListener("click", buildPlan);
 $("btnSnapshot").addEventListener("click", createSnapshot);
+$("btnLibrary").addEventListener("click", openLibrary);
+$("closeLibrary").addEventListener("click", () => $("libraryModal").classList.add("hidden"));
+$("libraryModal").addEventListener("click", (e) => {
+  if (e.target === $("libraryModal")) $("libraryModal").classList.add("hidden");
+});
 setStatus("只读模式 · 不执行任何 SQL");
 $("viewport").textContent = "只读比对";

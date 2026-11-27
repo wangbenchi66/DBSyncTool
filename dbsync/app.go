@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"gitee.com/wangbenchi66/dbsync/internal/library"
 	"gitee.com/wangbenchi66/dbsync/internal/service"
 	"gitee.com/wangbenchi66/dbsync/internal/snapshot"
 )
@@ -49,4 +50,20 @@ func (a *App) CreateSnapshot(ep service.Endpoint, output string, withData bool) 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	return a.svc.SnapshotCreate(ctx, ep, output, withData)
+}
+
+func (a *App) SnapshotLibrary() ([]library.Entry, error) {
+	return a.svc.SnapshotLibrary()
+}
+
+func (a *App) SnapshotLibraryDir() (string, error) {
+	return a.svc.SnapshotLibraryDir()
+}
+
+func (a *App) SnapshotImport(path string) (library.Entry, error) {
+	return a.svc.SnapshotImport(path)
+}
+
+func (a *App) SnapshotDelete(path string) error {
+	return a.svc.SnapshotDelete(path)
 }
