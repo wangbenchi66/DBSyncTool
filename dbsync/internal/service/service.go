@@ -380,15 +380,20 @@ func (s *Service) Plan(ctx context.Context, runID string, allowDestructive bool)
 		if kind == "snapshot" || kind == "dir" || kind == "" {
 			kind = "mysql"
 		}
-		p := plan.BuildData(sess.diff, sess.sourceSchema, sess.targetSchema, kind, plan.Options{
+		opts := plan.Options{
 			AllowDestructive: allowDestructive || sess.allowDrop,
 			CompareData:      sess.diff.HasData,
-		})
-		if kind == "sqlite" {
-			p = plan.BuildSQLite(sess.diff, sess.sourceSchema, sess.targetSchema, plan.Options{
-				AllowDestructive: allowDestructive || sess.allowDrop,
-				CompareData:      sess.diff.HasData,
-			})
+		}
+		var p *plan.Plan
+		switch kind {
+		case "sqlite":
+			p = plan.BuildSQLite(sess.diff, sess.sourceSchema, sess.targetSchema, opts)
+		case "postgres":
+			p = plan.BuildPostgres(sess.diff, sess.sourceSchema, sess.targetSchema, opts)
+		case "sqlserver":
+			p = plan.BuildSQLServer(sess.diff, sess.sourceSchema, sess.targetSchema, opts)
+		default:
+			p = plan.BuildData(sess.diff, sess.sourceSchema, sess.targetSchema, kind, opts)
 		}
 		s.mu.Lock()
 		sess.plan = p
