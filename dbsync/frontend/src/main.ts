@@ -76,6 +76,7 @@ function syncKind(prefix: "source" | "target") {
   input(`${prefix}Path`).classList.toggle("hidden", !file);
   input(`${prefix}Schema`).classList.toggle("hidden", kind === "sqlite" || kind === "snapshot" || kind === "dir");
   input(`${prefix}Path`).placeholder = kind === "sqlite" ? "SQLite 文件路径" : kind === "dir" ? "DDL 目录路径" : "baseline.dbsync 路径";
+  if (kind === "dir") input("compareData").checked = false;
   input(`${prefix}Schema`).placeholder = "库名（可空）";
 }
 
