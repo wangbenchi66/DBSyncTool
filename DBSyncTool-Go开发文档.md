@@ -6,15 +6,18 @@
 > 日期：2026-11-27
 > 阅读顺序：第 1–4 节（决策与边界）→ 第 22 节（排期）→ 按模块深入
 
+> **范围调整（2026-11-27）**：v2.0 **只交付桌面工作台**（Wails v3），**CLI 暂不实现**；§15/§16 的 CLI/CI 规格保留为 v2.x。因为 CLI 暂缓，v2.0 的 GUI 必须包含**基础数据差异页**，否则数据同步没有入口。**列顺序不参与比较，也不提供相关开关。**
+
 **一页纸决策**：
 
 | 决策 | 结论 |
 | :--- | :--- |
 | 语言 | Go 1.26，模块路径 `gitee.com/wangbenchi66/dbsync` |
-| 入口 | CLI 唯一实现；GUI 是外壳（Wails v3，M4 才做） |
+| 入口 | 桌面工作台唯一交付；核心 `service` 单一实现；CLI 暂缓（v2.x） |
 | 方向 | `source`（期望）→ `target`（现状），计划 = 让 target 变成 source |
 | 数据模型 | 类型化 `Value` + 规范化编码 + 客户端哈希 |
 | 快照 | ZIP + NDJSON + 每表摘要；加密用 age |
+| 列顺序 | **不参与比较**（不提供"忽略/严格"开关） |
 | 正确性优先 | 每个 P0 都有"先红后绿"的回归用例；集成矩阵自证幂等 |
 
 ---
@@ -25,15 +28,17 @@
 
 1. **把评估结论变成可实现的接口与数据结构**，避免实现时重新发明；
 2. **把评估里含糊的地方定死**（方向、排序、摘要、事务），这些是返工高发区；
-3. **给出可验收的里程碑与任务拆解**，让"7–12 周"变成可核对的清单。
+3. **给出可验收的里程碑与任务拆解**，让"7–11 周"变成可核对的清单。
 
 已定、本文不再讨论的决策：
 
 - **D1** 语言 Go；GUI 用 Wails v3（2026-10-26 发布 v3.0.0 稳定版，要求 Go 1.26+ 与 WebView2）。
-- **D2** 先 CLI、后 GUI；GUI 不含任何比对/生成逻辑。
+- **D2** **桌面工作台优先**；CLI 暂缓（v2.x）。核心 `internal/service` 是唯一实现，GUI 只是外壳；未来 CLI 复用同一 service，不允许第二份逻辑。
 - **D3** 保留"快照模式"产品创意（内网隔离、U 盘传递）。
 - **D4** 不复用原版的 CSV 通道、数据库侧哈希、`TableDiff` 模型、ViewModel 拼脚本。
-- **D5** 破坏性变更默认不执行；`--allow-destructive` 显式开启。
+- **D5** 破坏性变更默认不执行；GUI 的破坏性开关等价于 CLI 的 `--allow-destructive`。
+- **D6** **列顺序永不参与比较**：不实现"忽略列顺序/严格列顺序"开关（原版 #14 的假开关不能复现）。
+- **D7** v2.0 GUI 必须包含基础数据差异页：没有 CLI 兜底时，"能执行数据 DML 却看不见行"不可接受。
 
 仍需在 M0 关闭的开放问题见 §23.2；三个方向性问题（主力库、原生观感、重写 vs 增量）的默认答案沿用评估文档 §10，本文不再重复。
 
@@ -50,24 +55,25 @@
 | G1 | 四种方言（SQL Server / MySQL / PostgreSQL / SQLite）的结构读取与 DDL 生成 | 四方言集成矩阵绿 |
 | G2 | 结构 + 数据比对，输出可执行、幂等的分阶段计划 | "执行后再比对 = 无差异" |
 | G3 | 快照 v2：流式读写、可检查、可加密、带摘要 | round-trip 无损（二进制/换行/`\N`/时区） |
-| G4 | CLI 可进 CI：JSON 输出 + 退出码 + `--fail-on` | CI 示例跑通 |
-| G5 | 行级差异与列级变更（供 CLI 报告与后续 GUI） | `diff --rows` 的 JSON 含逐行/逐列数据 |
+| G4 | **桌面工作台**可完成"比较 → 计划 → 执行 → 自检" | 不跳页完成全流程，不需要开终端 |
+| G5 | 行级差异与列级变更（GUI 数据页） | v2.0 基础网格可看、可翻页、列高亮；搜索/导出在 v2.1 |
 | G6 | 破坏性操作有预检、有守卫、有明确告警 | 预检用例覆盖 100% 阻断项 |
 
 ### 2.2 非功能目标
 
 | 编号 | 指标 | 目标值（验收线，不是宣传语） |
 | :--- | :--- | :--- |
-| N1 | 单文件体积（CLI，不含 GUI） | ≤ 25 MB（linux/amd64，`-trimpath -ldflags="-s -w"`） |
-| N2 | 冷启动 | ≤ 50 ms（`dbsync version`） |
+| N1 | 桌面安装包 | ≤ 80 MB（不含 WebView2 Runtime；安装时检测/引导） |
+| N2 | 启动 | 热启动 ≤ 1 s、冷启动 ≤ 2 s（Windows，关闭 Defender 首次扫描影响） |
 | N3 | 流式内存 | 单表 100 万行比对，**进程常驻 ≤ 384 MB**（其中数据预算 256 MiB：差异集 128 + 多重集 128，其余为运行时开销） |
 | N4 | 吞吐 | 局域网内单表 ≥ 20k 行/秒（**窄行 200B、主键索引可用、无服务端排序**；宽行或强制 COLLATE 排序时按实测报告，不承诺） |
 | N5 | 可复现 | 同一输入两次运行，**明文快照与 plan.json** 字节级一致（时间戳字段除外）；加密快照因随机 file key/salt/nonce 不可复现，只要求解密后内容一致 |
 
-> N3/N4 是**灰度目标**：M2 结束前必须用 `internal/bench` 的固定数据集测出来并写进 README；达不到就调架构，不许改口径。N1 也要在 M1 就实测（四驱动 + age + cobra 后 15–20 MB 是常态，25 MB 偏紧），不要拖到发布前才发现超限。
+> N3/N4 是**灰度目标**：M2 结束前必须用 `internal/bench` 的固定数据集测出来并写进 README；达不到就调架构，不许改口径。N1/N2 在 M3（GUI 骨架搭起来后）实测，不要拖到发布前才发现超限。CLI 的 25 MB / 50 ms 指标随 CLI 一起推迟到 v2.x。
 
 ### 2.3 不做什么（v2.0）
 
+- **不交付 CLI**：`cmd/dbsync` 与 `internal/cli` 留到 v2.x；v2.0 只发桌面工作台；
 - 不做数据迁移以外的 ETL、不做定时任务调度（P2 的漂移检测另立）；
 - 不读取也不生成权限/角色/表空间/分区方案（IR 没有这些字段；v2.1 再评估"只读报告"）；
 - 不做 Oracle / 达梦 / 人大金仓（方言接口留好，M5 以后再评估）；
@@ -77,14 +83,14 @@
 
 ### 2.4 v2.0 完成定义（DoD）
 
-- [ ] `dbsync diff` / `plan` / `apply` / `snapshot` 四个命令在四方言上可用；
+- [ ] 桌面工作台完成"建快照 → 选端点 → 比较 → 审计划 → 执行 → 自检"全流程；
 - [ ] 评估文档 §3.1 的 10 条 P0 全部有回归用例，且全绿；
 - [ ] 集成矩阵"建表 → 比对 → 生成 → 执行 → 再比对 = 无差异"四方言全绿；
 - [ ] 同一份快照在 `tr-TR` / `de-DE` / `en-US` 下 round-trip 一致；
-- [ ] JSON 报告 schema 冻结为 v1，并有兼容性测试；
-- [ ] 无 `--allow-destructive` 时，任何 DROP/收窄/删列都被预检阻断；
+- [ ] JSON 报告 schema 冻结为 v1，并有兼容性测试（GUI 导出）；
+- [ ] 未开启破坏性开关时，任何 DROP/收窄/删列都被预检阻断；
 - [ ] 文档：README 的"已完成"声明与代码一致（评估文档 §0 结论 4 的问题不复现）；
-- [ ] GUI 工作台（M4a）可用：比较→计划→执行不跳页，且不出现与 CLI 不一致的结果。
+- [ ] GUI 的比较/计划/执行都调用同一份 `service`，不出现第二套差异逻辑。
 
 ---
 
@@ -156,7 +162,7 @@ plan   = 让 target 变成 source
 | `internal/config` | 标准库、`model` | `dialect`、`diff` |
 | `internal/logging` | 标准库 | 其它内部包 |
 | `internal/service` | `endpoint`、`diff`、`snapshot`、`plan`、`emit`、`execute`、`report`、`progress` | `cli`、`gui` |
-| `internal/cli` | `service`、`report`、`config`、`logging`、`model`、`progress` | `dialect`、`diff`、`plan` |
+| `internal/cli` | `service`、`report`、`config`、`logging`、`model`、`progress`（**v2.x，v2.0 不实现**） | `dialect`、`diff`、`plan` |
 | `internal/gui` | `service`、`progress` | 具体方言实现、`diff` |
 | `internal/bench` | 任意（仅测试/基准） | — |
 
@@ -177,6 +183,8 @@ plan   = 让 target 变成 source
    plan.Load(JSON) → execute.Preflight(执行 plan 里的只读检查) → execute.Apply(per-phase tx) → report
 ```
 
+**入口**：v2.0 由桌面工作台调用 `internal/service`；CLI 是 v2.x 的另一个外壳，复用同一 service。上图的 `emit.SQL`/`plan.Load` 是 service 内部步骤，不暴露给 GUI 逻辑。
+
 ---
 
 ## 5. 代码结构与包职责
@@ -184,12 +192,12 @@ plan   = 让 target 变成 source
 ```
 dbsync/
 ├── go.mod                          # module gitee.com/wangbenchi66/dbsync
-├── cmd/dbsync/main.go              # 只调用 cli.Main，无业务逻辑
+├── cmd/dbsync/main.go              # v2.x：CLI 入口，v2.0 不构建
 ├── internal/
-│   ├── cli/                        # cobra 命令、flag、退出码、输出格式
+│   ├── cli/                        # v2.x：cobra 命令、flag、退出码（v2.0 不实现）
 │   │   ├── root.go  diff.go  plan.go  apply.go  snapshot.go  schema.go  ddl.go
 │   │   └── exit.go                 # 退出码常量与映射
-│   ├── service/                    # 编排：端点→比对→计划→执行，CLI/GUI 共用
+│   ├── service/                    # 编排：端点→比对→计划→执行，GUI（及未来 CLI）共用
 │   ├── endpoint/                   # 数据源抽象：活库 / 快照 / RowStream 实现
 │   ├── stream/                     # RowStream/Comparator/DeltaSink（纯接口）
 │   ├── driver/                     # endpoint → (driverName, dsn) 适配与会话初始化
@@ -215,7 +223,7 @@ dbsync/
 │   ├── progress/                   # 事件总线（CLI 渲染 / GUI 推送共用）
 │   ├── bench/                      # 固定数据集与基准（N3/N4）
 │   ├── logging/                    # slog 初始化、脱敏
-│   └── gui/                        # Wails 绑定（M4）
+│   └── gui/                        # Wails 绑定（M3 主交付）
 ├── web/                            # 前端（M4）
 ├── testdata/                       # golden fixtures
 │   ├── schema/<dialect>/<case>/    # 源/目标 IR 的 JSON + 期望 SQL
@@ -1314,7 +1322,9 @@ diff 必须读"某一时刻的两端"，否则并发写入会让结果不可复�
 
 ---
 
-## 15. CLI 设计
+## 15. CLI 设计（v2.x，v2.0 暂不实现）
+
+> 本节保留为后续规格。v2.0 不构建 `cmd/dbsync`，所有能力通过桌面工作台调用 service；endpoint 语法、命令、退出码在 v2.x 复用本文，不另设计。
 
 ### 15.1 endpoint 语法
 
@@ -1425,7 +1435,9 @@ dbsync apply --source snapshot://./baseline.dbsync --target "mssql://sa@test/app
 
 ---
 
-## 16. 报告与 CI 集成
+## 16. 报告与 CI 集成（v2.x；v2.0 只做 GUI 导出）
+
+> v2.0 的 GUI 导出 `plan.json` / `plan.sql` 与比较结果 JSON；Markdown/HTML/SARIF 报告中心在 v2.1（B7），CLI 在 v2.x。本节其余内容保留为 CLI 阶段规格。
 
 ### 16.1 报告格式
 
@@ -1488,14 +1500,14 @@ JSON 结构（节选）：
 
 ---
 
-## 17. GUI（Wails v3，M4）
+## 17. GUI（Wails v3，M3 主交付）
 
 > 布局、功能清单与线框图见 [`DBSyncTool-功能与界面设计.md`](DBSyncTool-功能与界面设计.md)。本节只约束"GUI 不许有第二份实现"。
 
-- **原则**：GUI 不实现比对逻辑，只调用 `internal/service`（CLI 与 GUI 共用的编排层）。
+- **原则**：GUI 不实现比对逻辑，只调用 `internal/service`（GUI 与未来 CLI 共用的编排层）。
 - 绑定：`Diff(req) (DiffView, error)`、`Plan(req) (PlanView, error)`、`Apply(req) (ApplyResult, error)`、`Cancel(runID string) error`。**不要用 `chan` 参数**——Wails 绑定生成器不支持 channel，进度用 `app.Event.Emit("dbsync:progress", event)` 推送。
 - 取消：Go 侧维护 `map[runID]context.CancelFunc`，前端调 `Cancel(runID)`；不要靠关闭 channel。
-- 大数据：差异列表分页（每页 500 行）+ 虚拟滚动；行级 diff 只取选中表。
+- 大数据：差异列表分页（每页 500 行）+ 虚拟滚动；行级 diff 只取选中表。**v2.0 必须有基础数据差异页（只读、分页、列高亮）**，搜索/导出/按列视图放 v2.1。
 - WebView2：Windows 10/11 通常自带；安装包内置引导（`wails doctor` 可诊断），缺失时给下载指引。
 - **构建平台**：Wails v3 Linux 依赖 GTK4/WebKitGTK 6.0 与 CGO，**不能在 Windows 上交叉编译 Linux GUI**；GUI 的 Linux 产物必须在 Linux/CI 上构建。CLI 是纯 Go，可自由交叉编译。
 - 不为 GUI 单独写 SQL/差异代码；出现第二份实现即视为退回原版 #25/#26。
@@ -1553,7 +1565,7 @@ func (e *Error) Error() string
 func (e *Error) Unwrap() error
 ```
 
-- `errors.Is/As` 可判定；CLI 按 `Code` 映射退出码；
+- `errors.Is/As` 可判定；v2.x CLI 按 `Code` 映射退出码（v2.0 由 GUI 显示错误码）；
 - 用户消息给"下一步做什么"，技术细节进日志；
 - 禁止 `panic` 出现在库代码（`cmd` 顶层 recover 仅用于兜底并打印堆栈）。
 
@@ -1642,7 +1654,7 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 - 注释：**中文**（遵循仓库约定），导出符号必须有 doc comment；`TODO(owner):` 格式。
 - 测试：`TestXxx_场景_期望`；表驱动优先；`t.Parallel()` 用于纯函数。
 - 提交：中文，`✨/🐛/♻️/📝/✅` 前缀，正文写"为什么"。
-- 覆盖率：核心包 ≥ 80%，`cmd` 不设门禁；新增代码不得降低总覆盖率。
+- 覆盖率：核心包 ≥ 80%；GUI 以冒烟/端到端测试为主；`cmd`（v2.x）暂不设门禁；新增代码不得降低总覆盖率。
 
 ---
 
@@ -1652,7 +1664,7 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 
 | ID | 任务 | 产出 |
 | :--- | :--- | :--- |
-| M0-1 | 关闭 §23.2 的开放问题，冻结 ADR-001–006；ADR-007/008 立草案 | `docs/adr/*.md` |
+| M0-1 | 关闭 §23.2 的开放问题，冻结 ADR-001–006；007/008/009/010 立草案 | `docs/adr/*.md` |
 | M0-2 | 建 `testdata` 骨架与 **13 条 P0 回归用例**（覆盖 10 条 P0，全红） | `go test` 全红 |
 | M0-3 | 定 JSON schema v1 与 manifest schema | `docs/schema/*.json` |
 
@@ -1666,9 +1678,9 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 | M1-2 | SQL Server 方言：Introspect + ReadType/EmitType + Emit 基础 | 能读 IR、生成 CREATE |
 | M1-3 | 快照 v2 读写（明文 + age） | round-trip 无损 |
 
-**出口**：`snapshot create` → `snapshot verify` → `snapshot inspect` 在 SQL Server 上可用。
+**出口**：service 层能创建/校验/读取快照（SQL Server），不依赖 CLI。
 
-### M2 比对 + 计划 + 执行（2–3 周）
+### M2 四方言核心 + 比对/计划/执行（3–4 周）
 
 | ID | 任务 | 验收 |
 | :--- | :--- | :--- |
@@ -1678,35 +1690,34 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 | M2-4 | MySQL / PostgreSQL / SQLite 方言 | 四方言矩阵雏形 |
 | M2-5 | 基准与 N3/N4 实测 | 数字写进 README，不达标就调架构 |
 
-**出口**：Docker 里四方言"建表→比对→生成→执行→再比对=无差异"。
+**出口**：Docker 里四方言"建表→比对→生成→执行→再比对=无差异"（通过 service 测试，而非 CLI）。
 
-### M3 CLI 完整 + CI（2–3 周）
+### M3 桌面工作台（3–5 周，v2.0 主交付）
 
-| ID | 任务 | 验收 |
-| :--- | :--- | :--- |
-| M3-1 | 全部命令、退出码、配置优先级 | `--help` 与文档一致 |
-| M3-2 | JSON/SARIF 报告 + `--fail-on` | CI 示例绿 |
-| M3-3 | Golden + 契约 + fuzz + locale 测试 | 覆盖率达标 |
-| M3-4 | 性能基准**复测**与 README 指标核对 | N3/N4 不回退，偏差 >10% 需解释 |
-
-**出口**：v2.0 DoD 的 CLI 部分全部勾选。
-
-### M4 GUI（拆两期，M4a 2–4 周）
-
-> 功能清单、布局与线框图见 [`DBSyncTool-功能与界面设计.md`](DBSyncTool-功能与界面设计.md)。v2.0 只做 M4a；M4b 进 v2.1。
+> 功能清单、布局与线框图见 [`DBSyncTool-功能与界面设计.md`](DBSyncTool-功能与界面设计.md)。
 
 | ID | 任务 | 验收 |
 | :--- | :--- | :--- |
-| M4a-1 | Wails v3 外壳、三阶段工作台、对象树/差异画布/检查器 | 不跳页完成"比较→计划→执行" |
-| M4a-2 | 项目 + 凭据库 + 连接抽屉 | 逻辑名连接、重启恢复、密码不落日志 |
-| M4a-3 | 比较选项 + 规则预览 | 选项与比较器一致，无假开关 |
-| M4a-4 | 计划页 + 执行页（三道闸/进度/自检） | 与 CLI 同一份 Plan；失败可定位 |
-| M4a-5 | 整库 DDL 导出（源/目标） | 依赖排序正确 |
-| M4a-6 | 安装包与 WebView2 检测 | 干净 Windows 可装 |
-| M4b-1 | 数据差异页（行网格/列高亮/分页） | 10 万行不卡 |
-| M4b-2 | 快照库 / 脚本目录 / 多目标 / 依赖图 | 各自验收见设计文档 |
+| M3-1 | Wails v3 外壳、三阶段工作台、端点卡片、对象树/检查器 | 不跳页完成"比较→计划→执行" |
+| M3-2 | 项目 + 凭据库 + 连接抽屉 | 逻辑名连接、重启恢复、密码不落日志 |
+| M3-3 | 结构差异 + **基础数据差异网格**（只读、分页、列高亮） | 数据 DML 可被看见再执行 |
+| M3-4 | 比较选项 + 规则预览 | 选项与比较器一致，无假开关；列顺序不出现 |
+| M3-5 | 计划页 + 执行页（三道闸/进度/自检）+ 整库 DDL 导出 | 与 service 同一份 Plan；失败可定位 |
+| M3-6 | 安装包与 WebView2 检测 | 干净 Windows 可装 |
 
-**工期**：M4a 2–4 周（乐观）；M4b 3–4 周（v2.1）。v2.0（M1–M3 + M4a）仍按 7–12 周（乐观）/ 12–18 周（含返工）排。
+**出口**：v2.0 DoD 全部勾选。
+
+### M4 桌面增强（v2.1，2–3 周）
+
+| ID | 任务 | 验收 |
+| :--- | :--- | :--- |
+| M4-1 | 数据差异增强（搜索、导出、按列视图） | 10 万行不卡 |
+| M4-2 | 快照库（标签/来源/保留） | 打开即比较 |
+| M4-3 | 脚本目录端点（`dir://`） | 只读比对 Git 工作区 |
+| M4-4 | 多目标比较 | 一套源对 N 个目标 |
+| M4-5 | 依赖影响视图 + 接受/忽略规则 + 报告中心 | 各自验收见设计文档 |
+
+**工期**：v2.0（M0–M3）约 7–11 周（乐观）/ 12–18 周（含返工）；M4 另计 2–3 周。CLI 不在 v2.0 范围内，留到 v2.x。评估文档的"7–12 周"是含 CLI 的旧口径，本版 GUI-first 按 7–11 周。
 
 ---
 
@@ -1728,7 +1739,7 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 | MySQL DDL 不可回滚 | 半途失败留下半套结构 | 阶段化 + 预检 + 明确告警 |
 | 大表差异集撑爆内存 | OOM | `--max-changes` + `--spill` |
 | SQLite 改列需重建表 | 实现复杂、易丢数据 | M2 明确"重建表"路径与回滚脚本 |
-| Wails 依赖 WebView2 | 老内网机不可用 | 安装包检测 + 引导；CLI 不受影响 |
+| Wails 依赖 WebView2 | 老内网机不可用；**v2.0 没有 CLI 兜底**，装不上就完全不可用 | 安装包内置检测与引导；提供离线 WebView2 安装包说明；列为 v2.0 发布阻塞风险 |
 | 单人维护 | 工期与质量 | M0 坏例集 + 自动化矩阵，降低"人肉记忆" |
 | 序列当前值不同步 | 同步后自增值可能冲突或跳号 | 文档明确边界；identity 表用 §13.4 的 reseed，独立 sequence 手工处理 |
 
@@ -1744,14 +1755,16 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 
 | ADR | 决策 | 状态 |
 | :--- | :--- | :--- |
-| ADR-001 | Go 1.26 + Wails v3，CLI 先行 | 已定 |
+| ADR-001 | Go 1.26 + Wails v3；**桌面工作台先行，CLI 暂缓** | 已定 |
 | ADR-002 | 值归一化规则（NaN/-0/十进制/时区） | 已定，M1 复核 |
 | ADR-003 | 快照 = ZIP + NDJSON，加密用 age | 已定 |
 | ADR-004 | 方向统一 source→target | 已定 |
-| ADR-005 | 退出码 0/1/2/3/4/5 | 已定 |
+| ADR-005 | 退出码 0/1/2/3/4/5（v2.x CLI） | 已定，暂不实现 |
 | ADR-006 | 排序：数据库二进制排序 + 单调断言 + 外排回退 | 已定 |
 | ADR-007 | 表级摘要只在可证明范围启用 | 待 M2 复核 |
 | ADR-008 | v2.0 不做跨方言数据同步，只做结构报告 | 已定 |
+| ADR-009 | v2.0 只交付桌面工作台，CLI 推到 v2.x；GUI 必须含基础数据页 | 已定 |
+| ADR-010 | 列顺序不参与比较，不提供相关开关 | 已定 |
 
 ---
 
@@ -1888,7 +1901,7 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 | 结构完整性 | 统计代码围栏（必须偶数）、逐表核对 `\|` 列数、标题层级 | 修复 1 处断裂代码块（§13.5 的 `Phase/Step` 跑到围栏外）；修复后 64 个围栏、全部表格列数一致 |
 | 交叉引用 | 提取全部 `§x.y` 与标题编号比对 | 修正 3 处指错（§1 的三问、§2.4 的评估文档编号、§6.5 的属性测试位置） |
 | 术语与方向 | 全文检查 source/target、from/to、current/desired 的用法 | 报告字段由 `from/to` 改为 `current/desired`，并写死方向 |
-| 数字一致性 | 工期、内存预算、用例计数、退出码逐项对照 | 统一 7–12 周；N3 改为 384 MB（含 256 MiB 数据预算）；`--max-changes` 降到 50 万；测试 20 例 |
+| 数字一致性 | 工期、内存预算、用例计数、退出码逐项对照 | 统一 7–11 周（CLI 暂缓后）；N3 改为 384 MB（含 256 MiB 数据预算）；`--max-changes` 降到 50 万；测试 20 例 |
 | 参数一致性 | 提取全部 `--flag`，对照命令表/全局表 | 补全 `--source-env/--target-env/--schema-map/--optimistic/--batch/--with-count` 等；`--fail-on` 取值统一 |
 | 逻辑闭环 | 逐条走"读入→比对→计划→执行→再比对" | 发现并修复 7 个阻断级问题（E.2） |
 | Go 可行性 | 独立 Go 评审核查片段、驱动 API、age/Wails/xxh3 用法 | 发现并修复 12 处（E.3） |
