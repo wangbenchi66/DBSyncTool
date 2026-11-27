@@ -17,7 +17,7 @@
 | 语言 | Go 1.26（已确认 `go1.26.0 windows/amd64`）；模块路径 `gitee.com/wangbenchi66/dbsync` |
 | 入口 | Windows 桌面工作台唯一交付；核心 `service` 单一实现；CLI 暂缓（v2.x） |
 | 执行 | **永不执行 DDL/DML**；只读比对 + SQL 预览 |
-| 数据库顺序 | **MySQL 8.0.16 → SQLite → PostgreSQL；SQL Server 待补** |
+| 数据库顺序 | **MySQL 8.0.16 → SQLite → PostgreSQL → SQL Server（均已接）** |
 | 平台 | Windows 10/11 x64（WebView2） |
 | 方向 | `source`（期望）→ `target`（现状），计划 = 让 target 变成 source |
 | 数据模型 | 类型化 `Value` + 规范化编码 + 客户端哈希 |
@@ -64,7 +64,7 @@
 
 | 编号 | 目标 | 验收方式 |
 | :--- | :--- | :--- |
-| G1 | **MySQL + SQLite + PostgreSQL** 的结构读取与差异；SQL Server 待补 | 前三方言矩阵绿 |
+| G1 | **MySQL / SQLite / PostgreSQL / SQL Server** 的结构读取与差异 | 四方言矩阵绿 |
 | G2 | 结构 + 数据比对，输出差异与**只读 SQL 预览**（不执行） | "比较后无差异"与预览 SQL 可核对 |
 | G3 | 快照 v2：流式读写、可检查、可加密、带摘要 | round-trip 无损（二进制/换行/`\N`/时区） |
 | G4 | **桌面工作台**可完成"比较 → 差异 → SQL 预览" | 不跳页，不执行任何 SQL |
@@ -99,7 +99,7 @@
 
 - [ ] 桌面工作台完成"建快照 → 选端点 → 比较 → 看差异 → 看 SQL 预览"全流程；
 - [ ] 评估文档 §3.1 的 10 条 P0 全部有回归用例，且全绿；
-- [ ] 集成矩阵"建表 → 比对"在 MySQL + SQLite + PostgreSQL 全绿；**测试夹具之外不出现任何写语句**；
+- [ ] 集成矩阵"建表 → 比对"在 MySQL + SQLite + PostgreSQL + SQL Server 全绿；**测试夹具之外不出现任何写语句**；
 - [ ] 同一份快照在 `tr-TR` / `de-DE` / `en-US` 下 round-trip 一致；
 - [ ] JSON 报告 schema 冻结为 v1，并有兼容性测试（GUI 导出）；
 - [ ] 破坏性差异被明确标注；**工具内没有任何执行入口**；
@@ -710,7 +710,7 @@ type Capabilities struct {
 
 | 方言 | 必读差异 |
 | :--- | :--- |
-| SQL Server | `sys.*` 目录视图 + `OBJECT_DEFINITION` 读对象；`datetime2` 精度；`datetimeoffset`；`timestamp` 是 rowversion；计算列 `is_computed`；`IDENTITY(seed,inc)` 必须读；`COLLATE Latin1_General_100_BIN2` 是码点序（BIN 不是）；**collation 从 `sys.columns.collation_name` 读** |
+| SQL Server | `sys.*` 目录视图 + `OBJECT_DEFINITION` 读对象；`datetime2` 精度；`datetimeoffset`；`timestamp` 是 rowversion；计算列 `is_computed`；`IDENTITY(seed,inc)` 必须读；`COLLATE Latin1_General_100_BIN2` 是码点序（BIN 不是）；**collation 从 `sys.columns.collation_name` 读**；**连接加 `ApplicationIntent=ReadOnly` 并使用只读账号**（SQL Server 没有可靠的会话级只读开关） |
 | MySQL | `information_schema`；DDL 隐式提交；**8.0.16 用 `utf8mb4_bin`（PAD SPACE），8.0.17+ 可探测 `utf8mb4_0900_bin`（NO PAD）**；`ON UPDATE CURRENT_TIMESTAMP`；`AUTO_INCREMENT`；唯一约束以索引形式存在（读取时要还原为约束语义）；**collation 从 `COLUMNS.COLLATION_NAME` + `CHARACTER_SET_NAME` 读有效值** |
 | PostgreSQL | `pg_catalog`（`pg_attribute`/`pg_constraint`/`pg_index`）；`search_path` 决定 schema；`COLLATE "C"` 是字节序；`jsonb` 重排；分区表与继承需要显式排除；`SERIAL` 读成 identity；**collation 从 `pg_attribute.attcollation` 关联 `pg_collation` 读** |
 | SQLite | `pragma table_info/index_list/foreign_key_list`；类型是"亲和性"，按声明类型映射；**无真正 ALTER，改列要按官方 12 步重建表**（M2 实现）；`COLLATE BINARY`；无用户/权限概念。**连接级坑**：`PRAGMA foreign_keys=ON`/`busy_timeout` 是每连接设置，必须写进 DSN（`_pragma=...`）；`:memory:` 多连接会得到多个独立库，需 `file::memory:?cache=shared` + `MaxOpenConns(1)`；写并发用 WAL（`_pragma=journal_mode(WAL)`）+ busy_timeout；**SQLite 是单写者，`--parallel` 默认降为 1** |
@@ -1494,7 +1494,7 @@ JSON 结构（节选）：
 
 ### 18.3 基准
 
-`internal/bench` 固定数据集：10 张表 × 10 万行（含文本/二进制/时间/十进制）。基准矩阵必须覆盖 **行宽 200B / 1KB / 10KB × 主键索引可用/不可用 × 已支持方言（MySQL/SQLite/PostgreSQL）**，并记录：`ORDER BY` 是否触发排序、临时空间、RSS、行/秒。CI 只跑 size 与启动，性能基准本地跑并归档；**M2 结束前必须出第一组数字**，不能拖到 M3。
+`internal/bench` 固定数据集：10 张表 × 10 万行（含文本/二进制/时间/十进制）。基准矩阵必须覆盖 **行宽 200B / 1KB / 10KB × 主键索引可用/不可用 × 已支持方言（MySQL/SQLite/PostgreSQL/SQL Server）**，并记录：`ORDER BY` 是否触发排序、临时空间、RSS、行/秒。CI 只跑 size 与启动，性能基准本地跑并归档；**M2 结束前必须出第一组数字**，不能拖到 M3。
 
 > `modernc.org/sqlite` 是纯 Go、可交叉编译，但比 CGO 驱动慢（社区基准常见 1.5–2× per-query CPU、二进制约 +3 MB）。选它是为了分发便利，SQLite 方言的吞吐必须单独测，不能沿用其他方言的结论。
 
@@ -1560,13 +1560,13 @@ func (e *Error) Unwrap() error
 
 ### 20.2 集成矩阵
 
-**先跑 MySQL 矩阵**（M1 主方言，目标 8.0.16），再跑 **SQLite** 与 **PostgreSQL**，最后补 SQL Server。SQLite 用临时文件；MySQL 用 `mysql:8.0.16` 或直连测试库；PostgreSQL 用 `postgres:16`。每个方言在自己的 source↔target 配对里跑（同方言）：
+**先跑 MySQL 矩阵**（M1 主方言，目标 8.0.16），再跑 **SQLite / PostgreSQL / SQL Server**。SQLite 用临时文件；MySQL 用 `mysql:8.0.16` 或直连测试库；PostgreSQL 用 `postgres:16`；SQL Server 用 `mcr.microsoft.com/mssql/server:2022-latest`。每个方言在自己的 source↔target 配对里跑（同方言）：
 
 > 集成测试只连**专用、可清理**的测试库/临时 schema，测试前后自行建删；**禁止指向生产**。连接信息走本地环境变量或未跟踪配置，不写入仓库。
 
 1. 建源/目标 schema（含外键环、自引用、跨 schema 同名表、二进制、换行、`\N`、时区、collation 差异）；
-2. `diff` → `plan`（只读预览）→ 再 `diff`，断言目标未被修改；
-3. 断言：第二次 diff 为空、无阻断项。
+2. `diff` → `plan`（只读预览）→ 再 `diff`，断言目标未被修改、差异仍在；
+3. 断言：没有写语句进入生产路径、预览可解释。
 
 ### 20.3 关键用例（对应 P0）
 
@@ -1649,10 +1649,10 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 | M2-1 | `diff`：结构 + 数据 + 归并 + 排序断言 | 单表比对正确 |
 | M2-2 | `plan`：依赖图、SCC、预检、阶段、collation 变更 | MySQL 全链路 |
 | M2-3 | `plan` 只读预览：SQL 生成、风险标注、只读断言 | 目标数据/结构在预览前后完全一致 |
-| M2-4 | SQLite / PostgreSQL 已完成；SQL Server 待做 | 前三方言结构+数据差异 |
+| M2-4 | MySQL / SQLite / PostgreSQL / SQL Server 方言 | 四方言结构+数据差异 |
 | M2-5 | 基准与 N3/N4 实测 | 数字写进 README，不达标就调架构 |
 
-**出口**：MySQL/SQLite/PostgreSQL 的"建表→比对"通过 service 测试；SQL Server 待补。
+**出口**：MySQL/SQLite/PostgreSQL/SQL Server 的"建表→比对"通过 service 测试；目标库在预览前后不变。
 
 ### M3 桌面工作台（3–5 周，v2.0 主交付）
 
