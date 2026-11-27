@@ -69,7 +69,7 @@
 ### 2.3 不做什么（v2.0）
 
 - 不做数据迁移以外的 ETL、不做定时任务调度（P2 的漂移检测另立）；
-- 不做权限/角色/表空间/分区方案的同步（只报告差异，不生成）；
+- 不读取也不生成权限/角色/表空间/分区方案（IR 没有这些字段；v2.1 再评估"只读报告"）；
 - 不做 Oracle / 达梦 / 人大金仓（方言接口留好，M5 以后再评估）；
 - **不同步序列当前值**（PostgreSQL 独立 sequence 的 `last_value`）：v2.0 只建序列对象，不 `setval`；需要精确衔接自增值时由 DBA 手工处理，风险登记在 §23.1；
 - **v2.0 只保证同方言的数据同步**；跨方言只做结构报告（只读），数据同步留到 v2.1——类型映射不是单射（见 §7.3），强行做会把"读回类型"变成猜谜；
@@ -1487,6 +1487,8 @@ JSON 结构（节选）：
 ---
 
 ## 17. GUI（Wails v3，M4）
+
+> 布局、功能清单与线框图见 [`DBSyncTool-功能与界面设计.md`](DBSyncTool-功能与界面设计.md)。本节只约束"GUI 不许有第二份实现"。
 
 - **原则**：GUI 不实现比对逻辑，只调用 `internal/service`（CLI 与 GUI 共用的编排层）。
 - 绑定：`Diff(req) (DiffView, error)`、`Plan(req) (PlanView, error)`、`Apply(req) (ApplyResult, error)`、`Cancel(runID string) error`。**不要用 `chan` 参数**——Wails 绑定生成器不支持 channel，进度用 `app.Event.Emit("dbsync:progress", event)` 推送。
