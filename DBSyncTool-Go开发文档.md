@@ -17,7 +17,7 @@
 | 语言 | Go 1.26（已确认 `go1.26.0 windows/amd64`）；模块路径 `gitee.com/wangbenchi66/dbsync` |
 | 入口 | Windows 桌面工作台唯一交付；核心 `service` 单一实现；CLI 暂缓（v2.x） |
 | 执行 | **永不执行 DDL/DML**；只读比对 + SQL 预览 |
-| 数据库顺序 | **MySQL 8.0.16 先做**，再做 SQL Server / PostgreSQL / SQLite |
+| 数据库顺序 | **MySQL 8.0.16 先做 → SQLite → SQL Server / PostgreSQL** |
 | 平台 | Windows 10/11 x64（WebView2） |
 | 方向 | `source`（期望）→ `target`（现状），计划 = 让 target 变成 source |
 | 数据模型 | 类型化 `Value` + 规范化编码 + 客户端哈希 |
@@ -64,7 +64,7 @@
 
 | 编号 | 目标 | 验收方式 |
 | :--- | :--- | :--- |
-| G1 | **MySQL 优先**，随后 SQL Server / PostgreSQL / SQLite 的结构读取与 DDL 生成 | MySQL 矩阵先绿，再扩到四方言 |
+| G1 | **MySQL + SQLite** 的结构读取与差异；SQL Server / PostgreSQL 待补 | MySQL/SQLite 矩阵绿 |
 | G2 | 结构 + 数据比对，输出差异与**只读 SQL 预览**（不执行） | "比较后无差异"与预览 SQL 可核对 |
 | G3 | 快照 v2：流式读写、可检查、可加密、带摘要 | round-trip 无损（二进制/换行/`\N`/时区） |
 | G4 | **桌面工作台**可完成"比较 → 差异 → SQL 预览" | 不跳页，不执行任何 SQL |
@@ -99,7 +99,7 @@
 
 - [ ] 桌面工作台完成"建快照 → 选端点 → 比较 → 看差异 → 看 SQL 预览"全流程；
 - [ ] 评估文档 §3.1 的 10 条 P0 全部有回归用例，且全绿；
-- [ ] 集成矩阵"建表 → 比对"四方言全绿；**测试夹具之外不出现任何写语句**；
+- [ ] 集成矩阵"建表 → 比对"在 MySQL + SQLite 全绿；**测试夹具之外不出现任何写语句**；
 - [ ] 同一份快照在 `tr-TR` / `de-DE` / `en-US` 下 round-trip 一致；
 - [ ] JSON 报告 schema 冻结为 v1，并有兼容性测试（GUI 导出）；
 - [ ] 破坏性差异被明确标注；**工具内没有任何执行入口**；
@@ -1552,7 +1552,7 @@ func (e *Error) Unwrap() error
 | 单元 | value/model/diff/plan/emit | `go test` | 覆盖率 ≥ 80%（核心包） |
 | Golden | 四方言 SQL 生成 | `testdata/` + `-update` | 全绿 |
 | 契约 | 生成器调用点形状 | 表驱动 | 全绿（对应 #1/#39） |
-| 集成 | 真库全链路 | `//go:build integration` + Docker | 四方言矩阵 |
+| 集成 | 真库/文件全链路 | `//go:build integration` + Docker | MySQL + SQLite 矩阵 |
 | 属性 | 编码/比较全序 | `pgregory.net/rapid` | 全绿 |
 | 模糊 | 快照解析/编码 | `go test -fuzz` | 30 分钟无崩溃 |
 | 区域 | locale 无关 | `tr-TR/de-DE/en-US` | 快照 round-trip 一致 |
@@ -1560,7 +1560,7 @@ func (e *Error) Unwrap() error
 
 ### 20.2 集成矩阵
 
-**先跑 MySQL 矩阵**（M1 主方言，目标 8.0.16），再跑 SQL Server / PostgreSQL / SQLite。docker compose 起 `mysql:8.0.16`（或直连 8.0.16 测试库）、`mcr.microsoft.com/mssql/server:2022-latest`、`postgres:16`、SQLite（文件）。每个方言在自己的 source↔target 配对里跑（同方言），跨方言只跑"结构报告"用例（只读、不断言可执行）：
+**先跑 MySQL 矩阵**（M1 主方言，目标 8.0.16），再跑 **SQLite**，最后补 SQL Server / PostgreSQL。SQLite 用临时文件；MySQL 用 `mysql:8.0.16` 或直连测试库。每个方言在自己的 source↔target 配对里跑（同方言）：
 
 > 集成测试只连**专用、可清理**的测试库/临时 schema，测试前后自行建删；**禁止指向生产**。连接信息走本地环境变量或未跟踪配置，不写入仓库。
 
@@ -1638,7 +1638,7 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 | :--- | :--- | :--- |
 | M1-1 | `value` 包：Kind/Value/Decimal/Encode/Compare/Hash | 属性测试绿 |
 | M1-2 | **MySQL 方言**：Introspect + ReadType/EmitType + Emit 基础（含 collation 读取） | 能读 IR、生成 CREATE |
-| M1-3 | 快照 v2 读写（**默认明文**，可选 age） | round-trip 无损 |
+| M1-3 | 快照 v2 读写（**默认明文**，可选 age；结构+数据） | round-trip 无损 |
 
 **出口**：service 层能创建/校验/读取快照（MySQL），不依赖 CLI。
 
@@ -1649,7 +1649,7 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 | M2-1 | `diff`：结构 + 数据 + 归并 + 排序断言 | 单表比对正确 |
 | M2-2 | `plan`：依赖图、SCC、预检、阶段、collation 变更 | MySQL 全链路 |
 | M2-3 | `plan` 只读预览：SQL 生成、风险标注、只读断言 | 目标数据/结构在预览前后完全一致 |
-| M2-4 | SQL Server / PostgreSQL / SQLite 方言 | 四方言矩阵 |
+| M2-4 | SQLite 已完成；SQL Server / PostgreSQL 待做 | 已支持 SQLite 结构+数据差异 |
 | M2-5 | 基准与 N3/N4 实测 | 数字写进 README，不达标就调架构 |
 
 **出口**：Docker 里四方言"建表→比对→生成→执行→再比对=无差异"（通过 service 测试，而非 CLI）。
