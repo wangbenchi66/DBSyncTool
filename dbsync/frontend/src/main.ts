@@ -176,6 +176,45 @@ function renderDetail() {
   el.innerHTML = html;
 }
 
+function planSQL(): string {
+  if (!plan) return "";
+  const parts: string[] = ["-- DBSync 只读 SQL 预览；本文件不会被执行\n"];
+  for (const ph of [...plan.phases].sort((a, b) => a.phase - b.phase)) {
+    parts.push(`\n-- 阶段 ${ph.phase}：${phaseNames[ph.phase] ?? ""}\n`);
+    for (const s of ph.statements) parts.push(s.sql + "\n");
+  }
+  return parts.join("");
+}
+
+async function copySQL() {
+  const sql = planSQL();
+  if (!sql) { setMsg("请先生成 SQL 预览", true); return; }
+  try {
+    await navigator.clipboard.writeText(sql);
+    setStatus("SQL 已复制（未执行）");
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = sql;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    ta.remove();
+    setStatus("SQL 已复制（未执行）");
+  }
+}
+
+function exportSQL() {
+  const sql = planSQL();
+  if (!sql) { setMsg("请先生成 SQL 预览", true); return; }
+  const blob = new Blob([sql], { type: "text/plain;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "dbsync-preview.sql";
+  a.click();
+  URL.revokeObjectURL(a.href);
+  setStatus("SQL 已导出（未执行）");
+}
+
 async function saveReport() {
   if (!view) { setMsg("请先比较", true); return; }
   const path = input("reportPath").value.trim();
@@ -405,6 +444,8 @@ $("btnSnapshot").addEventListener("click", createSnapshot);
 $("btnLibrary").addEventListener("click", openLibrary);
 $("btnImportSnapshot").addEventListener("click", importSnapshot);
 $("btnReport").addEventListener("click", saveReport);
+$("btnCopySQL").addEventListener("click", copySQL);
+$("btnExportSQL").addEventListener("click", exportSQL);
 $("btnMulti").addEventListener("click", () => $("multiModal").classList.remove("hidden"));
 $("closeMulti").addEventListener("click", () => $("multiModal").classList.add("hidden"));
 $("runMulti").addEventListener("click", runMulti);
