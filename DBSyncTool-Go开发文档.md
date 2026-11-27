@@ -71,6 +71,7 @@
 - 不做数据迁移以外的 ETL、不做定时任务调度（P2 的漂移检测另立）；
 - 不做权限/角色/表空间/分区方案的同步（只报告差异，不生成）；
 - 不做 Oracle / 达梦 / 人大金仓（方言接口留好，M5 以后再评估）；
+- **不同步序列当前值**（PostgreSQL 独立 sequence 的 `last_value`）：v2.0 只建序列对象，不 `setval`；需要精确衔接自增值时由 DBA 手工处理，风险登记在 §23.1；
 - **v2.0 只保证同方言的数据同步**；跨方言只做结构报告（只读），数据同步留到 v2.1——类型映射不是单射（见 §7.3），强行做会把"读回类型"变成猜谜；
 - 不做云端托管与多租户。
 
@@ -339,14 +340,13 @@ tag = 1 字节 Kind
 
 | 用途 | 算法 | 说明 |
 | :--- | :--- | :--- |
-| 列哈希 | xxh3-128("col\0" ‖ 列名 ‖ 类型签名 ‖ Encode(value)) | `类型签名` 是 `model.Type` 的稳定文本（如 `text/utf8/50`），由调用方计算；`value` 包不依赖 `model`，避免循环依赖 |
-| 行哈希 | xxh3-128("row\0" ‖ 列哈希**按列名排序**后拼接) | 与物理列序无关；列集由调用方显式给定 |
+| 列哈希 | xxh3-128("col\0" ‖ Encode(value)) | **不含列名与类型**：名字大小写、列序、类型调整都不该造成"数据变了"；类型差异由结构层处理 |
+| 行哈希 | xxh3-128("row\0" ‖ 列哈希**按调用方给定的规范列序**拼接) | 规范列序由 diff 层提供（数据比对用 source 的共有列顺序），两端一致即可，不依赖物理列序 |
 | 表摘要 | 128 位模加：Σ 行哈希 | 可交换、与行序无关，因此无主键表也能算 |
 
 ```go
-// ColumnHash 是单列摘要；列名与类型签名都参与哈希。
+// ColumnHash 是单列值的摘要（不含列名/类型）。
 type ColumnHash struct {
-	Column string
 	Lo, Hi uint64
 }
 
@@ -364,18 +364,20 @@ func (d *Digest) Add(r RowHash)
 
 func (d Digest) Sum() (lo, hi uint64)
 
-func ColumnHashOf(name string, typeSig string, v Value) ColumnHash // 输入 = uvarint(len(name)) ‖ name ‖ uvarint(len(typeSig)) ‖ typeSig ‖ Encode(v)
+func ColumnHashOf(v Value) ColumnHash // 输入 = "col\0" ‖ Encode(v)
 
-// RowHashOf 内部按 ColumnHash.Column 排序后拼接，调用方顺序无关。
+// RowHashOf 按传入顺序拼接，调用方负责保证两端列序一致。
 func RowHashOf(cols []ColumnHash) RowHash
 ```
 
-**列集必须显式给定，而且两种用途不同**：
+**列序与列集必须由 diff 层显式给定**：
 
-- **数据比对**：行哈希只覆盖两端**共有列**（按列名求交集，见 §12.4.1）。这样"物理列序不同"不会造成假变更；源端新增列单独判定，不由行哈希承担。
-- **快照摘要**：覆盖该表**全部列**（按列名排序），写入 manifest。
+- **数据比对**：规范列序 = source 的**共有列**顺序；`RowStream` 按这个顺序产出 `[]ColumnHash`（target 端按同一顺序映射自己的列）。这样物理列序不同、列名大小写不同都不会造成假变更；名字匹配由结构层完成，哈希不掺和。
+- **快照摘要**：覆盖该表的**可比较列**（排除计算列、rowversion 等数据库自动维护列），按列名排序后计算，写入 manifest。
 
-两种范围算出的哈希不同，因此 manifest 的 `digest` **不能**拿来当行哈希用于数据比对；反之亦然。这是有意设计：避免"摘要相同但列集不同"被误判为数据相同。
+**为什么列哈希不含类型**：类型差异是结构问题，`varchar(100)`→`varchar(50)` 不代表数据变了。若把类型签名混进行哈希，一次长度调整会让每行都判"变更"，生成整表 UPDATE。编码里已经带 `Kind` 标签，`int 1` 与文本 `"1"` 不会碰撞。
+
+两种范围在**列集或列序不同**时算出的哈希不同，因此 manifest 的 `digest` **不能**拿来当行哈希用于数据比对；反之亦然。这是有意设计：避免"摘要相同但列集不同"被误判为数据相同。
 
 **域分隔**：列哈希输入以 `"col\x00"` 开头，行哈希以 `"row\x00"` 开头；表摘要是模加和，**不再额外加前缀**（对加法无意义）。若需要"这个和属于哪种用途"，把 `Sum()` 的结果再哈希一次并在格式里注明。
 
@@ -472,21 +474,27 @@ type Column struct {
 
 | 规范类型 | SQL Server | MySQL | PostgreSQL | SQLite |
 | :--- | :--- | :--- | :--- | :--- |
-| Bool | `bit` | `tinyint(1)` | `boolean` | `integer` |
-| Int64 | `bigint` | `bigint` | `bigint` | `integer` |
-| Uint64 | `decimal(20,0)` | `bigint unsigned` | `numeric(20,0)` | `text`（十进制串） |
-| Decimal(p,s) | `decimal(p,s)` | `decimal(p,s)` | `numeric(p,s)` | `numeric` |
-| Float64 | `float` | `double` | `double precision` | `real` |
-| Text(n) | `nvarchar(n)` | `varchar(n)` | `varchar(n)` | `text` |
-| Bytes | `varbinary(n)` | `varbinary(n)` | `bytea` | `blob` |
-| TimestampTZ | `datetimeoffset(7)` | `datetime(6)`（应用层 UTC） | `timestamptz` | `text`（ISO-8601） |
-| Timestamp | `datetime2(7)` | `datetime(6)` | `timestamp` | `text` |
-| JSON | `nvarchar(max)`+`ISJSON` | `json` | `jsonb` | `text` |
-| UUID | `uniqueidentifier` | `char(36)` | `uuid` | `text` |
+| Bool | `bit` | `tinyint(1)` | `boolean` | `BOOLEAN` |
+| Int64 | `bigint` | `bigint` | `bigint` | `INTEGER` |
+| Uint64 | `decimal(20,0)` | `bigint unsigned` | `numeric(20,0)` | `UINT64_TEXT` |
+| Decimal(p,s) | `decimal(p,s)` | `decimal(p,s)` | `numeric(p,s)` | `DECIMAL_TEXT` |
+| Float64 | `float` | `double` | `double precision` | `REAL` |
+| Text(n) | `nvarchar(n)` | `varchar(n)` | `varchar(n)` | `TEXT` |
+| Bytes | `varbinary(n)` | `varbinary(n)` | `bytea` | `BLOB` |
+| Date | `date` | `date` | `date` | `DATE_TEXT` |
+| Time | `time(7)` | `time(6)` | `time` | `TIME_TEXT` |
+| TimestampTZ | `datetimeoffset(7)` | `timestamp(6)`（会话 `time_zone='+00:00'`，1970–2038） | `timestamptz` | `TIMESTAMPTZ_TEXT` |
+| Timestamp | `datetime2(7)` | `datetime(6)` | `timestamp` | `DATETIME_TEXT` |
+| JSON | `nvarchar(max)`+`ISJSON` | `json` | `jsonb` | `JSON_TEXT` |
+| UUID | `uniqueidentifier` | `char(36)` | `uuid` | `UUID_TEXT` |
 
-> MySQL 的 `timestamp` 会做会话时区转换，因此**不要**用它承载"无时区时间"；`datetime` 才是对应项。SQL Server 的 `timestamp`/`rowversion` 是二进制版本号，映射为 `TypeBinary`，不是时间。
+> MySQL 的 `timestamp` 会做会话时区转换，因此**不要**用它承载"无时区时间"——无时区用 `datetime`，绝对时刻用 `timestamp` 且把会话时区固定为 UTC。SQL Server 的 `timestamp`/`rowversion` 是二进制版本号，映射为 `TypeBinary`，不是时间。
 >
-> **这张表不是单射**：MySQL `datetime(6)` 同时是 `Timestamp` 与 `TimestampTZ` 的落点，SQLite 的 `integer`/`text` 也无法区分 Bool/Int 与 Date/Time/Timestamp。因此 **v2.0 不做跨方言数据同步**；跨方言只做结构报告，且报告里标注"类型等价仅为展示"。要做双向同步，必须先在 §7.1 引入"逻辑类型 + 映射族 + 读回判定"，见 ADR-008（待定）。
+> **SQLite 刻意使用带 `_TEXT` 的逻辑类型名**（`DATETIME_TEXT`/`DECIMAL_TEXT`/`UINT64_TEXT`…）：SQLite 的声明类型决定**亲和性**。若写成 `NUMERIC`/`DECIMAL`/`UINT64`，亲和性会把看起来像数字的文本转成 INTEGER/REAL，大整数和高精度小数会被静默丢精度；名字里带 `TEXT` 才能保证按文本原样存储。读回时按声明名映射回逻辑类型，二次 diff 才收敛。`BOOLEAN` 用 0/1 存、`REAL`/`INTEGER` 用原生存储，不受影响。
+>
+> **MySQL `TIMESTAMP` 的范围是 1970–2038**：源数据超出范围时，`TimestampTZ` 映射到 MySQL 必须在预检阻断，不能静默截断。
+>
+> **这张表在 v2.0 范围内可逆**：同方言内，SQLite 的声明类型名由本工具写入、读取时按名映射；MySQL 的 `timestamp` 与 `datetime` 分别对应 TZ 与 naive。真正不可逆的是**跨方言**（例如 MySQL 的 `char(36)` 承载 UUID 与普通文本无法区分），所以 v2.0 不做跨方言数据同步。要做双向同步，必须先在 §7.1 引入"逻辑类型 + 映射族 + 读回判定"，见 ADR-008（待定）。
 
 - **Uint64 的特殊处理**：SQLite 的 `INTEGER` 是有符号 64 位，`uint64 > 2^63-1` 会被存成负数或溢出，因此 SQLite 侧用 `text` 存十进制串；SQL Server 用 `decimal(20,0)`。读取时按列类型解析回 `KindUint`，不要依赖数据库的隐式转换。
 - **MySQL `TIME`**：范围 `-838:59:59`–`838:59:59`，是时长而非时刻，映射到 `KindTime`（`Nanos int64`），不要按"当日纳秒"处理。
@@ -501,6 +509,8 @@ type Column struct {
 | 文本排序规则 | 只影响 DDL 生成，不影响数据值比较；`COLLATE` 差异按"可接受"提示 |
 | 浮点 NaN/-0 | 归一化后再比较，可能与某些库的位级差异不一致（不视为数据差异） |
 | 无时区时间 | 跨方言按墙上时间比较，不做时区推断 |
+| 计算列 / rowversion | **不参与数据比对与 DML**：值由数据库生成，两端必然不同；只在结构差异里报告定义 |
+| 数据库自动维护列 | 同上；若用户坚持同步，必须显式 `--include-generated` 并接受"每次都有差异" |
 
 ---
 
@@ -600,6 +610,7 @@ type EndpointRef struct {
 	Kind        string // snapshot/mssql/mysql/postgres/sqlite
 	Label       string // 用户可见的逻辑名
 	RedactedDSN string // 已脱敏
+	Identity    string // host:port/database 的 SHA-256（不含凭据），用于 apply 校验目标身份
 }
 
 type ObjectRef struct {
@@ -683,7 +694,7 @@ type Capabilities struct {
 | SQL Server | `sys.*` 目录视图 + `OBJECT_DEFINITION` 读对象；`datetime2` 精度；`datetimeoffset`；`timestamp` 是 rowversion；计算列 `is_computed`；`IDENTITY(seed,inc)` 必须读；`COLLATE Latin1_General_100_BIN2` 是码点序（BIN 不是） |
 | MySQL | `information_schema`；DDL 隐式提交；`utf8mb4_bin`/`utf8mb4_0900_bin`；`ON UPDATE CURRENT_TIMESTAMP`；`AUTO_INCREMENT`；唯一约束以索引形式存在（读取时要还原为约束语义） |
 | PostgreSQL | `pg_catalog`（`pg_attribute`/`pg_constraint`/`pg_index`）；`search_path` 决定 schema；`COLLATE "C"` 是字节序；`jsonb` 重排；分区表与继承需要显式排除；`SERIAL` 读成 identity |
-| SQLite | `pragma table_info/index_list/foreign_key_list`；类型是"亲和性"，按声明类型映射；**无真正 ALTER，改列要按官方 12 步重建表**（M2 实现）；`COLLATE BINARY`；无用户/权限概念。**连接级坑**：`PRAGMA foreign_keys=ON`/`busy_timeout` 是每连接设置，必须写进 DSN（`_pragma=...`）；`:memory:` 多连接会得到多个独立库，需 `file::memory:?cache=shared` + `MaxOpenConns(1)`；写并发用 WAL + busy_timeout |
+| SQLite | `pragma table_info/index_list/foreign_key_list`；类型是"亲和性"，按声明类型映射；**无真正 ALTER，改列要按官方 12 步重建表**（M2 实现）；`COLLATE BINARY`；无用户/权限概念。**连接级坑**：`PRAGMA foreign_keys=ON`/`busy_timeout` 是每连接设置，必须写进 DSN（`_pragma=...`）；`:memory:` 多连接会得到多个独立库，需 `file::memory:?cache=shared` + `MaxOpenConns(1)`；写并发用 WAL（`_pragma=journal_mode(WAL)`）+ busy_timeout；**SQLite 是单写者，`--parallel` 默认降为 1** |
 
 ### 9.3 连接、DSN 与凭据
 
@@ -691,20 +702,20 @@ type Capabilities struct {
 
 | endpoint 写法 | 驱动名 | 转换后的 DSN |
 | :--- | :--- | :--- |
-| `mssql://user:pass@host:1433/db?encrypt=true` | `sqlserver` | `sqlserver://user:pass@host:1433?database=db&encrypt=true`（URL 的 path 是**实例名**，不是 database） |
+| `mssql://user:pass@host:1433/db?encrypt=true` | `sqlserver` | `sqlserver://user:pass@host:1433?database=db&encrypt=true`（**本文 endpoint 的 path 是数据库名**；驱动自己的 URL path 是实例名，所以适配器必须改写成 `?database=`，不能原样透传） |
 | `mysql://user:pass@host:3306/db` | `mysql` | `user:pass@tcp(host:3306)/db?parseTime=true&loc=UTC&charset=utf8mb4` |
 | `postgres://user:pass@host:5432/db?sslmode=require` | `pgx` | 原样传给 `sql.Open("pgx", dsn)`（pgx 不注册 `postgres`） |
 | `sqlite:///path/to/file.db` | `sqlite` | `file:/path/to/file.db?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)` |
 
 每种转换必须有 `sql.Open + Ping + SELECT 1` 的集成测试；MySQL 不加 `parseTime=true&loc=UTC` 会拿到 `[]byte` 日期，直接把类型体系打乱。
 
-**每连接初始化**：`SET XACT_ABORT ON`（SQL Server）、`PRAGMA foreign_keys=ON`（SQLite）、`SET search_path`（PG）、`SET SESSION information_schema_stats_expiry=0`（MySQL）都是**连接级**设置，`db.Exec` 只影响池里一条连接。由 `Dialect.SessionInit()` 返回语句列表，打开 `*sql.Conn` 时逐条执行。
+**每连接初始化**：`SET XACT_ABORT ON`（SQL Server）、`PRAGMA foreign_keys=ON`（SQLite）、`SET search_path`（PG）、`SET SESSION information_schema_stats_expiry=0` 与 `SET time_zone='+00:00'`（MySQL）都是**连接级**设置，`db.Exec` 只影响池里一条连接。由 `Dialect.SessionInit()` 返回语句列表，打开 `*sql.Conn` 时逐条执行。
 
 **内省与执行都走 `*sql.Conn`**（不是 `*sql.DB`）：取连接 → 跑 `SessionInit` → 查询/执行 → 归还。否则池里不同连接的 `search_path`/`foreign_keys`/`XACT_ABORT` 可能不一致，元数据与写入行为会"看运气"。
 
 - 密码优先来自环境变量/文件，其次才允许出现在 DSN。
 - 所有日志与报告对 DSN 做**脱敏**（用户名保留、密码替换为 `***`），由 `logging.RedactDSN` 统一处理。
-- 连接池：每 endpoint 独立 `*sql.DB`；`SetMaxOpenConns(--max-conns)`（默认 8）、`SetMaxIdleConns` 与 max 相同，`SetConnMaxLifetime` 30 分钟。并发约束见 §18.1：**`--max-conns ≥ 2 × --parallel + 2`**（预留内省与进度）。
+- 连接池：每 endpoint 独立 `*sql.DB`；`SetMaxOpenConns(--max-conns)`（默认 8）、`SetMaxIdleConns` 与 max 相同，`SetConnMaxLifetime` 30 分钟。并发约束见 §18.1：**每 endpoint `--max-conns ≥ --parallel + 2`**（预留内省与进度）。
 
 ---
 
@@ -765,6 +776,8 @@ func ScanRows(ctx context.Context, rows *sql.Rows, cols []*model.Column, fn func
    **前提**：PostgreSQL/MySQL 的库编码必须是 UTF-8（连接与库两层都检查，非 UTF-8 直接报 `E_ENCODING`）；SQL Server 用 `nvarchar` + BIN2，不受默认排序规则影响。
 
    **代价**：在 `ORDER BY` 上临时 `COLLATE` 通常会让主键索引失效，数据库只能排序（SQL Server tempdb / MySQL filesort / PG sort / SQLite 临时 B-tree）。100 万行排序可能比"流式读 + 归并"本身更贵。因此 `--sort=db` 前先检查主键索引的 collation 是否已是二进制序；不是则报告"预计排序 N 行"，并建议 `--sort=external` 或建表达式索引。
+
+   **字符集限制**：SQL Server 的 `varchar` 主键按**代码页字节**排序，只有 Latin1 这类"字节序=码点序"的代码页才与 Go 的 UTF-8 字节序一致；CP936 等其他代码页可能不一致。文本主键优先用 `nvarchar`；非 Unicode 主键在预检里提示"可能退化为外排"，不要默认相信 BIN2。
 2. **单调性断言**：读取每一行时与上一行比较，必须严格递增（按 §6.5 的比较器）。一旦违反，立刻中止并返回 `E_ORDER`，附首个违例行，**绝不继续合并、绝不写出半份差异**。
 3. **回退**：`--sort=external` 时改为客户端外排（分块排序 + 归并临时文件），保证任意 collation 下正确；代价是磁盘 IO。默认 `--sort=db`：数据库排序 + 单调断言，**一旦断言失败就整次中止**并提示"改用 `--sort=external` 重跑"——不在流中途自动切换（差异集可能已写出，无法干净回退）。
 
@@ -780,7 +793,7 @@ func Merge(ctx context.Context, t *model.Table, src, tgt RowStream,
 // PK 是规范化主键元组。
 type PK []value.Value
 
-// RowStream 逐行给出主键、整行值与列哈希；hashes 由实现按"本次比对的列集"算好。
+// RowStream 逐行给出主键、整行值与列哈希；hashes 由实现按 diff 给定的规范列序算好。
 // 返回 io.EOF 表示结束；EOF 时 key/row/hashes 必须为零值。
 type RowStream interface {
 	Next(ctx context.Context) (key PK, row []value.Value, hashes []value.ColumnHash, err error)
@@ -803,7 +816,7 @@ type DeltaSink interface {
 }
 ```
 
-**为什么 `Merge` 要拿整表与列哈希**：只给 `key` 和 `row`，它无法知道"哪一列变了"，也就无法生成 `UPDATE 只改变化列`（评估 #1 的正面修复）。列哈希在 `RowStream.Next` 里算（同一份列集），`Merge` 只做比较；`DeltaSink.Update` 拿到 `ColumnChange{Old,New}`，可直接渲染 SET 与守卫。
+**为什么 `Merge` 要拿整表与列哈希**：只给 `key` 和 `row`，它无法知道"哪一列变了"，也就无法生成 `UPDATE 只改变化列`（评估 #1 的正面修复）。列哈希在 `RowStream.Next` 里算（按 diff 给定的规范列序），`Merge` 只做逐位比较；位置 `i` 对应哪个列由 `model.Table` 的规范列序决定。`DeltaSink.Update` 拿到 `ColumnChange{Old,New}`，可直接渲染 SET 与守卫。
 
 **EOF 约定**：`Next` 返回 `io.EOF` 时不得返回上一行的残留值；实现必须显式清零。`Close` 接受 `ctx`，取消时能尽快释放连接。
 
@@ -893,11 +906,11 @@ CHECKSUMS.txt
 
 ### 11.5 写入与读取
 
-- 写入：先写临时文件 `<name>.dbsync.tmp`，完成后 `os.Rename` 原子替换；中途失败清理临时文件。
+- 写入：先写临时文件 `<name>.dbsync.tmp`，完成后 `os.Rename` 原子替换；中途失败清理临时文件。**ZIP 条目的修改时间固定为 1980-01-01**，否则明文快照无法做到 N5 的字节级可复现。
 - **写出顺序**：有主键的表必须按 §10.4 的二进制主键序写出（`OrderByPK`；方言做不到时客户端排序），否则读取端归并会错配；无主键表不要求顺序（摘要可交换），按读取顺序写出即可。
 - **写出时校验**：每写一行就与上一行比较，违反严格递增立即中止、删除临时文件并报 `E_ORDER`。不允许"写出坏包、读取端才发现"。
 - 读取：流式逐行；`hasData=false` 时跳过 `data/` 条目，并把该表标为"不可数据比对"。有主键的表在读取时同样做**严格递增断言**，不满足返回 `E_SNAPSHOT_ORDER`。
-- 摘要：写完每表后计算 `TableDigest` 写入 manifest；`snapshot verify` 重新计算并比对。
+- **摘要**：写完每表后用 `Digest` 逐行累加（只覆盖可比较列）写入 manifest；`snapshot verify` 重新计算并比对。
 - 限制：单条目解压后 ≤ 8 GiB、总条目 ≤ 10000、路径必须是相对路径且不含 `..`（防 Zip Slip）。**不要只信 ZIP 头里的 `UncompressedSize64`**（可伪造）：解压时用 `io.LimitReader` 逐块计数，超限立即中止；Go 1.20+ 可用 `zip.Reader` 的 `ErrInsecurePath` 辅助拦截绝对路径。
 - **临时明文**：仅在不可 seek 的输入（stdin/管道）上落盘。`--temp-dir` 应指向受控目录；Unix 用 `0600`，**Windows 的 `0600` 不产生 ACL**，不要把它当安全边界（§19.3）。崩溃残留按 `.dbsync-dec-*` 前缀在下次启动时清理。
 
@@ -908,7 +921,7 @@ CHECKSUMS.txt
 ### 12.1 结构比对
 
 1. 表按 `FullName` 配对。`--ignore-schema-prefix` 时按 `Name` 配对；若同端出现同名不同 schema 的表，**必须报 `E_AMBIGUOUS_TABLE`** 并列出候选，不能用"保留首个"糊过去（原版 #6 的教训）。需要跨 schema 合并时用显式 `--schema-map from=to`。
-2. 列按名称配对：先精确，再按 `--case-insensitive` 忽略大小写；同端"仅大小写不同"的多列必须各自保留并可区分。
+2. 列按名称配对：默认**精确**（区分大小写）；`--case-insensitive` 时先精确、再忽略大小写匹配。同端"仅大小写不同"的多列必须各自保留并可区分，不能合并。**不要按数据库排序规则自动切换**——排序规则只影响排序，不决定"两个名字是不是同一列"。
 3. 索引、约束、对象同理；全部输出按 `FullName` 稳定排序。
 
 ### 12.2 类型等价三层
@@ -937,6 +950,13 @@ CHECKSUMS.txt
 
 **前置条件**：两端该表都 `hasData=true`（§11.5）。否则不比对数据，并给出 `E_NO_DATA_SIDE` 诊断——**绝不能把"缺失数据"解释成"源端没有行"**（否则会把 target 全表删空）。
 
+**主键不一致的表不走归并**：只要两端主键的列集合或顺序不同（含一侧完全没有主键），行级配对就失去意义，也无法在旧主键上安全地 UPDATE/INSERT。
+
+- **要求数据同步时默认阻断**（`E_PK_CHANGED`）：让用户显式二选一——`--data=none` 只改结构，或 `--allow-destructive` 做整表替换；
+- `--data=none`：只生成主键/列的 DDL，不动数据；主键变更作为普通 DDL 在阶段 3 执行（先删旧约束、再建新约束），不需要整表清空；
+- `--allow-destructive`：按**整表替换**处理——阶段 2 清空该表、阶段 3 重建主键/删除旧列、阶段 4 全量插入；
+- 禁止"先按旧主键更新、再改主键"的混搭路径，那种顺序在旧主键约束下必然冲突。
+
 ```
 common := 列名交集(source.columns, target.columns)
 for each table with PK and hasData on both sides:
@@ -946,7 +966,7 @@ for each table with PK and hasData on both sides:
         src < tgt  → Insert(整行，含 identity 列)
         src > tgt  → Delete(tgt.pk)
         src == tgt →
-            changed := common 列中列哈希不同者
+            changed := 共有列中列哈希不同者（按规范列序逐位）
             changed += source 独有列中"值 != 列默认值"者
             if len(changed) > 0 → Update(pk, changed)
             else                → no-op（绝不生成空 SET）
@@ -954,13 +974,14 @@ for each table with PK and hasData on both sides:
 
 规则：
 
-- **行哈希只覆盖共有列**（§6.4）；因此物理列序不同、列集不同都不会制造假变更。
+- **行哈希只覆盖共有列，且按 source 的共有列顺序逐位比较**（§6.4）；因此物理列序、列名大小写都不会制造假变更。
 - **源端独有列**（本次新增）由阶段 3 先加列（可空或有默认），数据阶段回填非默认值；值等于默认值时不需要 UPDATE。
-- **目标端独有列**（将被删除）不参与比较，值随阶段 5 `DROP COLUMN` 消失。
+- **目标端独有列**（将被删除）不参与比较，值随阶段 3 `DROP COLUMN` 消失。
 - **`changed` 为空时跳过**；生成器层再加一次断言（`SET` 为空直接报错，而不是输出非法 SQL）。这是评估 #1 的双保险。
-- **Insert 写入整行，包含自增/identity 列**——否则目标库重新分配主键，插入行的 PK 与源库不同，外键全部错位，下一轮 diff 会变成"删+插"，"执行后再比对 = 无差异"永远不成立。方言处理见 §13.4。
+- **不参与数据比对的列**：计算列（computed/generated）、SQL Server 的 `rowversion`/`timestamp` 版本列、以及数据库自动维护的列。它们由数据库生成，两端必然不同；参与比对会造成"永远有差异、永远在更新"。这些列也不出现在 INSERT/UPDATE 的列清单里。
+- **Insert 写入整行，包含自增/identity 列**——否则目标库重新分配主键，插入行的 PK 与源库不同，外键全部错位，下一轮 diff 会变成"删+插"，"执行后再比对 = 无差异"永远不成立。方言处理见 §13.4。计算列不写。
 - `--exclude-identity` 只用于"故意重建数据"的场景；开启时强制告警，并在报告里标注"主键可能被重排"。
-- Update 只 SET 变化列；`--optimistic` 追加 `AND col = 旧值` 守卫（NULL 用 `IS NULL`，不能写 `= NULL`）。
+- Update 只 SET 变化列；`--optimistic` 追加 `AND col = 旧值` 守卫（NULL 用 `IS NULL`，不能写 `= NULL`）。**必须检查 `RowsAffected`**：为 0 说明该行在 diff 之后被改过，按 `--on-conflict=abort|skip`（默认 `abort`）处理，不能静默当作成功。**新增列不参与守卫**（target 没有旧值），只对原有列生效。
 - Delete 只带主键。
 - 差异集按 `(table, pk)` 排序输出，保证确定性。
 
@@ -971,8 +992,8 @@ for each table with PK and hasData on both sides:
 | 情况 | 规则 |
 | :--- | :--- |
 | 共有列 | 正常比较列哈希 |
-| 源端独有列（新增） | 先看值是否等于该列默认值：等于则不产生变更；不等于则加入 `changed`（回填）。默认值不是字面量（如 `GETDATE()`）时**一律回填**，宁多写不猜 |
-| 目标端独有列（删除） | 忽略；不参与行哈希，不产生 UPDATE |
+| 源端独有列（新增） | 先看值是否等于该列默认值：等于则不产生变更；不等于则加入 `changed`（回填）。默认值不是字面量（如 `GETDATE()`）时**一律回填**，宁多写不猜。**值为 NULL 且列可空时视为默认，不回填**，避免整表空更新 |
+| 目标端独有列（删除） | 忽略；不参与行哈希，不产生 UPDATE；**阶段 3 删列**（必须在 INSERT 之前，否则旧的 NOT NULL 列会挡住插入） |
 | 共有列为空 | 该表跳过数据比对，报 `E_NO_COMMON_COLUMNS`（只做结构变更） |
 | 类型不可比（§12.2 阻断级） | 数据比对阶段直接阻断，不允许"先转再看看" |
 
@@ -1056,15 +1077,16 @@ renames:
 | 0 preflight | 只读检查 | 阻断项不通过则整体失败，不生成可执行计划 |
 | 1 drop dependents | 删除**参与数据变更或阻塞结构变更**的外键与唯一索引；视图按 §13.1.1 | 精确选取：只动受影响的表，不搞全库删除 |
 | 2 data-cleanup | DELETE（target 独有行） | 先删，避免后续加约束/改键时被历史数据卡住 |
-| 3 schema-additive | CREATE TABLE、ADD COLUMN（**先按可空加**）、放宽类型/可空性 | 只做"不会因现有数据失败"的变更；NOT NULL 收紧留到阶段 5 |
-| 4 data-load | INSERT / UPDATE | 此时表结构已能容纳新数据 |
-| 5 schema-finalize | PK/UNIQUE/CHECK/索引/FK、DROP COLUMN、收窄类型 | 数据已对齐，唯一性与外键在最后统一校验 |
-| 6 objects | 视图/过程/函数/触发器/序列 | 先重建阶段 1 摘下的依赖对象，再应用对象差异 |
+| 3 schema-additive | CREATE TABLE、ADD COLUMN（**先按可空加**）、放宽类型/可空性；**DROP target 独有的表/列**（破坏性） | 目标独有的列必须在装载前删掉，否则带 NOT NULL 的旧列会让 INSERT 失败；NOT NULL 收紧留到阶段 5 |
+| 4 data-load | INSERT / UPDATE | 此时表结构已能容纳新数据，且不再有"只属于 target"的列挡路 |
+| 5 schema-finalize | UNIQUE/CHECK/索引/FK、收窄类型、**自增计数器重设** | 主键变更走阶段 3 的整表替换路径，不在此阶段；数据已对齐，唯一性与外键在最后统一校验 |
+| 6 objects | 视图/过程/函数/触发器/序列 | 先按 source 定义重建阶段 1 摘下的对象，再应用对象差异 |
 | 7 verify | 可选：执行后自检 | `--verify` 时再跑一次 diff |
 
 这样排的原因：
 - **删除先于加约束**：否则 target 里的历史重复行/孤儿行会让新唯一键或外键直接失败；
-- **收窄与改主键放在数据之后**：UPDATE 需要按旧主键定位，收窄需要数据已经符合 source；
+- **目标独有列在装载前删除**：INSERT 只写 source 的列，target 独有的 NOT NULL 列（无默认值）会让插入直接失败；删列是破坏性操作，需 `--allow-destructive`；
+- **收窄放在数据之后**：数据先按 source 值装载，再收紧类型；主键变更不走"先更新再改键"的路径，而是整表替换（阶段 2 清空、阶段 3 重建主键）；
 - **索引放最后**：避免边写边维护索引；大表可用 `--index-early` 提前建（代价是唯一冲突更早暴露）。
 
 #### 13.1.1 外键、唯一索引与视图的处理（否则数据阶段必然失败）
@@ -1074,14 +1096,22 @@ renames:
 | 外键 | 凡是**本计划要改数据或改结构**的表，其相关外键在阶段 1 统一删除，阶段 5 重建。只靠"仅删受阻的"不够：阶段 2 删行与阶段 4 插行同时存在时，父/子顺序不存在单一解（评估文档未覆盖这一点） |
 | 唯一索引/唯一约束 | 对**有数据变更**的表，阶段 1 删除、阶段 5 重建。否则"两行交换唯一值"（A→B、B→A）必然中途冲突；`--index-early` 不改变这条规则 |
 | 普通索引 | 默认保留（写入变慢但省一次重建）；`--rebuild-indexes` 时随唯一索引一起重建 |
-| 视图 | 默认**不删**。若某变更被依赖视图阻塞，预检报 `E_VIEW_BLOCK` 并给出视图清单；只有显式 `--recreate-views` 才在阶段 1 摘下、阶段 6 **无条件重建全部被摘下的视图**（包括自身无差异的），再应用视图差异 |
+| 视图 | 默认**不删**。若某变更被依赖视图阻塞，预检报 `E_VIEW_BLOCK` 并给出视图清单；只有显式 `--recreate-views` 才在阶段 1 摘下、阶段 6 按 **source 的定义**重建。**source 中已不存在的视图不要重建**——它本来就该被删除 |
 | 触发器 | 默认保留；`--disable-triggers` 时按方言禁用/启用，避免数据装载期间重复写入审计表 |
 
-**关键**：阶段 1 必须记录 `droppedForDependency{kind, fullName, definition}`。阶段 5/6 先按这份清单重建，再处理"真正的差异对象"——否则"因为列变更被摘下、但自身没差异"的视图会永久消失。
+**关键**：阶段 1 必须记录 `droppedForDependency{kind, fullName, targetDefinition, existsInSource}`。阶段 6 的重建规则：
 
-> **代价要如实说**：摘掉唯一索引/外键的窗口期内，数据库不再强制这些约束。工具依赖"source 是可信的、target 无并发写入"这两个前提；生产库应在维护窗口执行，或至少确认没有并发写入。计划头部会打印这段警告。
+1. `existsInSource=true` → 用 **source 的定义**重建（不是 target 的旧定义，否则可能引用已删的列）；
+2. `existsInSource=false` → 不重建，按"目标独有对象"删除并报告；
+3. 多个视图互相依赖时按视图依赖拓扑序重建，环内视图报 `E_VIEW_CYCLE` 由人工处理。
+
+否则"因为列变更被摘下、但自身没差异"的视图会永久消失，或者被重建出一个编译不过的旧定义。
+
+> **代价要如实说**：摘掉唯一索引/外键的窗口期内，数据库不再强制这些约束。工具依赖"source 是可信的、target 无并发写入"这两个前提；生产库应在维护窗口执行，或至少确认没有并发写入。计划头部会打印这段警告。**MySQL 的阶段 1 不可回滚**：DDL 一旦执行就生效，若后续阶段失败，恢复索引/外键需要重新执行计划或人工修复——`plan.sql` 会附带一段"恢复被删约束"的备注。
 
 **环与自引用外键**：依赖图做 SCC 分解；同一 SCC 内的外键**统一挪到阶段 5**（先建表、后加约束），绝不会像原版那样把环内表从排序结果里丢掉（#11）。同一 SCC 内按 `FullName` 排序建表，保证输出稳定（N5）。
+
+**整表替换路径**（主键变更或一侧无主键）：阶段 2 清空、阶段 3 重建主键/列、阶段 4 全量插入。它绕开"旧主键定位"与"新主键唯一"的矛盾，代价是全表重写；必须 `--allow-destructive`，且报告里标明"该表不可增量"。清空用 `DELETE`，不用 `TRUNCATE`——MySQL 的 `TRUNCATE` 隐式提交，会破坏阶段事务。
 
 ### 13.2 依赖图
 
@@ -1094,25 +1124,32 @@ func (g *Graph) SCC() [][]NodeID
 
 - 节点：表、约束、索引、对象；
 - 边：外键依赖、视图→表、视图→视图、触发器→表、过程/函数→表、索引→列；
+- **依赖边来源**：优先读目录（SQL Server `sys.sql_expression_dependencies`、PostgreSQL `pg_depend`、SQLite `sqlite_master` 的 SQL 文本）；MySQL 没有等价目录，只能对 `VIEWS.VIEW_DEFINITION` 做受限解析。解析失败时**降级为"未知依赖"并告警**，不要假设无依赖，更不要静默跳过。
 - 拓扑序用于阶段 1/3/6 内部排序；SCC 内的边不参与拓扑，转阶段 5。
+- **阶段 3 内部顺序**：先按**逆拓扑**删表/删列（子先父后），再按**正拓扑**建表/加列（父先子后）；同一阶段里同时有删除与创建时，不能用一个方向套到底。
 - **数据阶段的表序**：阶段 2（删）按拓扑逆序（子先父后），阶段 4（插/改）按拓扑正序（父先子后）；同一 SCC 内串行。外键已在阶段 1 删除，这个顺序是为了减少死锁与临时不一致，而不是满足约束。
 
 ### 13.3 预检项（全部先红后绿）
 
 | 检查 | 阻断条件 | 修复建议 |
 | :--- | :--- | :--- |
-| 破坏性操作 | 存在 DROP TABLE/COLUMN、收窄类型，且未给 `--allow-destructive` | 显式开启；报告列出全部破坏项 |
+| 破坏性操作 | 存在 DROP TABLE/COLUMN、收窄类型、整表替换，且未给 `--allow-destructive` | 显式开启；报告列出全部破坏项 |
 | 依赖视图阻塞 | 变更被视图引用，且未给 `--recreate-views` | 开启重建，或先手工改视图 |
-| NOT NULL 收紧 | **已存在列**在 target 有 NULL 行（精确）；新增列由阶段 4 回填后、阶段 5 再校验 | 先回填或改为可空 |
-| 类型收窄 | 存在超长/超精度/不可转换值（**精确**） | 清洗或放宽 |
+| NOT NULL 收紧 | **最终保留的数据**存在 NULL：同步表看 source，未同步表看 target | 先回填或改为可空 |
+| 类型收窄 | **最终保留的数据**有超长/超精度/不可转换值（同步表看 source，未同步表看 target） | 清洗或放宽 |
 | 删列 | 列被视图/过程/索引/约束引用 | 先删依赖或 `--recreate-views` |
-| 改主键 | 有外键引用旧主键 | 阶段 1 自动列入删除清单（并告警） |
-| 唯一约束/索引 | **最终**数据有重复（**精确**） | 去重或改用普通索引 |
-| CHECK 约束 | **最终**数据不满足表达式（**精确**） | 清洗数据，或先以 `NOT VALID`/`WITH NOCHECK` 方式添加 |
+| 改主键 | 主键列集合/顺序在两端不同且要求数据同步 | `--data=none`（只改结构）或 `--allow-destructive`（整表替换）；引用旧主键的外键在阶段 1 删除 |
+| 不安全主键类型 | 主键含浮点/JSON/XML/无二进制序的文本 | 阻断或要求 `--sort=external` + 人工确认 |
+| 唯一约束/索引 | **最终数据**有重复（同步表看 source，未同步表看 target） | 去重或改用普通索引 |
+| CHECK 约束 | **最终数据**不满足表达式（同步表看 source，未同步表看 target） | 清洗数据，或先以 `NOT VALID`/`WITH NOCHECK` 方式添加 |
+| 外键约束 | **最终数据**有孤儿行（同步表看 source，未同步表看 target） | 先补父行或清理子行 |
 | 删除表 | 有外键/视图引用 | 阻断，需 `--allow-destructive` |
 | 改名候选 | 启发式命中但未确认 | 提示，需 `--renames` 确认 |
+| MySQL 时间范围 | `TimestampTZ` 值早于 1970 或晚于 2038 | 改用 `datetime` 并明确语义，或阻断 |
 
-**精确 vs 采样**：上表标"精确"的检查必须用走索引的 `EXISTS` 查询（`SELECT 1 FROM t WHERE … LIMIT 1` / `TOP 1`），**不允许采样**——采样假阴性会让阶段 3/5 直接失败。只有"预计影响行数"这类展示信息允许采样，且采样结果不得参与阻断判定。
+**精确 vs 采样**：上表的检查必须用走索引的 `EXISTS` 查询（`SELECT 1 FROM t WHERE … LIMIT 1` / `TOP 1`），**不允许采样**——采样假阴性会让阶段 3/5 直接失败。只有"预计影响行数"这类展示信息允许采样，且采样结果不得参与阻断判定。
+
+**检查对象**：预检判断的是"**最终状态**"是否满足约束，不是"当前 target"。同步数据的表最终数据 = source，所以查 source；`--data=none`、无主键跳过、主键不一致阻断的表最终数据 = target 现值，所以查 target。把两者搞反会造成两种错误：用 target 查会把"source 已经修好 NULL、只是还没 apply"误判为阻断；用 source 查会漏掉不参与同步的表。
 
 预检 SQL 全部只读；大表用索引列（主键/唯一键）构造查询，避免全表扫描。
 
@@ -1120,9 +1157,10 @@ func (g *Graph) SCC() [][]NodeID
 
 - **幂等**：`IF NOT EXISTS` / `IF EXISTS` / `CREATE OR REPLACE`（按方言能力）；`--no-idempotent` 可关，但默认开。
 - **类型化字面量**：数值不带引号；文本 `N'…'`（SQL Server）/`'…'`；二进制 `0x…`；时间显式 `CAST('…' AS datetime2(7))`；布尔按方言 `1/0` 或 `TRUE/FALSE`；NULL 显式 `NULL`（原版 #7）。
+- **建表只带列与主键**：新表的 `CREATE TABLE` 只输出列定义与主键；`UNIQUE`/`CHECK`/索引/外键统一在阶段 5 创建，避免与"阶段 1 摘下、阶段 5 重建"的清单重复。
 - **标识符**：一律 `Quote`；大小写按方言规则折叠后再输出。
 - **语句分组**：每条语句一个 `Statement{SQL, Object, Destructive, Reversible}`，便于执行器逐句进度与回滚。
-- **批大小**：INSERT 多值 `--batch=500`（按行宽自适应，单语句 ≤ 1 MB）；MySQL `max_allowed_packet` 预检。
+- **批大小**：INSERT 多值 `--batch=500`（按行宽与**参数个数**自适应：SQLite 的参数上限远低于行数×列数，按 ≤30000 个参数切分；单语句 ≤ 1 MB）；MySQL `max_allowed_packet` 预检。
 - **事务**：按能力矩阵输出 `BEGIN/COMMIT`；**MySQL 的 DDL 阶段不要输出 `BEGIN/COMMIT`**（DDL 隐式提交，包了只会误导），改为在脚本头部写显式警告："DDL 隐式提交，本段不可回滚"（原版 #18/#40）。DML 阶段仍可用事务。
 - **自增列**：数据装载必须写入原值，否则主键重排、外键错位。按方言生成：
   - SQL Server：`SET IDENTITY_INSERT <t> ON;` … `OFF;`（同一会话、每条语句成对出现）；
@@ -1130,6 +1168,7 @@ func (g *Graph) SCC() [][]NodeID
   - MySQL：显式值即可，`AUTO_INCREMENT` 计数器会自动上调；
   - SQLite：显式 rowid/主键即可，`AUTOINCREMENT` 的 `sqlite_sequence` 会自动上调。
   `--exclude-identity` 仅用于重建数据，开启时告警。
+- **自增计数器重设**（阶段 5 必做）：SQL Server 的 `IDENTITY_INSERT` **不会**更新当前种子，必须 `DBCC CHECKIDENT ('t', RESEED, <max>)`；PostgreSQL 的 identity/sequence 要 `setval`；MySQL/SQLite 会随显式插入自动上调。漏掉这一步，同步后第一次自动插入就会撞主键。
 - **回滚脚本**：只为可逆操作生成（CREATE→DROP、ADD COLUMN→DROP COLUMN、INSERT→按主键 DELETE）；不可逆操作在脚本里用注释标明，**不再伪造 `RolledBack` 标志**。
 
 ### 13.5 Plan 的机器格式
@@ -1159,8 +1198,16 @@ type Step struct {
 
 // PlanState 是执行状态文件（plan.json.state），与 plan.json 分开存放。
 type PlanState struct {
-	PlanHash  string   `json:"planHash"` // plan.json 内容的 SHA-256，防止状态文件被挪用到别的计划
-	Completed []string `json:"completed"` // 已完成的 Step.ID
+	PlanHash string       `json:"planHash"` // plan.json 内容的 SHA-256，防止状态文件被挪用到别的计划
+	Records  []StepRecord `json:"records"`
+}
+
+type StepRecord struct {
+	ID        string    `json:"id"`
+	Status    string    `json:"status"` // started / completed / failed
+	StartedAt time.Time `json:"startedAt"`
+	EndedAt   time.Time `json:"endedAt,omitempty"`
+	Rows      int64     `json:"rows,omitempty"`
 }
 ```
 
@@ -1195,6 +1242,7 @@ PRAGMA foreign_keys=ON;               -- defer 保证异常时也恢复
 
 - 临时表名加固定前缀 + 随机后缀，预检冲突；
 - **必须逐条 `ExecContext`**：`modernc.org/sqlite` 的多语句 `Exec` 只 prepare 第一条，其余会被静默丢弃（不报错）。12 步拆成 10 次以上的独立调用；
+- **重建清单去重**：重建表时旧表的索引/触发器会随 `DROP TABLE` 消失，必须在该 Step 内重建；计划生成时要把这些对象从阶段 5 的"新建清单"里扣除，否则会重复创建。
 - `PRAGMA foreign_keys` 在事务内是 no-op：关闭要在 `BEGIN` 之前，恢复要在 `COMMIT` 之后，并用 `defer` 保证异常时也恢复；`foreign_key_check` 在提交前执行；
 - 视图引用在 `RENAME` 时由 SQLite 自动更新（3.25+），但仍按 §13.1.1 先摘后建，避免依赖差异；
 - **验收**：`TestSQLiteRebuild`——重建前后行数、行哈希、索引、触发器、外键全部保真，且 `PRAGMA foreign_key_check` 为空。
@@ -1228,10 +1276,12 @@ load plan.json
 
 - **计划完整性**：`PlanHash` 覆盖整个 `plan.json`，apply 时重算；被人手改过的计划直接拒绝。
 - **权限**：预检只读；执行需要 DDL/DML 权限。缺权限在连接自检阶段就报错，不等到中途。
-- **目标指纹**：`TargetFingerprint` 是目标规范化 IR 的 SHA-256（§13.5），执行前重算；不一致说明"生成后目标被改"，拒绝执行。
+- **目标身份**：`apply` 先计算 `--target` 的 `Identity`（host:port/database 的哈希），与 plan 中记录的目标身份比对；不一致直接拒绝——防止"计划在测试库生成、误对生产库执行"。
+- **目标指纹**：`TargetFingerprint` 是目标规范化 IR 的 SHA-256（§13.5），执行前重算；不一致说明"生成后目标被改"，拒绝执行。**它只覆盖结构，不覆盖数据**——plan 生成后 target 的数据可能已变，工具不做数据版本校验；生产执行应在维护窗口，`--optimistic` 只保护 UPDATE 的逐行覆盖，不保护 INSERT/DELETE。
 - **`--verify` 必须同时给 `--source`**：plan.json 只存脱敏 DSN，不能凭它连接源端；`apply --verify` 缺少 `--source` 时直接报用法错误（退出码 2）。
-- **`--resume`**：读 `plan.json.state`，跳过 `Completed` 里的 step；没有状态文件则从头开始。状态文件与计划用 `PlanHash` 绑定，防止拿错计划。
+- **`--resume`**：读 `plan.json.state`，只跳过 `completed` 的 step；遇到 `started`（上次中断在语句中间）**默认拒绝续跑**，要求 `--force-resume` 或人工确认——尤其 MySQL DDL 已隐式提交时，无法判断该 step 生效了几条。状态文件与计划用 `PlanHash` 绑定，防止拿错计划。
 - **取消**：Ctrl-C 取消当前阶段；可回滚方言回滚当前事务，MySQL 记录已完成 step 并提示"DDL 已生效、不可回滚"。
+- **不是跨阶段原子**：每个阶段单独提交。第 5 阶段失败时，前 4 阶段已生效（数据已装载、约束未建）；修复后用 `--resume` 续跑，或用 `--rollback-out` 的反向脚本人工回退。报告必须明确写出"已完成阶段"。
 - **进度**：`progress.Event{Phase, StepID, Done, Total, Rows, Elapsed}`，CLI 渲染成一行，GUI 订阅同一事件。
 
 ### 14.3 读一致性
@@ -1246,6 +1296,8 @@ diff 必须读"某一时刻的两端"，否则并发写入会让结果不可复�
 | SQLite | 单连接读事务（`BEGIN`），保证读到一致快照 |
 
 多表并行时，每个表一个只读事务/连接；`--sort=external` 重跑时**重新开事务**，并记录两次读取的时间戳差异（数据可能已变，报告注明）。
+
+`snapshot create` 同样需要一致性读：整个导出应在一个只读事务/快照内完成（SQL Server SNAPSHOT、PG REPEATABLE READ、MySQL CONSISTENT SNAPSHOT、SQLite 读事务），否则不同表可能来自不同时刻。代价是长事务占用 undo/版本存储；`--snapshot-window` 控制超时，超时中止并提示。单表导出也至少保证该表在一个读事务内读完。
 
 ### 14.4 取消与失败清理
 
@@ -1275,7 +1327,7 @@ snapshot://./baseline.dbsync?pass_env=DBSYNC_SNAPSHOT_PASS
 
 也支持 `--source-env DBSYNC_SOURCE_DSN` / `--target-env DBSYNC_TARGET_DSN`，避免 DSN 进 shell history。快照口令也可写在 query 里（`pass_env=NAME`，NAME 是环境变量名），与 `--pass-env` 等价。
 
-**数据选择**：`--data=auto|all|none`（默认 auto：有主键且启用的表才比对数据）；`--schema-only` 等价于 `--data=none`。
+**数据选择**：`--data=auto|all|none`（默认 auto：所有启用的表都比对；无主键表走多重集，`--no-pk-strategy=skip` 时只报告不生成 DML）；`--schema-only` 等价于 `--data=none`。
 
 ### 15.2 命令
 
@@ -1307,7 +1359,7 @@ snapshot://./baseline.dbsync?pass_env=DBSYNC_SNAPSHOT_PASS
 | `--temp-dir` | 系统临时目录 | 加密快照解密与落盘位置 |
 | `--no-color` | false | 关闭彩色输出 |
 
-**命令级参数**（不属于全局）：`--optimistic`（diff/plan，UPDATE 守卫）、`--batch`（plan/emit，批量行数，默认 500）、`--recreate-views`（plan/apply）、`--schema-map`（diff/plan）、`--log-rows`（调试）、`--rows`（diff 报告）、`--case-insensitive` / `--ignore-schema-prefix` / `--ignore` / `--ignore-whitespace`（diff/plan 比较选项）、`--allow-unknown-types`、`--index-early`、`--rebuild-indexes`、`--disable-triggers`、`--no-pk-strategy`、`--exclude-identity`、`--no-idempotent`（plan）、`--with-count`（snapshot create / schema）、`--source-env` / `--target-env`（任何需要 endpoint 的命令）。
+**命令级参数**（不属于全局）：`--optimistic`（diff/plan）、`--on-conflict`（apply）、`--batch`（plan/emit，默认 500）、`--recreate-views`（plan/apply）、`--schema-map`（diff/plan）、`--log-rows`（调试）、`--rows`（diff）、`--case-insensitive` / `--ignore-schema-prefix` / `--ignore` / `--ignore-whitespace` / `--include-generated`（diff/plan 比较选项）、`--allow-unknown-types`、`--index-early`、`--rebuild-indexes`、`--disable-triggers`、`--no-pk-strategy`、`--exclude-identity`、`--no-idempotent`（plan）、`--with-count` / `--snapshot-window`（snapshot create）、`--source-env` / `--target-env`（任何需要 endpoint 的命令）。
 
 ### 15.3 退出码
 
@@ -1450,7 +1502,7 @@ JSON 结构（节选）：
 
 ### 18.1 并发模型
 
-- 表级并行：`--parallel`（默认 `min(GOMAXPROCS, 4)`）；每张表两个流（source/target）各占一个连接，因此必须满足 **`--max-conns ≥ 2 × --parallel + 2`**（+2 留给内省与元数据查询），不足时自动降并发并告警。
+- 表级并行：`--parallel`（默认 `min(GOMAXPROCS, 4)`）；每张表在**每个 endpoint** 各占一个连接，因此单 endpoint 的连接上限应满足 **`--max-conns ≥ --parallel + 2`**（+2 留给内省与元数据查询），不足时自动降并发并告警。
 - 端点连接上限：`--max-conns`（默认 8），超出排队；避免把生产库打满。
 - 顺序：结果按表名排序收集（worker 带序号，主协程按序 flush），保证确定性。
 - 取消：`signal.NotifyContext` 捕获 Ctrl-C，先取消查询再关连接。
@@ -1562,6 +1614,7 @@ docker compose 起 `mcr.microsoft.com/mssql/server:2022-latest`、`mysql:8.4`、
 | `TestLocaleIndependence` | 三种 locale 下编码字节一致 |
 | `TestOrderViolationFailsLoud` | 乱序输入返回 `E_ORDER`，不产出差异 |
 | `TestRenameKeepsData` | 改名前后行哈希不变，二次 diff 为空 |
+| `TestPkChangeRequiresReplace` | 主键变化默认跳过数据并报 `E_PK_CHANGED`；`--allow-destructive` 时走整表替换 |
 | `TestSQLiteRebuild` | 重建前后数据/索引/触发器/外键保真，`foreign_key_check` 为空 |
 
 ### 20.4 运行方式
@@ -1667,6 +1720,7 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 | SQLite 改列需重建表 | 实现复杂、易丢数据 | M2 明确"重建表"路径与回滚脚本 |
 | Wails 依赖 WebView2 | 老内网机不可用 | 安装包检测 + 引导；CLI 不受影响 |
 | 单人维护 | 工期与质量 | M0 坏例集 + 自动化矩阵，降低"人肉记忆" |
+| 序列当前值不同步 | 同步后自增值可能冲突或跳号 | 文档明确边界；identity 表用 §13.4 的 reseed，独立 sequence 手工处理 |
 
 ### 23.2 开放问题（M0 关闭）
 
@@ -1767,20 +1821,20 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 
 | 规范 | SQL Server | MySQL | PostgreSQL | SQLite | 备注 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| Bool | `bit` | `tinyint(1)` | `boolean` | `integer` | SQLite 用 0/1 |
-| Int(8/16/32/64) | `tinyint/smallint/int/bigint` | `tinyint/smallint/int/bigint` | `smallint/integer/bigint` | `integer` | SQLite 无宽度 |
-| Uint(8/16/32/64) | `tinyint/smallint/int/decimal(20,0)` | `tinyint unsigned/.../bigint unsigned` | `numeric(20,0)` | `text` | SQL Server 无无符号；SQLite `INTEGER` 是有符号 64 位，存不下 uint64 |
-| Decimal(p,s) | `decimal(p,s)` | `decimal(p,s)` | `numeric(p,s)` | `numeric` | p≤38（SQL Server）、p≤65（MySQL） |
-| Float(32/64) | `real/float` | `float/double` | `real/double precision` | `real` | |
-| Text(n/-1) | `nvarchar(n)/nvarchar(max)` | `varchar(n)/longtext` | `varchar(n)/text` | `text` | `nvarchar`=UTF16 |
-| Binary(n/-1) | `varbinary(n)/varbinary(max)` | `varbinary(n)/longblob` | `bytea` | `blob` | |
-| Date | `date` | `date` | `date` | `text` | |
-| Time | `time(7)` | `time(6)` | `time` | `text` | |
-| Timestamp | `datetime2(7)` | `datetime(6)` | `timestamp` | `text` | 无时区 |
-| TimestampTZ | `datetimeoffset(7)` | `datetime(6)`（UTC 约定） | `timestamptz` | `text` | MySQL 无真正 TZ 类型 |
-| UUID | `uniqueidentifier` | `char(36)` | `uuid` | `text` | |
-| JSON | `nvarchar(max)` | `json` | `jsonb` | `text` | SQL Server 需 `ISJSON` 检查 |
-| XML | `xml` | —（报不支持） | `xml` | `text` | |
+| Bool | `bit` | `tinyint(1)` | `boolean` | `BOOLEAN` | SQLite 用 0/1 存 |
+| Int(8/16/32/64) | `tinyint/smallint/int/bigint` | `tinyint/smallint/int/bigint` | `smallint/integer/bigint` | `INTEGER` | SQLite 无宽度 |
+| Uint(8/16/32/64) | `tinyint/smallint/int/decimal(20,0)` | `tinyint unsigned/.../bigint unsigned` | `numeric(20,0)` | `UINT64_TEXT` | SQL Server 无无符号；SQLite `INTEGER` 有符号 64 位，存不下 uint64 |
+| Decimal(p,s) | `decimal(p,s)` | `decimal(p,s)` | `numeric(p,s)` | `DECIMAL_TEXT` | p≤38（SQL Server）、p≤65（MySQL）；SQLite 文本保精度 |
+| Float(32/64) | `real/float` | `float/double` | `real/double precision` | `REAL` | |
+| Text(n/-1) | `nvarchar(n)/nvarchar(max)` | `varchar(n)/longtext` | `varchar(n)/text` | `TEXT` | `nvarchar`=UTF16 |
+| Binary(n/-1) | `varbinary(n)/varbinary(max)` | `varbinary(n)/longblob` | `bytea` | `BLOB` | |
+| Date | `date` | `date` | `date` | `DATE_TEXT` | |
+| Time | `time(7)` | `time(6)` | `time` | `TIME_TEXT` | |
+| Timestamp | `datetime2(7)` | `datetime(6)` | `timestamp` | `DATETIME_TEXT` | 无时区 |
+| TimestampTZ | `datetimeoffset(7)` | `timestamp(6)`（UTC 会话） | `timestamptz` | `TIMESTAMPTZ_TEXT` | MySQL 范围 1970–2038 |
+| UUID | `uniqueidentifier` | `char(36)` | `uuid` | `UUID_TEXT` | |
+| JSON | `nvarchar(max)` | `json` | `jsonb` | `JSON_TEXT` | SQL Server 需 `ISJSON` 检查 |
+| XML | `xml` | —（报不支持） | `xml` | `XML_TEXT` | |
 
 ---
 
@@ -1824,7 +1878,7 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 | 结构完整性 | 统计代码围栏（必须偶数）、逐表核对 `\|` 列数、标题层级 | 修复 1 处断裂代码块（§13.5 的 `Phase/Step` 跑到围栏外）；修复后 64 个围栏、全部表格列数一致 |
 | 交叉引用 | 提取全部 `§x.y` 与标题编号比对 | 修正 3 处指错（§1 的三问、§2.4 的评估文档编号、§6.5 的属性测试位置） |
 | 术语与方向 | 全文检查 source/target、from/to、current/desired 的用法 | 报告字段由 `from/to` 改为 `current/desired`，并写死方向 |
-| 数字一致性 | 工期、内存预算、用例计数、退出码逐项对照 | 统一 7–12 周；N3 改为 384 MB（含 256 MiB 数据预算）；`--max-changes` 降到 50 万；测试 19 例 |
+| 数字一致性 | 工期、内存预算、用例计数、退出码逐项对照 | 统一 7–12 周；N3 改为 384 MB（含 256 MiB 数据预算）；`--max-changes` 降到 50 万；测试 20 例 |
 | 参数一致性 | 提取全部 `--flag`，对照命令表/全局表 | 补全 `--source-env/--target-env/--schema-map/--optimistic/--batch/--with-count` 等；`--fail-on` 取值统一 |
 | 逻辑闭环 | 逐条走"读入→比对→计划→执行→再比对" | 发现并修复 7 个阻断级问题（E.2） |
 | Go 可行性 | 独立 Go 评审核查片段、驱动 API、age/Wails/xxh3 用法 | 发现并修复 12 处（E.3） |
@@ -1866,10 +1920,36 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 4. Wails v3 在目标 Windows 版本 + WebView2 缺失场景的安装体验。
 5. age `DecryptReaderAt` 在超大包上的内存与随机读性能。
 
-### E.5 结论
+### E.5 第二轮复核（本轮新增）
+
+在第一轮修复之后又通读了一遍数据通路，发现 18 处**时序/类型/幂等**问题，均已修复：
+
+| # | 修复前 | 后果 | 修复 |
+| :-- | :--- | :--- | :--- |
+| R1 | 列哈希含列名与类型 | 列名大小写不同或只改长度 → 全表行哈希都变 → 整表 UPDATE | §6.4 改为值哈希 + 规范列序；列名匹配交给结构层 |
+| R2 | SQLite 用 `text`/`integer` 承载逻辑类型 | 大整数/高精度小数被亲和性转成 REAL 丢精度；类型读回漂移，二次 diff 不收敛 | §7.3/附录 C 改用 `*_TEXT` 声明名并说明亲和性 |
+| R3 | MySQL `TimestampTZ` 映射 `datetime` | 同方言读回变 naive，类型永远不同 | 改为 `timestamp(6)` + 会话 UTC；范围外预检阻断 |
+| R4 | target 独有列在阶段 5 才删 | 旧的 NOT NULL 列挡住阶段 4 的 INSERT | 移到阶段 3，装载前删除（破坏性） |
+| R5 | 被摘下的视图用 target 旧定义重建 | 引用已删列编译失败，或重建了本该删除的视图 | 按 `existsInSource` + **source 定义**重建；不存在则不建 |
+| R6 | 主键不一致时仍按旧主键 UPDATE/DELETE，之后改键 | 旧主键约束下必然冲突 | 默认阻断；`--data=none` 只改结构；`--allow-destructive` 整表替换 |
+| R7 | `--resume` 只记录 completed | 中断在语句中间时重复执行，MySQL 已提交 DDL 会二次报错 | 状态改为 `started/completed/failed`，`started` 默认拒绝续跑 |
+| R8 | `--optimistic` 不检查 `RowsAffected` | 并发改动被静默跳过 | 检查影响行数，`--on-conflict=abort\|skip` |
+| R9 | 只写 identity 原值、不重设种子 | SQL Server 下次自增撞主键 | 阶段 5 `DBCC CHECKIDENT`/`setval` |
+| R10 | 计算列/rowversion 参与数据比对 | 值由库生成，永远"有差异"、反复更新 | 排除出比对与 DML；`--include-generated` 才显式包含 |
+| R11 | 快照导出无一致性读 | 不同表来自不同时刻 | 整个导出一个只读事务/快照，`--snapshot-window` 控超时 |
+| R12 | apply 不校验目标身份 | 计划可能在测试库生成、误对生产执行 | `EndpointRef.Identity`（host:port/db 哈希）+ 执行前比对 |
+| R13 | ZIP 条目使用当前时间 | 明文快照无法字节级复现（N5） | 修改时间固定为 1980-01-01 |
+| R14 | 默认相信 `varchar` 主键的 BIN2 排序 | 非 Latin1 代码页与 UTF-8 字节序不一致 → 错配 | §10.4 增加代码页限制，预检提示/走外排 |
+| R15 | 无主键表与主键变更没有明确数据路径 | 无法生成正确 DML 或永远不收敛 | §12.4 主键不一致策略；无主键走多重集/整表替换 |
+| R16 | 独立 sequence 的当前值未处理 | 同步后自增冲突/跳号 | 明确列为"不同步"（§2.3/§23.1），identity 表用 R9 的 reseed |
+| R17 | 预检拿 target 现值判断"最终约束" | 会把 source 已修好、尚未 apply 的 NULL/重复误判为阻断；不参与同步的表反而漏检 | §13.3 明确检查对象：同步表看 source，未同步表看 target |
+| R18 | 视图依赖边没有来源定义 | 阶段 6 重建顺序错，MySQL 尤其无目录可用 | §13.2 规定目录优先、MySQL 受限解析、失败降级告警 |
+
+### E.6 结论
 
 - **结构、方向、参数、数字、交叉引用**已闭环，可交给实现。
 - **代码片段仍未编译**（环境无 Go），M0 第一件事是落成可编译骨架并过 `go vet`；这不是文档缺陷，而是已声明的边界。
-- 逻辑评审与 Go 评审各自发现的**阻断项已全部修复**；剩余问题都归入"实测"或"开放问题"，没有"知道了但没写"的项。
+- 两轮复核共修复 **7 个阻断项 + 18 个时序/类型/幂等问题 + 12 个 Go 设计问题**；剩余问题都归入"实测"或"开放问题"，没有"知道了但没写"的项。
+- **仍然会变的地方**：性能数字、BIN2 补充平面行为、Wails/WebView2 体验——这些只能靠 M1/M2 的真实环境验证，文档已把它们标为开放问题，而不是假装已知。
 
 > 复核方式：`git diff` 查看本文件相对上一版的改动；搜索 `E.2`/`E.3` 的每条修复，均能在正文对应章节找到落点。
