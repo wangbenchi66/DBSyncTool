@@ -6,6 +6,8 @@
 > 日期：2026-11-27
 > 阅读顺序：第 1–4 节（决策与边界）→ 第 22 节（排期）→ 按模块深入
 
+> **只读边界（最高优先级，覆盖全文）**：本工具**不执行任何 DDL/DML**，不提供 `apply`/`execute`/`resume`/`dry-run`/事务/回滚/自检执行。连接必须使用**只读账号**；SQL 只用于**预览/导出**，不能在本工具内执行。§14 的执行器已删除；§13.5 的 plan 只是只读预览。
+
 > **范围调整（2026-11-27）**：v2.0 **只交付 Windows 桌面工作台**（Wails v3），**CLI/CI 不实现**；**MySQL 8.0.16 优先**，随后 SQL Server/PostgreSQL/SQLite；GUI 必须包含**基础数据差异页**；**列顺序不比较，排序规则参与比较**；快照**默认不加密**；仅中文、固定浅色主题、无自动更新。
 
 **一页纸决策**：
@@ -14,6 +16,7 @@
 | :--- | :--- |
 | 语言 | Go 1.26（已确认 `go1.26.0 windows/amd64`）；模块路径 `gitee.com/wangbenchi66/dbsync` |
 | 入口 | Windows 桌面工作台唯一交付；核心 `service` 单一实现；CLI 暂缓（v2.x） |
+| 执行 | **永不执行 DDL/DML**；只读比对 + SQL 预览 |
 | 数据库顺序 | **MySQL 8.0.16 先做**，再做 SQL Server / PostgreSQL / SQLite |
 | 平台 | Windows 10/11 x64（WebView2） |
 | 方向 | `source`（期望）→ `target`（现状），计划 = 让 target 变成 source |
@@ -36,6 +39,7 @@
 
 已定、本文不再讨论的决策：
 
+- **D0** **只读**：工具不执行任何 DDL/DML，不提供执行器；所有 SQL 只是预览。数据库连接必须使用只读账号；代码中禁止出现 `Exec/ExecContext`（由 `internal/readonly` 测试静态拦截）。
 - **D1** 语言 Go 1.26（已确认可用）；GUI 用 Wails v3（要求 Go 1.26+ 与 WebView2）。
 - **D2** **桌面工作台优先**；CLI 暂缓（v2.x）。核心 `internal/service` 是唯一实现，GUI 只是外壳；未来 CLI 复用同一 service，不允许第二份逻辑。
 - **D3** 保留"快照模式"产品创意（内网隔离、U 盘传递）；**快照默认不加密**，敏感场景手动开 age。
@@ -61,11 +65,11 @@
 | 编号 | 目标 | 验收方式 |
 | :--- | :--- | :--- |
 | G1 | **MySQL 优先**，随后 SQL Server / PostgreSQL / SQLite 的结构读取与 DDL 生成 | MySQL 矩阵先绿，再扩到四方言 |
-| G2 | 结构 + 数据比对，输出可执行、幂等的分阶段计划 | "执行后再比对 = 无差异" |
+| G2 | 结构 + 数据比对，输出差异与**只读 SQL 预览**（不执行） | "比较后无差异"与预览 SQL 可核对 |
 | G3 | 快照 v2：流式读写、可检查、可加密、带摘要 | round-trip 无损（二进制/换行/`\N`/时区） |
-| G4 | **桌面工作台**可完成"比较 → 计划 → 执行 → 自检" | 不跳页完成全流程，不需要开终端 |
+| G4 | **桌面工作台**可完成"比较 → 差异 → SQL 预览" | 不跳页，不执行任何 SQL |
 | G5 | 行级差异与列级变更（GUI 数据页） | v2.0 基础网格可看、可翻页、列高亮；搜索/导出在 v2.1 |
-| G6 | 破坏性操作有预检、有守卫、有明确告警 | 预检用例覆盖 100% 阻断项 |
+| G6 | 破坏性差异有标注、有风险提示 | 只标注，不执行 |
 
 ### 2.2 非功能目标
 
@@ -81,6 +85,7 @@
 
 ### 2.3 不做什么（v2.0）
 
+- **不执行任何 DDL/DML**：没有 apply/execute/resume/dry-run/事务/回滚；SQL 只做预览；
 - **不交付 CLI/CI**：`cmd/dbsync` 与 `internal/cli` 留到 v2.x；v2.0 只发 Windows 桌面工作台；
 - **不做自动更新、主题切换、多语言**：固定浅色、仅中文；
 - 不做数据迁移以外的 ETL、不做定时任务调度（P2 的漂移检测另立）；
@@ -92,14 +97,14 @@
 
 ### 2.4 v2.0 完成定义（DoD）
 
-- [ ] 桌面工作台完成"建快照 → 选端点 → 比较 → 审计划 → 执行 → 自检"全流程；
+- [ ] 桌面工作台完成"建快照 → 选端点 → 比较 → 看差异 → 看 SQL 预览"全流程；
 - [ ] 评估文档 §3.1 的 10 条 P0 全部有回归用例，且全绿；
-- [ ] 集成矩阵"建表 → 比对 → 生成 → 执行 → 再比对 = 无差异"四方言全绿；
+- [ ] 集成矩阵"建表 → 比对"四方言全绿；**测试夹具之外不出现任何写语句**；
 - [ ] 同一份快照在 `tr-TR` / `de-DE` / `en-US` 下 round-trip 一致；
 - [ ] JSON 报告 schema 冻结为 v1，并有兼容性测试（GUI 导出）；
-- [ ] 未开启破坏性开关时，任何 DROP/收窄/删列都被预检阻断；
+- [ ] 破坏性差异被明确标注；**工具内没有任何执行入口**；
 - [ ] 文档：README 的"已完成"声明与代码一致（评估文档 §0 结论 4 的问题不复现）；
-- [ ] GUI 的比较/计划/执行都调用同一份 `service`，不出现第二套差异逻辑。
+- [ ] GUI 的比较/预览都调用同一份 `service`，不出现第二套差异逻辑。
 
 ---
 
@@ -108,11 +113,11 @@
 | 术语 | 定义 |
 | :--- | :--- |
 | **source** | 期望状态。可以是活库，也可以是快照 |
-| **target** | 现状。计划执行后要变成 source |
+| **target** | 现状。差异中要变成 source（**工具不执行**） |
 | **endpoint** | 任意一端：`mssql://`、`mysql://`、`postgres://`、`sqlite://`、`snapshot://` |
-| **plan** | 从 target 到 source 的分阶段变更集合（含前置检查） |
-| **phase** | 计划中的一个阶段，有固定顺序与事务语义 |
-| **preflight** | 执行前的只读检查，产出阻断项/告警 |
+| **plan** | 从 target 到 source 的只读差异 SQL 预览（含风险标注） |
+| **phase** | 预览语句的展示分组 |
+| **preflight** | 只读风险检查，产出阻断项/告警 |
 | **canonical value** | 与方言无关、可编码、可哈希、可排序的值 |
 | **digest** | 表的行多重集摘要，用于"可证明相等时跳过" |
 | **object** | 表、列、索引、约束、视图、存储过程、函数、触发器、序列 |
@@ -139,9 +144,9 @@ plan   = 让 target 变成 source
 ┌──────────────────────────────────────────────────────────┐
 │ cmd/dbsync  +  internal/cli  +  internal/gui              │  参数、渲染、绑定
 ├──────────────────────────────────────────────────────────┤
-│ internal/service                                          │  编排：端点→比对→计划→执行
+│ internal/service                                          │  编排：端点→比对→SQL 预览
 ├──────────────────────────────────────────────────────────┤
-│ internal/plan   →  internal/emit   →  internal/execute    │  计划、SQL 渲染、执行
+│ internal/plan   →  internal/emit                          │  只读预览、SQL 渲染
 ├──────────────────────────────────────────────────────────┤
 │ internal/diff   →  internal/snapshot  →  internal/report  │  纯计算、格式、报告
 ├──────────────────────────────────────────────────────────┤
@@ -159,23 +164,22 @@ plan   = 让 target 变成 source
 | `internal/model` | `value` | `dialect`、`diff` |
 | `internal/stream` | `model`、`value` | `dialect`、`diff` |
 | `internal/driver` | 标准库、`model` | `diff`、`plan` |
-| `internal/dialect` | `model`、`value`、`stream`、`emit` 接口 | `diff`、`plan`、`cli`、`execute` |
+| `internal/dialect` | `model`、`value`、`stream`、`emit` 接口 | `diff`、`plan`、`cli` |
 | `internal/diff` | `model`、`value`、`stream` | `dialect` 的具体实现、`plan`、`endpoint` |
 | `internal/snapshot` | `model`、`value` | `dialect`、`diff` |
 | `internal/endpoint` | `model`、`value`、`stream`、`driver`、`dialect` 接口 | `diff`、`plan` |
 | `internal/plan` | `model`、`diff`、`stream` | `dialect` 具体实现、`endpoint` |
 | `internal/emit` | `model`、`plan`、`value` | `dialect`、`cli`、`gui` |
-| `internal/execute` | `plan`、`model`、`dialect` 接口、`stream` | `diff`、`cli` |
 | `internal/report` | `model`、`plan` | `dialect`、`diff` |
 | `internal/progress` | 标准库 | 其它内部包 |
 | `internal/config` | 标准库、`model` | `dialect`、`diff` |
 | `internal/logging` | 标准库 | 其它内部包 |
-| `internal/service` | `endpoint`、`diff`、`snapshot`、`plan`、`emit`、`execute`、`report`、`progress` | `cli`、`gui` |
+| `internal/service` | `endpoint`、`diff`、`snapshot`、`plan`、`emit`、`report`、`progress` | `cli`、`gui`、`database/sql`（写） |
 | `internal/cli` | `service`、`report`、`config`、`logging`、`model`、`progress`（**v2.x，v2.0 不实现**） | `dialect`、`diff`、`plan` |
 | `internal/gui` | `service`、`progress` | 具体方言实现、`diff` |
 | `internal/bench` | 任意（仅测试/基准） | — |
 
-**硬约束**：`internal/diff` 与 `internal/plan` **不做 IO**——不打开连接、不读文件、不写日志、不依赖 `database/sql`。它们只接受注入的 `stream.RowStream` 与纯数据结构；`plan` 负责**生成**预检规格（SQL + 参数），`execute` 负责**执行**这些只读检查。IO 全部发生在 `dialect`（读）、`endpoint`（连接）、`snapshot`（读写）、`execute`（写）。这条规则保证核心逻辑可以用表驱动测试覆盖，也保证 GUI/CLI 复用同一份实现。
+**硬约束**：`internal/diff` 与 `internal/plan` **不做 IO**——不打开连接、不读文件、不写日志、不依赖 `database/sql`。它们只接受注入的 `stream.RowStream` 与纯数据结构；`plan` 只**生成**预览规格（SQL + 参数），**不执行**。IO 全部发生在 `dialect`（读）、`endpoint`（连接）、`snapshot`（读写）；生产代码不得出现 `Exec/ExecContext`。这条规则保证核心逻辑可以用表驱动测试覆盖，也保证 GUI/CLI 复用同一份实现。
 
 `emit` 需要标识符转义时，自己定义 `Quoter` 接口（`Quote(parts ...string) string`），由 `dialect` 实现并在调用时注入；**`emit` 不 import `dialect`**，否则会形成 `dialect → emit → dialect` 环。
 
@@ -188,11 +192,11 @@ plan   = 让 target 变成 source
 ② 比对 / 生成计划
    endpoint.Open → Introspect + ordered rows → diff.Compare → plan.Build → emit.SQL
 
-③ 执行
-   plan.Load(JSON) → execute.Preflight(执行 plan 里的只读检查) → execute.Apply(per-phase tx) → report
+③ 预览/导出
+   plan.Build → plan.sql / plan.json（只读，不执行）
 ```
 
-**入口**：v2.0 由桌面工作台调用 `internal/service`；CLI 是 v2.x 的另一个外壳，复用同一 service。上图的 `emit.SQL`/`plan.Load` 是 service 内部步骤，不暴露给 GUI 逻辑。
+**入口**：v2.0 由桌面工作台调用 `internal/service`；CLI 是 v2.x 的另一个外壳，复用同一 service。`emit.SQL` 是只读预览，不暴露执行入口。
 
 ---
 
@@ -204,9 +208,9 @@ dbsync/
 ├── cmd/dbsync/main.go              # v2.x：CLI 入口，v2.0 不构建
 ├── internal/
 │   ├── cli/                        # v2.x：cobra 命令、flag、退出码（v2.0 不实现）
-│   │   ├── root.go  diff.go  plan.go  apply.go  snapshot.go  schema.go  ddl.go
+│   │   ├── root.go  diff.go  plan.go  snapshot.go  schema.go  ddl.go
 │   │   └── exit.go                 # 退出码常量与映射
-│   ├── service/                    # 编排：端点→比对→计划→执行，GUI（及未来 CLI）共用
+│   ├── service/                    # 编排：端点→比对→SQL 预览，GUI（及未来 CLI）共用
 │   ├── endpoint/                   # 数据源抽象：活库 / 快照 / RowStream 实现
 │   ├── stream/                     # RowStream/Comparator/DeltaSink（纯接口）
 │   ├── driver/                     # endpoint → (driverName, dsn) 适配与会话初始化
@@ -223,17 +227,14 @@ dbsync/
 │   ├── diff/                       # 纯函数：schema.go data.go merge.go rename.go
 │   ├── snapshot/                   # 格式、读写、加密、校验
 │   │   ├── format.go  writer.go  reader.go  manifest.go  crypt.go  inspect.go
-│   ├── plan/                       # 计划构建、依赖图、预检
-│   │   ├── build.go  graph.go  preflight.go  diagnostic.go
-│   ├── emit/                       # SQL 渲染（按方言）、字面量、幂等 DDL
-│   │   ├── emit.go  literal.go  idempotent.go
-│   ├── execute/                    # 执行器、阶段事务、进度
+│   ├── plan/                       # 只读差异 SQL 预览、依赖图、风险标注
 │   ├── report/                     # text、json、md、sarif
 │   ├── progress/                   # 事件总线（CLI 渲染 / GUI 推送共用）
 │   ├── bench/                      # 固定数据集与基准（N3/N4）
 │   ├── logging/                    # slog 初始化、脱敏
 │   └── gui/                        # Wails 绑定（M3 主交付）
-├── web/                            # 前端（M4）
+├── main.go  app.go                 # Wails 入口与绑定层
+├── frontend/                       # 前端（M3）
 ├── testdata/                       # golden fixtures
 │   ├── schema/<dialect>/<case>/    # 源/目标 IR 的 JSON + 期望 SQL
 │   └── snapshot/<case>/            # 快照样本与期望解析结果
@@ -628,7 +629,7 @@ type EndpointRef struct {
 	Kind        string // snapshot/mssql/mysql/postgres/sqlite
 	Label       string // 用户可见的逻辑名
 	RedactedDSN string // 已脱敏
-	Identity    string // host:port/database 的 SHA-256（不含凭据），用于 apply 校验目标身份
+	Identity    string // host:port/database 的 SHA-256（不含凭据），用于标识端点
 }
 
 type ObjectRef struct {
@@ -947,7 +948,7 @@ CHECKSUMS.txt
 
 比较方向：**把 target 改成 source 之后是否安全**。
 
-| 判定 | 条件 | 生成变更 | 阻断 | plan/apply 退出码 |
+| 判定 | 条件 | 预览变更 | 风险标注 | 预览结果 |
 | :--- | :--- | :--- | :--- | :---: |
 | 等价 | `ID`、位宽、长度、精度、标度、编码、`Collation` 全同 | 否 | 否 | 0 |
 | 可接受 | 同 ID 但文本编码不同（`varchar`↔`nvarchar`）、**source 比 target 宽**（标度/长度放宽） | 是（带提示） | 否 | 0 |
@@ -960,7 +961,7 @@ CHECKSUMS.txt
 
 > 收窄方向容易写反：`source` 是"要变成的样子"。`source varchar(50)` 覆盖 `target varchar(100)` 是收窄，可能截断；反过来是放宽，安全。
 >
-> **阻断语义**：阻断项**不会**写进可执行计划；`plan` 以退出码 4 结束并输出诊断，绝不生成"带注释的半份脚本"。`diff` 不做阻断（它只报告），阻断项以诊断形式输出，是否失败由 `--fail-on` 决定。
+> **阻断语义**：阻断项**不会**写进可导出的 SQL 预览；预览以失败状态返回诊断，绝不生成"带注释的半份脚本"。工具不执行任何语句。
 >
 > **`--ignore` 语义**：`--ignore=type-encoding` 表示这类差异"既不生成变更、也不报诊断"，必须在报告里记一条 info，避免"忽略"变成"静默"。可忽略项只有"可接受"级；阻断级不可忽略；**排序规则不提供忽略开关**（既然选择比较，就不做假开关）。
 
@@ -1021,7 +1022,7 @@ for each table with PK and hasData on both sides:
 | 共有列为空 | 该表跳过数据比对，报 `E_NO_COMMON_COLUMNS`（只做结构变更） |
 | 类型不可比（§12.2 阻断级） | 数据比对阶段直接阻断，不允许"先转再看看" |
 
-> 这条规则解决的是"结构还没改、数据已经比"的时序矛盾：diff 在 apply 之前运行，两端列集必然可能不同。实现上**不要**要求"先 apply 结构再比数据"，那会把一次计划拆成两次运行。
+> 这条规则解决的是"结构还没改、数据已经比"的时序矛盾：diff 前后两端列集必然可能不同。实现上不要要求"先改结构再比数据"，那会把一次比对拆成两次运行。
 
 ### 12.5 表级短路（诚实版）
 
@@ -1086,26 +1087,28 @@ renames:
 | MySQL | `RENAME TABLE old TO new` | `ALTER TABLE t RENAME COLUMN old TO new`（8.0+） |
 | SQLite | `ALTER TABLE old RENAME TO new` | `ALTER TABLE t RENAME COLUMN old TO new`（3.25+） |
 
-**连锁处理**：改名放进阶段 3（schema-additive），先于数据；索引/约束/外键引用旧列名的，在阶段 5 按新名重建；视图引用旧名的，按 §13.1.1 处理。改名成功后必须跑 `--verify`，否则"数据没丢"只是推断。
+**连锁处理**：改名放进预览阶段 3（schema-additive），先于数据；索引/约束/外键引用旧列名的，在阶段 5 按新名重建；视图引用旧名的，按 §13.1.1 处理。工具不执行改名，只预览。
 
 **验收**：`TestRenameKeepsData`——改名前后行数、行哈希不变，且第二次 diff 无差异。
 
 ---
 
-## 13. 变更计划与 SQL 生成
+## 13. 变更计划与 SQL 预览（只读）
+
+> 本节的“阶段”只用于**差异 SQL 预览的排序**，不代表工具会执行。工具没有 apply/execute；`plan.sql`/`plan.json` 只能导出查看，不能在应用内运行。
 
 ### 13.1 阶段
 
 | 阶段 | 内容 | 说明 |
 | :--- | :--- | :--- |
-| 0 preflight | 只读检查 | 阻断项不通过则整体失败，不生成可执行计划 |
-| 1 drop dependents | 删除**参与数据变更或阻塞结构变更**的外键与唯一索引；视图按 §13.1.1 | 精确选取：只动受影响的表，不搞全库删除 |
-| 2 data-cleanup | DELETE（target 独有行） | 先删，避免后续加约束/改键时被历史数据卡住 |
-| 3 schema-additive | CREATE TABLE、ADD COLUMN（**先按可空加**）、放宽类型/可空性、**collation 变更**；**DROP target 独有的表/列**（破坏性） | 目标独有的列必须在装载前删掉，否则带 NOT NULL 的旧列会让 INSERT 失败；NOT NULL 收紧留到阶段 5 |
-| 4 data-load | INSERT / UPDATE | 此时表结构已能容纳新数据，且不再有"只属于 target"的列挡路 |
-| 5 schema-finalize | UNIQUE/CHECK/索引/FK、收窄类型、**自增计数器重设** | 主键变更走阶段 3 的整表替换路径，不在此阶段；数据已对齐，唯一性与外键在最后统一校验 |
-| 6 objects | 视图/过程/函数/触发器/序列 | 先按 source 定义重建阶段 1 摘下的对象，再应用对象差异 |
-| 7 verify | 可选：执行后自检 | `--verify` 时再跑一次 diff |
+| 0 preflight | 只读风险检查 | 只影响预览标注；不执行、不阻断工具启动 |
+| 1 drop dependents | 预览"删除参与数据变更或阻塞结构变更的外键与唯一索引" | 精确选取：只动受影响的表，不搞全库删除 |
+| 2 data-cleanup | 预览 DELETE（target 独有行） | 仅用于排序展示 |
+| 3 schema-additive | 预览 CREATE TABLE、ADD COLUMN、放宽类型/可空性、collation 变更、DROP target 独有表/列 | 目标独有列的删除是破坏性差异，只标注 |
+| 4 data-load | 预览 INSERT / UPDATE | 仅展示差异 SQL |
+| 5 schema-finalize | 预览 UNIQUE/CHECK/索引/FK、收窄类型、自增计数器重设 | 仅展示 |
+| 6 objects | 预览视图/过程/函数/触发器/序列 | 仅展示 |
+| 7 verify | **不执行**；仅提示用户可以自行复核 | 工具不做执行后自检 |
 
 这样排的原因：
 - **删除先于加约束**：否则 target 里的历史重复行/孤儿行会让新唯一键或外键直接失败；
@@ -1132,7 +1135,7 @@ renames:
 
 否则"因为列变更被摘下、但自身没差异"的视图会永久消失，或者被重建出一个编译不过的旧定义。
 
-> **代价要如实说**：摘掉唯一索引/外键的窗口期内，数据库不再强制这些约束。工具依赖"source 是可信的、target 无并发写入"这两个前提；生产库应在维护窗口执行，或至少确认没有并发写入。计划头部会打印这段警告。**MySQL 的阶段 1 不可回滚**：DDL 一旦执行就生效，若后续阶段失败，恢复索引/外键需要重新执行计划或人工修复——`plan.sql` 会附带一段"恢复被删约束"的备注。
+> **预览提示**：这些语句只用于展示 target 变成 source 需要的操作，工具不会执行。真正执行时请自行在维护窗口、用只读账号之外的人工流程操作；本工具不承担执行风险。
 
 **环与自引用外键**：依赖图做 SCC 分解；同一 SCC 内的外键**统一挪到阶段 5**（先建表、后加约束），绝不会像原版那样把环内表从排序结果里丢掉（#11）。同一 SCC 内按 `FullName` 排序建表，保证输出稳定（N5）。
 
@@ -1175,7 +1178,7 @@ func (g *Graph) SCC() [][]NodeID
 
 **精确 vs 采样**：上表的检查必须用走索引的 `EXISTS` 查询（`SELECT 1 FROM t WHERE … LIMIT 1` / `TOP 1`），**不允许采样**——采样假阴性会让阶段 3/5 直接失败。只有"预计影响行数"这类展示信息允许采样，且采样结果不得参与阻断判定。
 
-**检查对象**：预检判断的是"**最终状态**"是否满足约束，不是"当前 target"。同步数据的表最终数据 = source，所以查 source；`--data=none`、无主键跳过、主键不一致阻断的表最终数据 = target 现值，所以查 target。把两者搞反会造成两种错误：用 target 查会把"source 已经修好 NULL、只是还没 apply"误判为阻断；用 source 查会漏掉不参与同步的表。
+**检查对象**：预检判断的是"**最终状态**"是否满足约束，不是"当前 target"。同步数据的表最终数据 = source，所以查 source；`--data=none`、无主键跳过、主键不一致阻断的表最终数据 = target 现值，所以查 target。把两者搞反会造成两种错误：用 target 查会把"source 已经修好 NULL、只是还没同步"误判为阻断；用 source 查会漏掉不参与同步的表。
 
 预检 SQL 全部只读；大表用索引列（主键/唯一键）构造查询，避免全表扫描。
 
@@ -1185,7 +1188,7 @@ func (g *Graph) SCC() [][]NodeID
 - **类型化字面量**：数值不带引号；文本 `N'…'`（SQL Server）/`'…'`；二进制 `0x…`；时间显式 `CAST('…' AS datetime2(7))`；布尔按方言 `1/0` 或 `TRUE/FALSE`；NULL 显式 `NULL`（原版 #7）。
 - **建表只带列与主键**：新表的 `CREATE TABLE` 只输出列定义与主键；`UNIQUE`/`CHECK`/索引/外键统一在阶段 5 创建，避免与"阶段 1 摘下、阶段 5 重建"的清单重复。
 - **标识符**：一律 `Quote`；大小写按方言规则折叠后再输出。
-- **语句分组**：每条语句一个 `Statement{SQL, Object, Destructive, Reversible}`，便于执行器逐句进度与回滚。
+- **语句分组**：每条语句一个 `Statement{SQL, Object, Destructive, Reversible}`，只用于预览展示与导出。
 - **批大小**：INSERT 多值 `--batch=500`（按行宽与**参数个数**自适应：SQLite 的参数上限远低于行数×列数，按 ≤30000 个参数切分；单语句 ≤ 1 MB）；MySQL `max_allowed_packet` 预检。
 - **事务**：按能力矩阵输出 `BEGIN/COMMIT`；**MySQL 的 DDL 阶段不要输出 `BEGIN/COMMIT`**（DDL 隐式提交，包了只会误导），改为在脚本头部写显式警告："DDL 隐式提交，本段不可回滚"（原版 #18/#40）。DML 阶段仍可用事务。
 - **自增列**：数据装载必须写入原值，否则主键重排、外键错位。按方言生成：
@@ -1239,10 +1242,10 @@ type StepRecord struct {
 ```
 
 - `Destructive`/`Reversible` **只存在于 `Statement`**；`Step` 需要时由语句汇总派生，不重复存（避免两处不一致）。
-- `Step.ID` 用**内容哈希**而不是 UUID/随机数：同一输入两次生成的计划必须字节一致（N5），也给 `--resume` 一个稳定键。
-- `Plan.FormatVersion` 与 JSON tag 在 M0 冻结；`apply` 依赖字段名，改名即破坏兼容。
+- `Step.ID` 用**内容哈希**而不是 UUID/随机数：同一输入两次生成的预览必须字节一致（N5）。
+- `Plan.FormatVersion` 与 JSON tag 在 M0 冻结；改名即破坏导出兼容。
 
-`plan` 同时输出 `plan.sql`（人看）与 `plan.json`（`apply` 用），二者由同一份 `Plan` 渲染，**不允许各写一套**（原版 #26 的教训）。`plan.json` 不含任何密码，只有 endpoint 的逻辑名与脱敏 DSN；但它**包含行数据**（INSERT/UPDATE 的值），必须按敏感文件对待：默认权限 `0600`，`--plan-json=-` 可写 stdout 交给管道的加密工具。
+`plan` 同时输出 `plan.sql`（人看）与 `plan.json`（导出/审阅），二者由同一份 `Plan` 渲染，**不允许各写一套**（原版 #26 的教训）。`plan.json` 不含任何密码，只有 endpoint 的逻辑名与脱敏 DSN；但它**包含行数据**（INSERT/UPDATE 的值），必须按敏感文件对待：默认权限 `0600`，`--plan-json=-` 可写 stdout 交给管道的加密工具。**导出不等于执行**。
 
 ### 13.6 SQLite 重建表
 
@@ -1252,7 +1255,7 @@ SQLite 不支持大部分 `ALTER COLUMN`，以下变更走"重建表"：
 - 删除列（3.35+ 支持 `DROP COLUMN`，但被索引/约束/视图引用时仍需重建）；
 - 修改/新增 CHECK、主键、外键。
 
-**Plan 表示**：独立 `StepKind = RebuildTable`，一个 Step 内含完整语句序列（执行器按事务整体提交）：
+**Plan 表示**：独立 `StepKind = RebuildTable`，一个 Step 内含完整语句序列（**只预览，不提交**）：
 
 ```
 PRAGMA foreign_keys=OFF;              -- 必须在事务外
@@ -1276,69 +1279,14 @@ PRAGMA foreign_keys=ON;               -- defer 保证异常时也恢复
 
 ---
 
-## 14. 执行器与事务语义
+## 14. 执行器（已删除，禁止实现）
 
-### 14.1 事务矩阵
+本工具是**只读比对工具**，不提供 `apply`、`execute`、`resume`、`dry-run`、事务、回滚、自检执行。
 
-| 方言 | DDL 事务 | 数据事务 | 策略 |
-| :--- | :--- | :--- | :--- |
-| SQL Server | 支持 | 支持 | `SET XACT_ABORT ON` + 阶段事务；DDL 与 DML 可分阶段提交 |
-| PostgreSQL | 支持 | 支持 | 每阶段一个事务；失败整阶段回滚 |
-| MySQL | **不支持**（隐式提交） | 支持 | DDL 不包裹；DML 阶段单独事务；执行前明确提示 |
-| SQLite | 支持 | 支持 | 每阶段一个事务；`RebuildTable` 的整段语句必须在**同一个**事务里 |
-
-### 14.2 执行流程
-
-```
-load plan.json
-  → 校验 PlanHash（= SHA-256(plan.json 原始字节)）
-  → preflight（--dry-run 时到此为止）
-  → 校验 TargetFingerprint（重算目标 IR 摘要）
-  → 按方言能力分支：
-       SQL Server / PostgreSQL / SQLite：for phase: BEGIN → steps → COMMIT / ROLLBACK
-       MySQL：DDL 阶段逐句执行（失败即停，不假装回滚）；DML 阶段 BEGIN/COMMIT
-  → 每个 step 完成即追加写入 plan.json.state
-  → 汇总：成功/失败/跳过、受影响行数、耗时
-```
-
-- **计划完整性**：`PlanHash` 覆盖整个 `plan.json`，apply 时重算；被人手改过的计划直接拒绝。
-- **权限**：预检只读；执行需要 DDL/DML 权限。缺权限在连接自检阶段就报错，不等到中途。
-- **目标身份**：`apply` 先计算 `--target` 的 `Identity`（host:port/database 的哈希），与 plan 中记录的目标身份比对；不一致直接拒绝——防止"计划在测试库生成、误对生产库执行"。
-- **目标指纹**：`TargetFingerprint` 是目标规范化 IR 的 SHA-256（§13.5），执行前重算；不一致说明"生成后目标被改"，拒绝执行。**它只覆盖结构，不覆盖数据**——plan 生成后 target 的数据可能已变，工具不做数据版本校验；生产执行应在维护窗口，`--optimistic` 只保护 UPDATE 的逐行覆盖，不保护 INSERT/DELETE。
-- **`--verify` 必须同时给 `--source`**：plan.json 只存脱敏 DSN，不能凭它连接源端；`apply --verify` 缺少 `--source` 时直接报用法错误（退出码 2）。
-- **`--resume`**：读 `plan.json.state`，只跳过 `completed` 的 step；遇到 `started`（上次中断在语句中间）**默认拒绝续跑**，要求 `--force-resume` 或人工确认——尤其 MySQL DDL 已隐式提交时，无法判断该 step 生效了几条。状态文件与计划用 `PlanHash` 绑定，防止拿错计划。
-- **取消**：Ctrl-C 取消当前阶段；可回滚方言回滚当前事务，MySQL 记录已完成 step 并提示"DDL 已生效、不可回滚"。
-- **不是跨阶段原子**：每个阶段单独提交。第 5 阶段失败时，前 4 阶段已生效（数据已装载、约束未建）；修复后用 `--resume` 续跑，或用 `--rollback-out` 的反向脚本人工回退。报告必须明确写出"已完成阶段"。
-- **进度**：`progress.Event{Phase, StepID, Done, Total, Rows, Elapsed}`，CLI 渲染成一行，GUI 订阅同一事件。
-
-### 14.3 读一致性
-
-diff 必须读"某一时刻的两端"，否则并发写入会让结果不可复现（N5）。每端在读取开始时确立一致性视图：
-
-| 方言 | 做法 |
-| :--- | :--- |
-| SQL Server | `SET TRANSACTION ISOLATION LEVEL SNAPSHOT`（库开启快照隔离时）或 `READ COMMITTED SNAPSHOT`；不可用时降级并在报告注明 |
-| PostgreSQL | `BEGIN ISOLATION LEVEL REPEATABLE READ`（只读事务） |
-| MySQL | `START TRANSACTION WITH CONSISTENT SNAPSHOT`（InnoDB） |
-| SQLite | 单连接读事务（`BEGIN`），保证读到一致快照 |
-
-多表并行时，每个表一个只读事务/连接；`--sort=external` 重跑时**重新开事务**，并记录两次读取的时间戳差异（数据可能已变，报告注明）。
-
-`snapshot create` 同样需要一致性读：整个导出应在一个只读事务/快照内完成（SQL Server SNAPSHOT、PG REPEATABLE READ、MySQL CONSISTENT SNAPSHOT、SQLite 读事务），否则不同表可能来自不同时刻。代价是长事务占用 undo/版本存储；`--snapshot-window` 控制超时，超时中止并提示。单表导出也至少保证该表在一个读事务内读完。
-
-### 14.4 取消与失败清理
-
-| 资源 | 失败/取消时的处理 |
-| :--- | :--- |
-| 目标库事务 | 可回滚方言 `ROLLBACK` 当前阶段；MySQL DDL 记录已完成 step 并明确提示不可回滚 |
-| `plan.json.state` | 保留（供 `--resume`），但只在 step 成功返回后写入 |
-| 快照 `.tmp` 文件 | 删除 |
-| 解密临时文件 | 删除；进程启动时按 `.dbsync-dec-*` 前缀兜底清理（防崩溃残留） |
-| 外排 run 文件 | 删除 |
-| 进度事件 | 发送 `Canceled` 终态，GUI 不悬挂 |
-| 本地日志 | 保留（脱敏后） |
-
----
+- 代码中不得出现 `Exec/ExecContext`（`internal/readonly` 测试静态拦截）；
+- SQL 只用于预览/导出，不能在本工具内执行；
+- 数据库连接必须使用只读账号；
+- 任何"顺手加一个执行按钮"的改动都违反产品边界。
 
 ## 15. CLI 设计（v2.x，v2.0 暂不实现）
 
@@ -1366,9 +1314,8 @@ snapshot://./baseline.dbsync?pass_env=DBSYNC_SNAPSHOT_PASS
 | `dbsync snapshot inspect` | 查看 manifest/表清单 | `--json` `--pass-env` |
 | `dbsync snapshot verify` | 校验摘要与完整性 | `--pass-env` |
 | `dbsync diff` | 比对并输出差异 | `--source` `--target` `--tables` `--include` `--exclude` `--schema-only` `--data` `--format` `--output` `--fail-on` `--rows` |
-| `dbsync plan` | 生成计划 | `--source` `--target` `--tables` `--include` `--exclude` `--schema-only` `--out` `--plan-json` `--rollback-out` `--allow-destructive` `--renames` |
-| `dbsync apply` | 执行计划 | `--target` `--plan` `--dry-run` `--verify`（需同时给 `--source`） `--resume` `--allow-destructive` |
-| `dbsync schema` | 打印 IR（调试/CI 基线） | `--source` `--format json` |
+| `dbsync plan` | 生成**只读 SQL 预览**（不执行） | `--source` `--target` `--tables` `--include` `--exclude` `--schema-only` `--out` `--plan-json` `--allow-destructive` `--renames` |
+| `dbsync schema` | 打印 IR（调试基线） | `--source` `--format json` |
 | `dbsync ddl export` | 导出整库 DDL（源或目标） | `--source`/`--target` `--side source\|target` `--out` `--format sql` |
 | `dbsync version` | 版本 | `--json` |
 
@@ -1389,18 +1336,17 @@ snapshot://./baseline.dbsync?pass_env=DBSYNC_SNAPSHOT_PASS
 | `--temp-dir` | 系统临时目录 | 加密快照解密与落盘位置 |
 | `--no-color` | false | 关闭彩色输出 |
 
-**命令级参数**（不属于全局）：`--optimistic`（diff/plan）、`--on-conflict`（apply）、`--batch`（plan/emit，默认 500）、`--recreate-views`（plan/apply）、`--schema-map`（diff/plan）、`--log-rows`（调试）、`--rows`（diff）、`--case-insensitive` / `--ignore-schema-prefix` / `--ignore` / `--ignore-whitespace` / `--include-generated`（diff/plan 比较选项）、`--allow-unknown-types`、`--index-early`、`--rebuild-indexes`、`--disable-triggers`、`--no-pk-strategy`、`--exclude-identity`、`--no-idempotent`（plan）、`--with-count` / `--snapshot-window`（snapshot create）、`--source-env` / `--target-env`（任何需要 endpoint 的命令）。
+**命令级参数**（不属于全局）：`--optimistic`（diff/plan）、`--batch`（plan/emit，默认 500）、`--schema-map`（diff/plan）、`--rows`（diff）、`--case-insensitive` / `--ignore-schema-prefix` / `--ignore` / `--ignore-whitespace` / `--include-generated`（diff/plan 比较选项）、`--allow-unknown-types`、`--no-idempotent`（plan 预览）、`--with-count` / `--snapshot-window`（snapshot create）、`--source-env` / `--target-env`（任何需要 endpoint 的命令）。
 
 ### 15.3 退出码
 
 | 码 | 含义 | 场景 |
 | :---: | :--- | :--- |
-| 0 | 成功且无差异；`plan` 生成成功；`apply` 成功 | 默认 |
+| 0 | 成功且无差异；`plan` 预览生成成功 | 默认 |
 | 1 | 成功但**有差异** | `diff` 默认；或 `--fail-on` 命中；`--fail-on=none` 时返回 0 |
 | 2 | 用法/配置错误 | 参数冲突、配置文件语法错 |
 | 3 | 运行时错误 | 连接、IO、快照损坏、未支持类型 |
-| 4 | 预检阻断 | plan/apply 的阻断项 |
-| 5 | 执行失败（可能已部分提交） | apply 中途失败 |
+| 4 | 风险阻断 | `plan` 预览的阻断项 |
 
 > 与旧 CLI 的 0/1/2 兼容：0/1/2 语义不变，3/4/5 是新增，不会让既有脚本误判。`plan` 的"生成了计划"是成功，因此默认 0——CI 里判断差异请用 `diff`。
 >
@@ -1440,14 +1386,9 @@ dbsync snapshot create --source-env DBSYNC_SOURCE_DSN \
 dbsync diff --source snapshot://./baseline.dbsync --target "mssql://sa@test/app?encrypt=true" \
   --format json --fail-on any
 
-# 生成计划（人看 + 机器用）
+# 生成只读 SQL 预览（人看 + 导出审阅；不执行）
 dbsync plan --source snapshot://./baseline.dbsync --target "mssql://sa@test/app?encrypt=true" \
   --out plan.sql --plan-json plan.json
-
-# 预检 + 执行
-dbsync apply --target "mssql://sa@test/app?encrypt=true" --plan plan.json --dry-run
-dbsync apply --source snapshot://./baseline.dbsync --target "mssql://sa@test/app?encrypt=true" \
-  --plan plan.json --verify
 ```
 
 ---
@@ -1522,7 +1463,7 @@ JSON 结构（节选）：
 > 布局、功能清单与线框图见 [`DBSyncTool-功能与界面设计.md`](DBSyncTool-功能与界面设计.md)。本节只约束"GUI 不许有第二份实现"。
 
 - **原则**：GUI 不实现比对逻辑，只调用 `internal/service`（GUI 与未来 CLI 共用的编排层）。
-- 绑定：`Diff(req) (DiffView, error)`、`Plan(req) (PlanView, error)`、`Apply(req) (ApplyResult, error)`、`Cancel(runID string) error`。**不要用 `chan` 参数**——Wails 绑定生成器不支持 channel，进度用 `app.Event.Emit("dbsync:progress", event)` 推送。
+- 绑定：`Diff(req) (DiffView, error)`、`Plan(req) (PlanView, error)`、`Cancel(runID string) error`。**只读**：不提供 Apply；`Plan` 只返回 SQL 预览。**不要用 `chan` 参数**——Wails 绑定生成器不支持 channel，进度用 `app.Event.Emit("dbsync:progress", event)` 推送。
 - 取消：Go 侧维护 `map[runID]context.CancelFunc`，前端调 `Cancel(runID)`；不要靠关闭 channel。
 - 大数据：差异列表分页（每页 500 行）+ 虚拟滚动；行级 diff 只取选中表。**v2.0 必须有基础数据差异页（只读、分页、列高亮）**，搜索/导出/按列视图放 v2.1。
 - WebView2：Windows 10/11 通常自带；安装包内置引导（`wails doctor` 可诊断），缺失时给下载指引。
@@ -1624,7 +1565,7 @@ func (e *Error) Unwrap() error
 > 集成测试只连**专用、可清理**的测试库/临时 schema，测试前后自行建删；**禁止指向生产**。连接信息走本地环境变量或未跟踪配置，不写入仓库。
 
 1. 建源/目标 schema（含外键环、自引用、跨 schema 同名表、二进制、换行、`\N`、时区、collation 差异）；
-2. `plan` → `apply` → 再 `diff`；
+2. `diff` → `plan`（只读预览）→ 再 `diff`，断言目标未被修改；
 3. 断言：第二次 diff 为空、无阻断项。
 
 ### 20.3 关键用例（对应 P0）
@@ -1634,13 +1575,13 @@ func (e *Error) Unwrap() error
 | `TestUpdateUsesChangedColumns` | 生成 `SET a=…,b=…`，不含主键，**不为空** |
 | `TestEmptyUpdateNeverEmitted` | 变化列为空时不生成任何 UPDATE（兜底） |
 | `TestInsertCarriesAllColumns` | INSERT 列数 = 源表列数（含 identity，除 `--exclude-identity`） |
-| `TestIdentityPreserved` | 执行后主键值不变、外键仍指向正确行 |
+| `TestIdentityPreserved` | 预览的 INSERT 显式带 identity 列；不执行 |
 | `TestBinaryRoundTrip` | `[]byte` → 快照 → 值为 `KindBytes`，SQL 为 `0x…` |
 | `TestMultilineAndBackslashN` | 含 `\n`、`\N` 的值 round-trip 一致 |
 | `TestCaseOnlyPKDifference` | 大小写不同的两行都能保留，不撞键 |
 | `TestCrossSchemaSameName` | 两表分别处理，不抛重复键 |
 | `TestColumnOrderIndependent` | 两端物理列序不同，不产生假变更 |
-| `TestCollationCompared` | MySQL 源 `utf8mb4_0900_ai_ci`、目标 `utf8mb4_bin` → 计划含 ALTER COLLATE，执行后二次 diff 为空 |
+| `TestCollationCompared` | MySQL 源 `utf8mb4_0900_ai_ci`、目标 `utf8mb4_bin` → 预览含 ALTER COLLATE；目标不被修改 |
 | `TestCollationUniquePreflight` | 唯一索引列改 collation 后出现重复 → 阻断，不生成计划 |
 | `TestAddedColumnBackfill` | 新增列的非默认值被回填；等于默认值不产生 UPDATE |
 | `TestCycleTwoPhase` | 环内表仍被建，FK 在阶段 5 |
@@ -1707,7 +1648,7 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 | :--- | :--- | :--- |
 | M2-1 | `diff`：结构 + 数据 + 归并 + 排序断言 | 单表比对正确 |
 | M2-2 | `plan`：依赖图、SCC、预检、阶段、collation 变更 | MySQL 全链路 |
-| M2-3 | `execute`：阶段事务、进度、dry-run | 执行后再比对为空 |
+| M2-3 | `plan` 只读预览：SQL 生成、风险标注、只读断言 | 目标数据/结构在预览前后完全一致 |
 | M2-4 | SQL Server / PostgreSQL / SQLite 方言 | 四方言矩阵 |
 | M2-5 | 基准与 N3/N4 实测 | 数字写进 README，不达标就调架构 |
 
@@ -1719,11 +1660,11 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 
 | ID | 任务 | 验收 |
 | :--- | :--- | :--- |
-| M3-1 | Wails v3 外壳、三阶段工作台、端点卡片、对象树/检查器 | 不跳页完成"比较→计划→执行" |
+| M3-1 | Wails v3 外壳、三阶段工作台、端点卡片、对象树/检查器 | 不跳页完成"比较→差异→SQL 预览" |
 | M3-2 | 项目 + 凭据库 + 连接抽屉 | 逻辑名连接、重启恢复、密码不落日志 |
-| M3-3 | 结构差异 + **基础数据差异网格**（只读、分页、列高亮） | 数据 DML 可被看见再执行 |
+| M3-3 | 结构差异 + **基础数据差异网格**（只读、分页、列高亮） | 数据差异可见；无执行入口 |
 | M3-4 | 比较选项 + 规则预览 | 选项与比较器一致；排序规则默认比较；列顺序不出现 |
-| M3-5 | 计划页 + 执行页（三道闸/进度/自检）+ 整库 DDL 导出 | 与 service 同一份 Plan；失败可定位 |
+| M3-5 | SQL 预览页 + 整库 DDL 导出；**不提供执行页/按钮** | 与 service 同一份 Plan；只读 |
 | M3-6 | **便携 ZIP**（最快交付）+ WebView2 检测；Inno Setup 后置 | 解压即用；缺 WebView2 有引导 |
 
 **出口**：v2.0 DoD 全部勾选。
