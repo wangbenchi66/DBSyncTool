@@ -83,7 +83,8 @@
 - [ ] 同一份快照在 `tr-TR` / `de-DE` / `en-US` 下 round-trip 一致；
 - [ ] JSON 报告 schema 冻结为 v1，并有兼容性测试；
 - [ ] 无 `--allow-destructive` 时，任何 DROP/收窄/删列都被预检阻断；
-- [ ] 文档：README 的"已完成"声明与代码一致（评估文档 §0 结论 4 的问题不复现）。
+- [ ] 文档：README 的"已完成"声明与代码一致（评估文档 §0 结论 4 的问题不复现）；
+- [ ] GUI 工作台（M4a）可用：比较→计划→执行不跳页，且不出现与 CLI 不一致的结果。
 
 ---
 
@@ -186,7 +187,7 @@ dbsync/
 ├── cmd/dbsync/main.go              # 只调用 cli.Main，无业务逻辑
 ├── internal/
 │   ├── cli/                        # cobra 命令、flag、退出码、输出格式
-│   │   ├── root.go  diff.go  plan.go  apply.go  snapshot.go  schema.go
+│   │   ├── root.go  diff.go  plan.go  apply.go  snapshot.go  schema.go  ddl.go
 │   │   └── exit.go                 # 退出码常量与映射
 │   ├── service/                    # 编排：端点→比对→计划→执行，CLI/GUI 共用
 │   ├── endpoint/                   # 数据源抽象：活库 / 快照 / RowStream 实现
@@ -1340,6 +1341,7 @@ snapshot://./baseline.dbsync?pass_env=DBSYNC_SNAPSHOT_PASS
 | `dbsync plan` | 生成计划 | `--source` `--target` `--tables` `--include` `--exclude` `--schema-only` `--out` `--plan-json` `--rollback-out` `--allow-destructive` `--renames` |
 | `dbsync apply` | 执行计划 | `--target` `--plan` `--dry-run` `--verify`（需同时给 `--source`） `--resume` `--allow-destructive` |
 | `dbsync schema` | 打印 IR（调试/CI 基线） | `--source` `--format json` |
+| `dbsync ddl export` | 导出整库 DDL（源或目标） | `--source`/`--target` `--side source\|target` `--out` `--format sql` |
 | `dbsync version` | 版本 | `--json` |
 
 **全局参数**（所有命令可用）：
@@ -1689,16 +1691,22 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 
 **出口**：v2.0 DoD 的 CLI 部分全部勾选。
 
-### M4 GUI（2–4 周）
+### M4 GUI（拆两期，M4a 2–4 周）
+
+> 功能清单、布局与线框图见 [`DBSyncTool-功能与界面设计.md`](DBSyncTool-功能与界面设计.md)。v2.0 只做 M4a；M4b 进 v2.1。
 
 | ID | 任务 | 验收 |
 | :--- | :--- | :--- |
-| M4-1 | Wails v3 骨架 + 服务绑定 | 能加载连接/快照 |
-| M4-2 | Diff 视图（虚拟滚动、行级/列级） | 10 万行不卡 |
-| M4-3 | 计划预览与执行进度 | 与 CLI 同一份 Plan |
-| M4-4 | 安装包与 WebView2 检测 | 干净 Windows 可装 |
+| M4a-1 | Wails v3 外壳、三阶段工作台、对象树/差异画布/检查器 | 不跳页完成"比较→计划→执行" |
+| M4a-2 | 项目 + 凭据库 + 连接抽屉 | 逻辑名连接、重启恢复、密码不落日志 |
+| M4a-3 | 比较选项 + 规则预览 | 选项与比较器一致，无假开关 |
+| M4a-4 | 计划页 + 执行页（三道闸/进度/自检） | 与 CLI 同一份 Plan；失败可定位 |
+| M4a-5 | 整库 DDL 导出（源/目标） | 依赖排序正确 |
+| M4a-6 | 安装包与 WebView2 检测 | 干净 Windows 可装 |
+| M4b-1 | 数据差异页（行网格/列高亮/分页） | 10 万行不卡 |
+| M4b-2 | 快照库 / 脚本目录 / 多目标 / 依赖图 | 各自验收见设计文档 |
 
-**总工期**：7–12 周（乐观）/ 12–18 周（含返工），与评估文档一致。
+**工期**：M4a 2–4 周（乐观）；M4b 3–4 周（v2.1）。v2.0（M1–M3 + M4a）仍按 7–12 周（乐观）/ 12–18 周（含返工）排。
 
 ---
 
