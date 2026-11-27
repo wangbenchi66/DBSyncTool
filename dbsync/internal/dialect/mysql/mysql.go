@@ -12,7 +12,8 @@ import (
 	"gitee.com/wangbenchi66/dbsync/internal/model"
 )
 
-// Open 打开 MySQL 连接。DSN 必须带 parseTime=true；调用方负责关闭。
+// Open 打开 MySQL 连接。**只读用途**：调用方只能做查询/内省，禁止执行 DDL/DML。
+// 生产环境必须使用只读账号；工具内的写语句由 internal/readonly 测试静态拦截。
 func Open(dsn string) (*sql.DB, error) {
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {

@@ -2,12 +2,16 @@
 
 DBSyncTool v2 的 Go 实现（Windows 桌面工作台，MySQL 8.0.16 优先）。
 
+> **只读边界**：本工具只做结构与数据比对、SQL 预览；**不执行任何 DDL/DML**，没有 Apply/执行按钮。数据库连接必须使用只读账号；生产代码禁止 `Exec/ExecContext`（`internal/readonly` 测试会拦截）。
+
 ## 当前状态
 
 - M1：值模型、MySQL 结构读取、快照 v2（schema-only，默认明文）
+- M2：结构+数据差异、只读 SQL 预览（MySQL 端到端已接）
+- M3：Wails v3 桌面工作台（比较/差异/SQL 预览，只读）
 - 单元测试：`go test ./...`
 - 集成测试：需要设置 `DBSYNC_TEST_MYSQL_DSN`，并加 `-tags integration`
-- CLI 暂不实现；GUI 在 M3 接入 Wails v3
+- CLI 暂不实现
 
 ## 本地测试
 

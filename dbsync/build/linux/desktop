@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=My Product
+Comment=A DBSync application
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/dbsync.exe %u
+Terminal=false
+Type=Application
+Icon=dbsync.exe
+Categories=Utility;
+StartupWMClass=dbsync.exe
+
+ 

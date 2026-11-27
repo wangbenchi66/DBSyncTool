@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>DBSync</title>
+  <link rel="stylesheet" href="/style.css"/>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="mark">▣</span> DBSync <span class="sub" id="viewport">只读比对</span></div>
+  <div class="status" id="status">只读模式 · 不执行任何 SQL</div>
+</header>
+
+<section class="endpoints">
+  <div class="endpoint">
+    <div class="ep-head"><b>源</b><span>期望结构</span><button id="testSource" class="ghost">测试</button></div>
+    <div class="row">
+      <select id="sourceKind"><option value="mysql">MySQL</option><option value="snapshot">快照</option></select>
+      <input id="sourceSchema" placeholder="库名（可空）"/>
+    </div>
+    <input id="sourceDSN" placeholder="root:***@tcp(host:3306)/?parseTime=true"/>
+    <input id="sourcePath" class="hidden" placeholder="baseline.dbsync 路径"/>
+  </div>
+  <div class="arrow">⇄</div>
+  <div class="endpoint">
+    <div class="ep-head"><b>目标</b><span>现状，将被修改</span><button id="testTarget" class="ghost">测试</button></div>
+    <div class="row">
+      <select id="targetKind"><option value="mysql">MySQL</option><option value="snapshot">快照</option></select>
+      <input id="targetSchema" placeholder="库名（可空）"/>
+    </div>
+    <input id="targetDSN" placeholder="root:***@tcp(host:3306)/?parseTime=true"/>
+    <input id="targetPath" class="hidden" placeholder="baseline.dbsync 路径"/>
+  </div>
+  <div class="actions">
+    <label><input id="compareData" type="checkbox" checked/> 比较数据</label>
+    <label><input id="allowDestructive" type="checkbox"/> 允许破坏性</label>
+    <button id="btnCompare" class="primary">比较</button>
+  </div>
+</section>
+
+<main class="workspace">
+  <aside class="panel objects">
+    <div class="panel-title">对象 <span id="summary"></span></div>
+    <div id="tableList" class="list empty">尚未比较</div>
+  </aside>
+  <section class="panel canvas">
+    <div class="panel-title" id="detailTitle">结构差异</div>
+    <div id="detail" class="detail empty">选择左侧对象查看列/索引/约束</div>
+  </section>
+  <aside class="panel plan">
+    <div class="panel-title">SQL 预览 <span id="planBadge">只读</span></div>
+    <div id="diagnostics" class="diags"></div>
+    <div id="planList" class="plan-list empty">比较后生成差异 SQL 预览（不会执行）</div>
+    <div class="plan-actions">
+      <button id="btnPlan" class="primary">生成 SQL 预览</button>
+      <span class="muted">只读，不执行</span>
+    </div>
+  </aside>
+</main>
+
+<footer class="statusbar">
+  <span id="phaseInfo">只读比对 · 不执行任何 DDL/DML · MySQL 优先</span>
+  <span id="msg"></span>
+</footer>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
