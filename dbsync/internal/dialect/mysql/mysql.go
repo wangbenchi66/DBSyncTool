@@ -6,12 +6,15 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"regexp"
 	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
 
 	"gitee.com/wangbenchi66/dbsync/internal/model"
 )
+
+var viewRef = regexp.MustCompile("(?is)\\b(?:from|join)\\s+(?:`?([A-Za-z0-9_$]+)`?\\.)?`?([A-Za-z0-9_$]+)`?")
 
 // Open 打开 MySQL 连接。**只读用途**：调用方只能做查询/内省，禁止执行 DDL/DML。
 // 生产环境必须使用只读账号；工具内的写语句由 internal/readonly 测试静态拦截。
@@ -121,9 +124,9 @@ ORDER BY TABLE_NAME, ORDINAL_POSITION`
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var tableName, name, dataType, columnType, isNullable, extra, comment, genExpr string
+		var tableName, name, dataType, columnType, isNullable, extra, comment string
 		var ordinal int
-		var def, charset, collation sql.NullString
+		var def, charset, collation, genExpr sql.NullString
 		var charLen, numPrec, numScale, dtPrec sql.NullInt64
 		if noGen {
 			if err := rows.Scan(&tableName, &name, &ordinal, &def, &isNullable,
@@ -148,7 +151,7 @@ ORDER BY TABLE_NAME, ORDINAL_POSITION`
 			Nullable:       strings.EqualFold(isNullable, "YES"),
 			Identity:       strings.Contains(strings.ToLower(extra), "auto_increment"),
 			Generated:      strings.Contains(strings.ToUpper(extra), "GENERATED"),
-			GenerationExpr: genExpr,
+			GenerationExpr: genExpr.String,
 			Comment:        comment,
 		}
 		if def.Valid {
@@ -434,8 +437,28 @@ func readViews(ctx context.Context, db *sql.DB, schema string) ([]model.View, er
 	}
 	for i := range out {
 		out[i].Dependencies = deps[out[i].Name]
+		if len(out[i].Dependencies) == 0 {
+			out[i].Dependencies = viewRefs(out[i].Definition)
+		}
 	}
 	return out, nil
+}
+
+func viewRefs(def string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, m := range viewRef.FindAllStringSubmatch(def, -1) {
+		if len(m) < 3 {
+			continue
+		}
+		n := m[2]
+		if n == "" || strings.EqualFold(n, "select") || seen[n] {
+			continue
+		}
+		seen[n] = true
+		out = append(out, n)
+	}
+	return out
 }
 
 func readRoutines(ctx context.Context, db *sql.DB, schema string) ([]model.Routine, error) {

@@ -6,6 +6,8 @@ import (
 	"context"
 	"database/sql"
 	"os"
+	"strconv"
+	"strings"
 	"testing"
 
 	drivermysql "github.com/go-sql-driver/mysql"
@@ -13,6 +15,25 @@ import (
 	"gitee.com/wangbenchi66/dbsync/internal/model"
 )
 
+func supportsCheck(version string) bool {
+	if strings.Contains(strings.ToLower(version), "mariadb") {
+		return true
+	}
+	parts := strings.SplitN(version, ".", 3)
+	if len(parts) < 3 {
+		return true
+	}
+	major, _ := strconv.Atoi(parts[0])
+	minor, _ := strconv.Atoi(parts[1])
+	patch, _ := strconv.Atoi(strings.Fields(parts[2])[0])
+	if major != 8 {
+		return major > 8
+	}
+	if minor != 0 {
+		return minor > 0
+	}
+	return patch >= 16
+}
 func TestIntrospectMySQL(t *testing.T) {
 	base := os.Getenv("DBSYNC_TEST_MYSQL_DSN")
 	if base == "" {
@@ -40,7 +61,9 @@ func TestIntrospectMySQL(t *testing.T) {
 	}
 	defer db.Close()
 	ctx := context.Background()
+	version := ""
 	if v, err := Version(ctx, db); err == nil {
+		version = v
 		t.Logf("MySQL version: %s", v)
 	}
 	cleanup := func() {
@@ -126,8 +149,14 @@ CREATE PROCEDURE p_parent() SELECT 1;
 			hasCheck = true
 		}
 	}
-	if !hasFK || !hasCheck {
-		t.Fatalf("约束缺失: fk=%v check=%v", hasFK, hasCheck)
+	if !hasFK {
+		t.Fatalf("外键缺失: %+v", s.Table("child").Constraints)
+	}
+	if supportsCheck(version) && !hasCheck {
+		t.Fatalf("CHECK 约束缺失: %+v", parent.Constraints)
+	}
+	if !supportsCheck(version) {
+		t.Logf("服务端 %s 不支持/不保存 CHECK 约束，跳过 CHECK 断言", version)
 	}
 	if len(s.Views) != 1 || s.Views[0].Name != "v_parent" {
 		t.Fatalf("视图不符: %+v", s.Views)
