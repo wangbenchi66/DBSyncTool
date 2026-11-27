@@ -3,7 +3,7 @@
 > 输入：[`DBSyncTool-Go开发文档.md`](DBSyncTool-Go开发文档.md)、[`DBSyncTool-重构评估.md`](DBSyncTool-重构评估.md)
 > 对标：[TiCodeX SQL Schema Compare](https://github.com/TiCodeX/SQLSchemaCompare)（GPL-3.0）
 > 原则：**只借鉴功能与交互模式，不复制其代码、界面资源或文案**；核心 `internal/service` 是唯一实现，v2.0 **只交付 Windows 桌面工作台**，CLI 暂缓（v2.x）
-> 目标：Windows 10/11 x64；**MySQL 优先**；仅中文；固定浅色；不做主题切换与自动更新；快照默认不加密
+> 目标：Windows 10/11 x64；**MySQL 8.0.16 优先**；仅中文；固定浅色；不做主题切换与自动更新；快照默认不加密
 > 日期：2026-11-27
 
 ---
@@ -115,7 +115,7 @@ TiCodeX 的功能主张（来自其 README 与公开介绍）：
 
 | 能力 | TiCodeX | 我们（v2 计划） | 结论 |
 | :--- | :---: | :--- | :--- |
-| 多数据库 | ✅ MSSQL/Azure/RDS/MySQL/MariaDB/PG | **MySQL 优先**，随后 MSSQL/PG/SQLite | 补 MariaDB/Azure 预设（低成本） |
+| 多数据库 | ✅ MSSQL/Azure/RDS/MySQL/MariaDB/PG | **MySQL 8.0.16 优先**，随后 MSSQL/PG/SQLite | 补 MariaDB/Azure 预设（低成本） |
 | 对象类型 | 表/索引/约束/视图/序列/函数/过程/自定义类型 | 表/索引/约束/视图/过程/函数/触发器/序列 | **补自定义类型或明确不做**（F1） |
 | 迁移脚本 | ✅ | ✅ 分阶段计划 + plan.sql | 我们更强（预检/阶段/阻断） |
 | 建库脚本 | ✅ | ❌ | 补 `ddl export`（F5） |

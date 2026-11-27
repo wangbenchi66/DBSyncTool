@@ -6,15 +6,15 @@
 > 日期：2026-11-27
 > 阅读顺序：第 1–4 节（决策与边界）→ 第 22 节（排期）→ 按模块深入
 
-> **范围调整（2026-11-27）**：v2.0 **只交付 Windows 桌面工作台**（Wails v3），**CLI/CI 不实现**；**MySQL 优先**，随后 SQL Server/PostgreSQL/SQLite；GUI 必须包含**基础数据差异页**；**列顺序不比较，排序规则参与比较**；快照**默认不加密**；仅中文、固定浅色主题、无自动更新。
+> **范围调整（2026-11-27）**：v2.0 **只交付 Windows 桌面工作台**（Wails v3），**CLI/CI 不实现**；**MySQL 8.0.16 优先**，随后 SQL Server/PostgreSQL/SQLite；GUI 必须包含**基础数据差异页**；**列顺序不比较，排序规则参与比较**；快照**默认不加密**；仅中文、固定浅色主题、无自动更新。
 
 **一页纸决策**：
 
 | 决策 | 结论 |
 | :--- | :--- |
-| 语言 | Go 1.26（当前机器是 1.25，Wails v3 要求 1.26，见 §23.2 待确认）；模块路径 `gitee.com/wangbenchi66/dbsync` |
+| 语言 | Go 1.26（已确认 `go1.26.0 windows/amd64`）；模块路径 `gitee.com/wangbenchi66/dbsync` |
 | 入口 | Windows 桌面工作台唯一交付；核心 `service` 单一实现；CLI 暂缓（v2.x） |
-| 数据库顺序 | **MySQL 先做**，再做 SQL Server / PostgreSQL / SQLite |
+| 数据库顺序 | **MySQL 8.0.16 先做**，再做 SQL Server / PostgreSQL / SQLite |
 | 平台 | Windows 10/11 x64（WebView2） |
 | 方向 | `source`（期望）→ `target`（现状），计划 = 让 target 变成 source |
 | 数据模型 | 类型化 `Value` + 规范化编码 + 客户端哈希 |
@@ -36,14 +36,14 @@
 
 已定、本文不再讨论的决策：
 
-- **D1** 语言 Go；GUI 用 Wails v3（要求 Go 1.26+ 与 WebView2）。当前机器是 Go 1.25，需升级或改 Wails v2，见 §23.2。
+- **D1** 语言 Go 1.26（已确认可用）；GUI 用 Wails v3（要求 Go 1.26+ 与 WebView2）。
 - **D2** **桌面工作台优先**；CLI 暂缓（v2.x）。核心 `internal/service` 是唯一实现，GUI 只是外壳；未来 CLI 复用同一 service，不允许第二份逻辑。
 - **D3** 保留"快照模式"产品创意（内网隔离、U 盘传递）；**快照默认不加密**，敏感场景手动开 age。
 - **D4** 不复用原版的 CSV 通道、数据库侧哈希、`TableDiff` 模型、ViewModel 拼脚本。
 - **D5** 破坏性变更默认不执行；GUI 的破坏性开关等价于 CLI 的 `--allow-destructive`。
 - **D6** **列顺序永不参与比较**：不实现"忽略列顺序/严格列顺序"开关（原版 #14 的假开关不能复现）。
 - **D7** v2.0 GUI 必须包含基础数据差异页：没有 CLI 兜底时，"能执行数据 DML 却看不见行"不可接受。
-- **D8** **MySQL 优先**：M1 做 MySQL 方言，M2 再做另外三种；测试矩阵以 MySQL 为主。
+- **D8** **MySQL 8.0.16 优先**：M1 做 MySQL 方言，M2 再做另外三种；测试矩阵以 MySQL 8.0.16 为主。
 - **D9** **排序规则参与比较**（同方言）：列 collation 不同 → 生成 ALTER COLLATE，不阻断，但索引需重建；跨方言只展示不判定。
 - **D10** **只做 Windows**：不做 macOS/Linux GUI；Wails 的 Linux 构建要求不进入 v2.0。
 - **D11** **仅中文、固定浅色、无主题切换、无自动更新**。安装包以**便携 ZIP** 最快，Inno Setup 后置。
@@ -516,7 +516,7 @@ type Column struct {
 
 - **Uint64 的特殊处理**：SQLite 的 `INTEGER` 是有符号 64 位，`uint64 > 2^63-1` 会被存成负数或溢出，因此 SQLite 侧用 `text` 存十进制串；SQL Server 用 `decimal(20,0)`。读取时按列类型解析回 `KindUint`，不要依赖数据库的隐式转换。
 - **MySQL `TIME`**：范围 `-838:59:59`–`838:59:59`，是时长而非时刻，映射到 `KindTime`（`Nanos int64`），不要按"当日纳秒"处理。
-- **`utf8mb4_0900_bin` 需要 8.0.17+**，且 `COLLATE` 只对 `utf8mb4` 列有效；旧版本或非 utf8mb4 列要单独检测。
+- **目标 MySQL 是 8.0.16**：该版本**没有 `utf8mb4_0900_bin`**（8.0.17 才加入），排序用 `utf8mb4_bin`（PAD SPACE）；如果未来连到 8.0.17+，启动时查 `information_schema.COLLATIONS`，有 `utf8mb4_0900_bin` 就优先用（NO PAD），没有就回退 `utf8mb4_bin`。CHECK 约束从 8.0.16 起强制执行。
 - **SQL Server `tds`/`_BIN` 细节**：`_BIN` 不是"UTF-16 码元序"，而是"首个 WCHAR + 余下字节"；**必须用 `_BIN2`**。补充平面字符（emoji、CJK 扩展 B）要用测试向量验证 BIN2 与 Go UTF-8 字节序一致。
 
 ### 7.4 已知不保真项（必须在报告里标注）
@@ -710,7 +710,7 @@ type Capabilities struct {
 | 方言 | 必读差异 |
 | :--- | :--- |
 | SQL Server | `sys.*` 目录视图 + `OBJECT_DEFINITION` 读对象；`datetime2` 精度；`datetimeoffset`；`timestamp` 是 rowversion；计算列 `is_computed`；`IDENTITY(seed,inc)` 必须读；`COLLATE Latin1_General_100_BIN2` 是码点序（BIN 不是）；**collation 从 `sys.columns.collation_name` 读** |
-| MySQL | `information_schema`；DDL 隐式提交；`utf8mb4_bin`/`utf8mb4_0900_bin`；`ON UPDATE CURRENT_TIMESTAMP`；`AUTO_INCREMENT`；唯一约束以索引形式存在（读取时要还原为约束语义）；**collation 从 `COLUMNS.COLLATION_NAME` + `CHARACTER_SET_NAME` 读有效值** |
+| MySQL | `information_schema`；DDL 隐式提交；**8.0.16 用 `utf8mb4_bin`（PAD SPACE），8.0.17+ 可探测 `utf8mb4_0900_bin`（NO PAD）**；`ON UPDATE CURRENT_TIMESTAMP`；`AUTO_INCREMENT`；唯一约束以索引形式存在（读取时要还原为约束语义）；**collation 从 `COLUMNS.COLLATION_NAME` + `CHARACTER_SET_NAME` 读有效值** |
 | PostgreSQL | `pg_catalog`（`pg_attribute`/`pg_constraint`/`pg_index`）；`search_path` 决定 schema；`COLLATE "C"` 是字节序；`jsonb` 重排；分区表与继承需要显式排除；`SERIAL` 读成 identity；**collation 从 `pg_attribute.attcollation` 关联 `pg_collation` 读** |
 | SQLite | `pragma table_info/index_list/foreign_key_list`；类型是"亲和性"，按声明类型映射；**无真正 ALTER，改列要按官方 12 步重建表**（M2 实现）；`COLLATE BINARY`；无用户/权限概念。**连接级坑**：`PRAGMA foreign_keys=ON`/`busy_timeout` 是每连接设置，必须写进 DSN（`_pragma=...`）；`:memory:` 多连接会得到多个独立库，需 `file::memory:?cache=shared` + `MaxOpenConns(1)`；写并发用 WAL（`_pragma=journal_mode(WAL)`）+ busy_timeout；**SQLite 是单写者，`--parallel` 默认降为 1** |
 
@@ -788,7 +788,7 @@ func ScanRows(ctx context.Context, rows *sql.Rows, cols []*model.Column, fn func
 
 1. **强制二进制排序**：`OrderByPK` 为每个文本主键列追加码点序 collation：
    - SQL Server：`COLLATE Latin1_General_100_BIN2`（BIN2 是码点序；`_BIN` 是 UTF-16 码元序，不能用）；
-   - MySQL：`COLLATE utf8mb4_0900_bin`（8.0+，NO PAD）或 `utf8mb4_bin`；
+   - MySQL：**8.0.16 用 `COLLATE utf8mb4_bin`（PAD SPACE）**；8.0.17+ 若探测到 `utf8mb4_0900_bin`（NO PAD）则优先。两者都是码点序，但 PAD SPACE 会让尾部空格的比较出现相等，严格递增断言必须保留；
    - PostgreSQL：`COLLATE "C"`；
    - SQLite：`COLLATE BINARY`。
    **前提**：PostgreSQL/MySQL 的库编码必须是 UTF-8（连接与库两层都检查，非 UTF-8 直接报 `E_ENCODING`）；SQL Server 用 `nvarchar` + BIN2，不受默认排序规则影响。
@@ -1619,7 +1619,7 @@ func (e *Error) Unwrap() error
 
 ### 20.2 集成矩阵
 
-**先跑 MySQL 矩阵**（M1 主方言），再跑 SQL Server / PostgreSQL / SQLite。docker compose 起 `mysql:8.4`、`mcr.microsoft.com/mssql/server:2022-latest`、`postgres:16`、SQLite（文件）。每个方言在自己的 source↔target 配对里跑（同方言），跨方言只跑"结构报告"用例（只读、不断言可执行）：
+**先跑 MySQL 矩阵**（M1 主方言，目标 8.0.16），再跑 SQL Server / PostgreSQL / SQLite。docker compose 起 `mysql:8.0.16`（或直连 8.0.16 测试库）、`mcr.microsoft.com/mssql/server:2022-latest`、`postgres:16`、SQLite（文件）。每个方言在自己的 source↔target 配对里跑（同方言），跨方言只跑"结构报告"用例（只读、不断言可执行）：
 
 1. 建源/目标 schema（含外键环、自引用、跨 schema 同名表、二进制、换行、`\N`、时区、collation 差异）；
 2. `plan` → `apply` → 再 `diff`；
@@ -1759,7 +1759,7 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 | 大表差异集撑爆内存 | OOM | `--max-changes` + `--spill` |
 | SQLite 改列需重建表 | 实现复杂、易丢数据 | M2 明确"重建表"路径与回滚脚本 |
 | Wails 依赖 WebView2 | 老内网机不可用；**v2.0 没有 CLI 兜底**，装不上就完全不可用 | 安装包内置检测与引导；提供离线 WebView2 安装包说明；列为 v2.0 发布阻塞风险 |
-| Go 1.25 与 Wails v3 不兼容 | 工具链装不上，M3 直接卡住 | M0 二选一：升级 Go 1.26，或回退 Wails v2 |
+| MySQL 8.0.16 无 0900_bin | 只能用 PAD SPACE 的 `utf8mb4_bin`，尾部空格排序会相等 | 严格递增断言保留；主键唯一性本身不允许尾空格共存；必要时 `--sort=external` |
 | collation 变更重建索引 | 大表锁表/耗时，唯一键可能冲突 | 阶段 1 删索引、阶段 5 重建；唯一列先按新 collation 查重 |
 | 快照默认明文 | 数据带出内网时泄露 | 敏感场景手动开 age；UI 明确提示"当前未加密" |
 | 单人维护 | 工期与质量 | M0 坏例集 + 自动化矩阵，降低"人肉记忆" |
@@ -1767,18 +1767,18 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 
 ### 23.2 开放问题（M0 关闭）
 
-1. **MySQL 版本**：生产/测试库是 8.0.17+ 还是 5.7？前者可用 `utf8mb4_0900_bin`，后者只能 `utf8mb4_bin`（PAD SPACE）。测试库版本需要确认；凭据不写入仓库。
-2. **Go 1.25 vs Wails v3**：Wails v3 要求 Go 1.26+，当前机器是 1.25。二选一：升级 Go 到 1.26（推荐，保留 Wails v3），或改用 Wails v2（Go 1.25 可编译，但文档/API 要整体回退）。
-3. SQL Server 最低版本？（决定 `datetime2`、`BIN2`、`STRING_AGG` 可用性；MySQL 优先后可放到 M2 前定）
-4. SQL Server BIN2 与 Go 的 UTF-8 字节序在**补充平面字符**（emoji、CJK 扩展 B）上是否完全一致？不一致则 SQL Server 文本主键必须走外排（需要实测向量，不能只信文档）。
-5. 是否需要"仅生成差异、不读全表"的采样模式？（与正确性冲突，需产品取舍）
-6. WebView2 离线策略：预装 / 内置 Bootstrapper / 内置固定运行时（无 CLI 兜底，这是发布阻塞项）。
+> 已确认：**Go 1.26.0** 可用；**MySQL 目标版本 8.0.16**（无 `utf8mb4_0900_bin`，用 `utf8mb4_bin`；CHECK 从 8.0.16 起强制执行）。
+
+1. SQL Server 最低版本？（决定 `datetime2`、`BIN2`、`STRING_AGG` 可用性；MySQL 优先后可放到 M2 前定）
+2. SQL Server BIN2 与 Go 的 UTF-8 字节序在**补充平面字符**（emoji、CJK 扩展 B）上是否完全一致？不一致则 SQL Server 文本主键必须走外排（需要实测向量，不能只信文档）。
+3. 是否需要"仅生成差异、不读全表"的采样模式？（与正确性冲突，需产品取舍）
+4. WebView2 离线策略：预装 / 内置 Bootstrapper / 内置固定运行时（无 CLI 兜底，这是发布阻塞项）。
 
 ### 23.3 ADR 索引
 
 | ADR | 决策 | 状态 |
 | :--- | :--- | :--- |
-| ADR-001 | Go + Wails v3；桌面工作台先行，CLI 暂缓（**Go 版本待定：1.26 升级 or Wails v2**） | 待 M0 确认 |
+| ADR-001 | Go 1.26.0 + Wails v3；桌面工作台先行，CLI 暂缓 | 已定 |
 | ADR-002 | 值归一化规则（NaN/-0/十进制/时区） | 已定，M1 复核 |
 | ADR-003 | 快照 = ZIP + NDJSON；**默认不加密**，按需 age | 已定 |
 | ADR-004 | 方向统一 source→target | 已定 |
@@ -1788,12 +1788,13 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 | ADR-008 | v2.0 不做跨方言数据同步，只做结构报告 | 已定 |
 | ADR-009 | v2.0 只交付桌面工作台，CLI 推到 v2.x；GUI 必须含基础数据页 | 已定 |
 | ADR-010 | 列顺序不参与比较，不提供相关开关 | 已定 |
-| ADR-011 | MySQL 优先，M1 做 MySQL；其余三方言 M2 | 已定 |
+| ADR-011 | MySQL 8.0.16 优先，M1 做 MySQL；其余三方言 M2 | 已定 |
 | ADR-012 | 只做 Windows 10/11 x64，不做 macOS/Linux GUI | 已定 |
 | ADR-013 | 排序规则参与比较；差异生成 ALTER COLLATE，索引重建 | 已定 |
 | ADR-014 | 快照默认不加密；敏感场景手动开 age | 已定 |
 | ADR-015 | 仅中文、固定浅色、无主题切换、无自动更新 | 已定 |
 | ADR-016 | 发布以便携 ZIP 优先，Inno Setup 后置 | 已定 |
+| ADR-017 | MySQL 8.0.16 用 `utf8mb4_bin`；8.0.17+ 探测到 `utf8mb4_0900_bin` 才用 | 已定 |
 
 ---
 
@@ -1967,7 +1968,7 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 ### E.4 仍需实测（不在文档内解决）
 
 1. SQL Server BIN2 与 Go UTF-8 在**补充平面字符**上的排序一致性（§23.2 第 3 问）。
-2. MySQL 各版本 `utf8mb4_0900_bin` 的实际顺序与 PAD 行为。
+2. MySQL 8.0.16 的 `utf8mb4_bin` PAD SPACE 行为（尾部空格、排序相等）。
 3. N3/N4 的性能数字必须由 `internal/bench` 在真实网络与库上测出，文档只给目标。
 4. Wails v3 在目标 Windows 版本 + WebView2 缺失场景的安装体验。
 5. age `DecryptReaderAt` 在超大包上的内存与随机读性能。
