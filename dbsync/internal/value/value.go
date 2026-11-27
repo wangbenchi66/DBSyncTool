@@ -1,6 +1,7 @@
 package value
 
 import (
+	"encoding/hex"
 	"fmt"
 	"math"
 	"math/big"
@@ -80,6 +81,33 @@ func (v Value) Float() float64       { return v.f }
 func (v Value) StringValue() string  { return v.s }
 func (v Value) BytesValue() []byte   { return append([]byte(nil), v.bs...) }
 func (v Value) TimeValue() time.Time { return v.t }
+
+// Display 返回给 UI/报告的可读文本；不用于哈希或比较。
+func (v Value) Display() string {
+	switch v.kind {
+	case KindNull:
+		return "NULL"
+	case KindBool:
+		if v.b {
+			return "true"
+		}
+		return "false"
+	case KindInt:
+		return strconv.FormatInt(v.i, 10)
+	case KindUint:
+		return strconv.FormatUint(v.u, 10)
+	case KindFloat:
+		return strconv.FormatFloat(v.f, 'g', -1, 64)
+	case KindDecimal, KindString:
+		return v.s
+	case KindBytes:
+		return "0x" + hex.EncodeToString(v.bs)
+	case KindTime:
+		return v.t.UTC().Format(time.RFC3339Nano)
+	default:
+		return ""
+	}
+}
 
 // Decimal 构造一个规范化十进制。输入必须是十进制字面量，不接受 NaN/Inf。
 func Decimal(s string) (Value, error) {

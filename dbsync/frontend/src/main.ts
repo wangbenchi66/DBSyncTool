@@ -9,7 +9,7 @@ type Table = {
   name: string; status: string; columns: Column[];
   indexes: { name: string; status: string }[];
   constraints: { name: string; kind: string; status: string }[];
-  data?: { sourceCount: number; targetCount: number; inserts: number; updates: number; deletes: number; unsupportedKey: boolean };
+  data?: { sourceCount: number; targetCount: number; inserts: number; updates: number; deletes: number; unsupportedKey: boolean; rows: { kind: string; key: string; cells: { name: string; source: string; target: string }[] }[]; truncated: boolean };
 };
 type CompareView = {
   runId: string; sourceName: string; targetName: string;
@@ -114,6 +114,19 @@ function renderDetail() {
   if (t.data) {
     const d = t.data;
     html += `<p class="muted">数据：源 ${d.sourceCount} 行，目标 ${d.targetCount} 行；INSERT ${d.inserts} / UPDATE ${d.updates} / DELETE ${d.deletes}${d.unsupportedKey ? ' <span class="reason">（无主键，不能生成逐行 DML）</span>' : ""}</p>`;
+    if (d.rows?.length) {
+      html += `<h3>数据差异 ${d.truncated ? "（仅前 50 行）" : ""}</h3><table><thead><tr><th>类型</th><th>主键</th><th>变化</th></tr></thead><tbody>`;
+      for (const r of d.rows) {
+        const kind = r.kind === "insert" ? "新增" : r.kind === "delete" ? "删除" : "变更";
+        const cells = r.cells.map((c) => {
+          if (r.kind === "insert") return `${esc(c.name)}=${esc(c.source)}`;
+          if (r.kind === "delete") return `${esc(c.name)}=${esc(c.target)}`;
+          return `${esc(c.name)}: ${esc(c.target)} → ${esc(c.source)}`;
+        }).join("；");
+        html += `<tr><td><span class="badge ${r.kind}">${kind}</span></td><td class="mono">${esc(r.key)}</td><td class="mono">${cells}</td></tr>`;
+      }
+      html += `</tbody></table>`;
+    }
   }
   html += `<table><thead><tr><th>列</th><th>状态</th><th>源类型</th><th>目标类型</th><th>可空</th><th>默认值</th></tr></thead><tbody>`;
   for (const c of t.columns) {

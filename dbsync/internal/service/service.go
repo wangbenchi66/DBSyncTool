@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 
 	"gitee.com/wangbenchi66/dbsync/internal/data"
@@ -90,12 +91,26 @@ type ObjectBrief struct {
 }
 
 type DataBrief struct {
-	SourceCount    int  `json:"sourceCount"`
-	TargetCount    int  `json:"targetCount"`
-	Inserts        int  `json:"inserts"`
-	Updates        int  `json:"updates"`
-	Deletes        int  `json:"deletes"`
-	UnsupportedKey bool `json:"unsupportedKey"`
+	SourceCount    int        `json:"sourceCount"`
+	TargetCount    int        `json:"targetCount"`
+	Inserts        int        `json:"inserts"`
+	Updates        int        `json:"updates"`
+	Deletes        int        `json:"deletes"`
+	UnsupportedKey bool       `json:"unsupportedKey"`
+	Rows           []RowBrief `json:"rows"`
+	Truncated      bool       `json:"truncated"`
+}
+
+type RowBrief struct {
+	Kind  string      `json:"kind"` // insert/update/delete
+	Key   string      `json:"key"`
+	Cells []CellBrief `json:"cells"`
+}
+
+type CellBrief struct {
+	Name   string `json:"name"`
+	Source string `json:"source"`
+	Target string `json:"target"`
 }
 
 type PlanView struct {
@@ -504,7 +519,9 @@ func toCompareView(runID string, d *diff.SchemaDiff) *CompareView {
 				SourceCount: t.Data.SourceCount, TargetCount: t.Data.TargetCount,
 				Inserts: len(t.Data.Inserts), Updates: len(t.Data.Updates), Deletes: len(t.Data.Deletes),
 				UnsupportedKey: t.Data.UnsupportedKey,
+				Rows:           []RowBrief{},
 			}
+			tb.Data.Rows, tb.Data.Truncated = dataRows(&t)
 		}
 		v.Tables = append(v.Tables, tb)
 	}
@@ -518,6 +535,77 @@ func toCompareView(runID string, d *diff.SchemaDiff) *CompareView {
 		v.Triggers = append(v.Triggers, ObjectBrief{Name: o.Name, Kind: o.Kind, Status: string(o.Status)})
 	}
 	return v
+}
+
+func dataRows(t *diff.TableDiff) ([]RowBrief, bool) {
+	if t.Data == nil {
+		return []RowBrief{}, false
+	}
+	const limit = 50
+	total := t.Data.Changes()
+	out := make([]RowBrief, 0, min(total, limit))
+	appendRow := func(kind string, key diff.Row, cols []string, source, target diff.Row) bool {
+		if len(out) >= limit {
+			return false
+		}
+		rb := RowBrief{Kind: kind, Key: keyText(key, t.Data.KeyColumns), Cells: []CellBrief{}}
+		for _, c := range cols {
+			sv, sok := source[c]
+			tv, tok := target[c]
+			cell := CellBrief{Name: c}
+			if sok {
+				cell.Source = sv.Display()
+			}
+			if tok {
+				cell.Target = tv.Display()
+			}
+			rb.Cells = append(rb.Cells, cell)
+		}
+		out = append(out, rb)
+		return true
+	}
+	for _, r := range t.Data.Inserts {
+		if t.Source == nil {
+			break
+		}
+		cols := columnNames(t.Source)
+		if !appendRow("insert", r, cols, r, nil) {
+			return out, true
+		}
+	}
+	for _, u := range t.Data.Updates {
+		if !appendRow("update", u.Key, u.Changed, u.After, u.Before) {
+			return out, true
+		}
+	}
+	for _, r := range t.Data.Deletes {
+		if t.Target == nil {
+			break
+		}
+		cols := columnNames(t.Target)
+		if !appendRow("delete", r, cols, nil, r) {
+			return out, true
+		}
+	}
+	return out, total > limit
+}
+
+func keyText(r diff.Row, pk []string) string {
+	parts := make([]string, 0, len(pk))
+	for _, c := range pk {
+		if v, ok := r[c]; ok {
+			parts = append(parts, c+"="+v.Display())
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+func columnNames(t *model.Table) []string {
+	out := make([]string, 0, len(t.Columns))
+	for _, c := range t.Columns {
+		out = append(out, c.Name)
+	}
+	return out
 }
 
 func toPlanView(runID string, p *plan.Plan) *PlanView {
