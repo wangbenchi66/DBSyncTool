@@ -1,4 +1,5 @@
-// Package mysql 读取 MySQL 8.0.16 的结构 IR。它不做比对，也不生成 SQL。
+// Package mysql 读取 MySQL / MariaDB 的结构 IR。它不做比对，也不生成 SQL。
+// 兼容策略：以 MySQL 8.0.16 为基线，CHECK/生成列等元数据按版本回退；排序统一用 utf8mb4_bin。
 package mysql
 
 import (
@@ -29,7 +30,8 @@ func Open(dsn string) (*sql.DB, error) {
 }
 
 // Introspect 读取一个 schema 的表、列、索引、约束、视图、过程/函数、触发器。
-// 只支持 MySQL 8.0.16+；不读取权限、分区、事件。
+// 兼容 MySQL 5.7+/8.0 与常见 MariaDB；不读取权限、分区、事件。
+// 旧版本缺少 CHECK_CONSTRAINTS/GENERATION_EXPRESSION 时自动退回旧查询。
 func Introspect(ctx context.Context, db *sql.DB, schema string) (*model.Schema, error) {
 	if schema == "" {
 		return nil, fmt.Errorf("schema 不能为空")
@@ -99,7 +101,21 @@ SELECT TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE,
 FROM information_schema.COLUMNS
 WHERE TABLE_SCHEMA = ?
 ORDER BY TABLE_NAME, ORDINAL_POSITION`
+	const qNoGen = `
+SELECT TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE,
+       DATA_TYPE, COLUMN_TYPE, CHARACTER_MAXIMUM_LENGTH, NUMERIC_PRECISION,
+       NUMERIC_SCALE, DATETIME_PRECISION, CHARACTER_SET_NAME, COLLATION_NAME,
+       EXTRA, COLUMN_COMMENT, NULL
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = ?
+ORDER BY TABLE_NAME, ORDINAL_POSITION`
 	rows, err := db.QueryContext(ctx, q, schema)
+	noGen := false
+	if err != nil {
+		// MySQL 5.7 之前的 information_schema 没有 GENERATION_EXPRESSION；退回旧列集。
+		rows, err = db.QueryContext(ctx, qNoGen, schema)
+		noGen = true
+	}
 	if err != nil {
 		return fmt.Errorf("读取列: %w", err)
 	}
@@ -109,7 +125,13 @@ ORDER BY TABLE_NAME, ORDINAL_POSITION`
 		var ordinal int
 		var def, charset, collation sql.NullString
 		var charLen, numPrec, numScale, dtPrec sql.NullInt64
-		if err := rows.Scan(&tableName, &name, &ordinal, &def, &isNullable,
+		if noGen {
+			if err := rows.Scan(&tableName, &name, &ordinal, &def, &isNullable,
+				&dataType, &columnType, &charLen, &numPrec, &numScale, &dtPrec,
+				&charset, &collation, &extra, &comment, &genExpr); err != nil {
+				return err
+			}
+		} else if err := rows.Scan(&tableName, &name, &ordinal, &def, &isNullable,
 			&dataType, &columnType, &charLen, &numPrec, &numScale, &dtPrec,
 			&charset, &collation, &extra, &comment, &genExpr); err != nil {
 			return err
@@ -286,7 +308,28 @@ LEFT JOIN information_schema.CHECK_CONSTRAINTS cc
  AND cc.CONSTRAINT_NAME = tc.CONSTRAINT_NAME
 WHERE tc.CONSTRAINT_SCHEMA = ? AND tc.TABLE_SCHEMA = ?
 ORDER BY tc.TABLE_NAME, tc.CONSTRAINT_NAME, kcu.ORDINAL_POSITION`
+	// CHECK_CONSTRAINTS 在 MySQL 5.7 / 旧 MariaDB 上可能不存在；退回无 CHECK 的查询。
+	const qNoCheck = `
+SELECT tc.TABLE_NAME, tc.CONSTRAINT_NAME, tc.CONSTRAINT_TYPE,
+       kcu.COLUMN_NAME, kcu.ORDINAL_POSITION,
+       kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME,
+       rc.UPDATE_RULE, rc.DELETE_RULE, NULL
+FROM information_schema.TABLE_CONSTRAINTS tc
+LEFT JOIN information_schema.KEY_COLUMN_USAGE kcu
+  ON kcu.CONSTRAINT_SCHEMA = tc.CONSTRAINT_SCHEMA
+ AND kcu.CONSTRAINT_NAME = tc.CONSTRAINT_NAME
+ AND kcu.TABLE_SCHEMA = tc.TABLE_SCHEMA
+ AND kcu.TABLE_NAME = tc.TABLE_NAME
+LEFT JOIN information_schema.REFERENTIAL_CONSTRAINTS rc
+  ON rc.CONSTRAINT_SCHEMA = tc.CONSTRAINT_SCHEMA
+ AND rc.CONSTRAINT_NAME = tc.CONSTRAINT_NAME
+ AND rc.TABLE_NAME = tc.TABLE_NAME
+WHERE tc.CONSTRAINT_SCHEMA = ? AND tc.TABLE_SCHEMA = ?
+ORDER BY tc.TABLE_NAME, tc.CONSTRAINT_NAME, kcu.ORDINAL_POSITION`
 	rows, err := db.QueryContext(ctx, q, schema, schema)
+	if err != nil {
+		rows, err = db.QueryContext(ctx, qNoCheck, schema, schema)
+	}
 	if err != nil {
 		return fmt.Errorf("读取约束: %w", err)
 	}

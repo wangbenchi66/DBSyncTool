@@ -1,6 +1,6 @@
 # dbsync
 
-DBSyncTool v2 的 Go 实现（Windows 桌面工作台，MySQL 8.0.16 优先）。
+DBSyncTool v2 的 Go 实现（Windows 桌面工作台，MySQL 8.0.16 优先，兼容 MySQL 5.7+/MariaDB 的常见元数据）。
 
 > **只读边界**：本工具只做结构与数据比对、SQL 预览；**不执行任何 DDL/DML**，没有 Apply/执行按钮。数据库连接必须使用只读账号；生产代码禁止 `Exec/ExecContext`（`internal/readonly` 测试会拦截）。
 
