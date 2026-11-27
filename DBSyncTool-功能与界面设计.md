@@ -116,7 +116,7 @@ TiCodeX 的功能主张（来自其 README 与公开介绍）：
 
 | 能力 | TiCodeX | 我们（v2 计划） | 结论 |
 | :--- | :---: | :--- | :--- |
-| 多数据库 | ✅ MSSQL/Azure/RDS/MySQL/MariaDB/PG | **MySQL 8.0.16 + SQLite 已实现**；MSSQL/PG 待做 | 补 MariaDB/Azure 预设（低成本） |
+| 多数据库 | ✅ MSSQL/Azure/RDS/MySQL/MariaDB/PG | **MySQL 8.0.16 + SQLite + PostgreSQL 已实现**；SQL Server 待做 | 补 MariaDB/Azure 预设（低成本） |
 | 对象类型 | 表/索引/约束/视图/序列/函数/过程/自定义类型 | 表/索引/约束/视图/过程/函数/触发器/序列 | **补自定义类型或明确不做**（F1） |
 | 迁移脚本 | ✅ | **只读 SQL 预览**（不执行） | 我们只做比对，不碰执行 |
 | 建库脚本 | ✅ | ❌ | 补 `ddl export`（F5） |
