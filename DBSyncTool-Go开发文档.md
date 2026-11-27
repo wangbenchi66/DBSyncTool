@@ -6,18 +6,22 @@
 > 日期：2026-11-27
 > 阅读顺序：第 1–4 节（决策与边界）→ 第 22 节（排期）→ 按模块深入
 
-> **范围调整（2026-11-27）**：v2.0 **只交付桌面工作台**（Wails v3），**CLI 暂不实现**；§15/§16 的 CLI/CI 规格保留为 v2.x。因为 CLI 暂缓，v2.0 的 GUI 必须包含**基础数据差异页**，否则数据同步没有入口。**列顺序不参与比较，也不提供相关开关。**
+> **范围调整（2026-11-27）**：v2.0 **只交付 Windows 桌面工作台**（Wails v3），**CLI/CI 不实现**；**MySQL 优先**，随后 SQL Server/PostgreSQL/SQLite；GUI 必须包含**基础数据差异页**；**列顺序不比较，排序规则参与比较**；快照**默认不加密**；仅中文、固定浅色主题、无自动更新。
 
 **一页纸决策**：
 
 | 决策 | 结论 |
 | :--- | :--- |
-| 语言 | Go 1.26，模块路径 `gitee.com/wangbenchi66/dbsync` |
-| 入口 | 桌面工作台唯一交付；核心 `service` 单一实现；CLI 暂缓（v2.x） |
+| 语言 | Go 1.26（当前机器是 1.25，Wails v3 要求 1.26，见 §23.2 待确认）；模块路径 `gitee.com/wangbenchi66/dbsync` |
+| 入口 | Windows 桌面工作台唯一交付；核心 `service` 单一实现；CLI 暂缓（v2.x） |
+| 数据库顺序 | **MySQL 先做**，再做 SQL Server / PostgreSQL / SQLite |
+| 平台 | Windows 10/11 x64（WebView2） |
 | 方向 | `source`（期望）→ `target`（现状），计划 = 让 target 变成 source |
 | 数据模型 | 类型化 `Value` + 规范化编码 + 客户端哈希 |
-| 快照 | ZIP + NDJSON + 每表摘要；加密用 age |
-| 列顺序 | **不参与比较**（不提供"忽略/严格"开关） |
+| 快照 | ZIP + NDJSON + 每表摘要；**默认不加密**，按需 age |
+| 列顺序 | **不参与比较**，不提供开关 |
+| 排序规则 | **参与比较**（同方言），差异生成 ALTER COLLATE；跨方言只展示 |
+| 语言/主题/更新 | 仅中文；固定浅色；不做主题切换与自动更新 |
 | 正确性优先 | 每个 P0 都有"先红后绿"的回归用例；集成矩阵自证幂等 |
 
 ---
@@ -32,13 +36,17 @@
 
 已定、本文不再讨论的决策：
 
-- **D1** 语言 Go；GUI 用 Wails v3（2026-10-26 发布 v3.0.0 稳定版，要求 Go 1.26+ 与 WebView2）。
+- **D1** 语言 Go；GUI 用 Wails v3（要求 Go 1.26+ 与 WebView2）。当前机器是 Go 1.25，需升级或改 Wails v2，见 §23.2。
 - **D2** **桌面工作台优先**；CLI 暂缓（v2.x）。核心 `internal/service` 是唯一实现，GUI 只是外壳；未来 CLI 复用同一 service，不允许第二份逻辑。
-- **D3** 保留"快照模式"产品创意（内网隔离、U 盘传递）。
+- **D3** 保留"快照模式"产品创意（内网隔离、U 盘传递）；**快照默认不加密**，敏感场景手动开 age。
 - **D4** 不复用原版的 CSV 通道、数据库侧哈希、`TableDiff` 模型、ViewModel 拼脚本。
 - **D5** 破坏性变更默认不执行；GUI 的破坏性开关等价于 CLI 的 `--allow-destructive`。
 - **D6** **列顺序永不参与比较**：不实现"忽略列顺序/严格列顺序"开关（原版 #14 的假开关不能复现）。
 - **D7** v2.0 GUI 必须包含基础数据差异页：没有 CLI 兜底时，"能执行数据 DML 却看不见行"不可接受。
+- **D8** **MySQL 优先**：M1 做 MySQL 方言，M2 再做另外三种；测试矩阵以 MySQL 为主。
+- **D9** **排序规则参与比较**（同方言）：列 collation 不同 → 生成 ALTER COLLATE，不阻断，但索引需重建；跨方言只展示不判定。
+- **D10** **只做 Windows**：不做 macOS/Linux GUI；Wails 的 Linux 构建要求不进入 v2.0。
+- **D11** **仅中文、固定浅色、无主题切换、无自动更新**。安装包以**便携 ZIP** 最快，Inno Setup 后置。
 
 仍需在 M0 关闭的开放问题见 §23.2；三个方向性问题（主力库、原生观感、重写 vs 增量）的默认答案沿用评估文档 §10，本文不再重复。
 
@@ -52,7 +60,7 @@
 
 | 编号 | 目标 | 验收方式 |
 | :--- | :--- | :--- |
-| G1 | 四种方言（SQL Server / MySQL / PostgreSQL / SQLite）的结构读取与 DDL 生成 | 四方言集成矩阵绿 |
+| G1 | **MySQL 优先**，随后 SQL Server / PostgreSQL / SQLite 的结构读取与 DDL 生成 | MySQL 矩阵先绿，再扩到四方言 |
 | G2 | 结构 + 数据比对，输出可执行、幂等的分阶段计划 | "执行后再比对 = 无差异" |
 | G3 | 快照 v2：流式读写、可检查、可加密、带摘要 | round-trip 无损（二进制/换行/`\N`/时区） |
 | G4 | **桌面工作台**可完成"比较 → 计划 → 执行 → 自检" | 不跳页完成全流程，不需要开终端 |
@@ -63,8 +71,8 @@
 
 | 编号 | 指标 | 目标值（验收线，不是宣传语） |
 | :--- | :--- | :--- |
-| N1 | 桌面安装包 | ≤ 80 MB（不含 WebView2 Runtime；安装时检测/引导） |
-| N2 | 启动 | 热启动 ≤ 1 s、冷启动 ≤ 2 s（Windows，关闭 Defender 首次扫描影响） |
+| N1 | Windows 便携包 | 解压即用；不含 WebView2 Runtime，启动时检测/引导；目标 ≤ 80 MB |
+| N2 | 启动 | 热启动 ≤ 1 s、冷启动 ≤ 2 s（Windows 10/11，关闭 Defender 首次扫描影响） |
 | N3 | 流式内存 | 单表 100 万行比对，**进程常驻 ≤ 384 MB**（其中数据预算 256 MiB：差异集 128 + 多重集 128，其余为运行时开销） |
 | N4 | 吞吐 | 局域网内单表 ≥ 20k 行/秒（**窄行 200B、主键索引可用、无服务端排序**；宽行或强制 COLLATE 排序时按实测报告，不承诺） |
 | N5 | 可复现 | 同一输入两次运行，**明文快照与 plan.json** 字节级一致（时间戳字段除外）；加密快照因随机 file key/salt/nonce 不可复现，只要求解密后内容一致 |
@@ -73,7 +81,8 @@
 
 ### 2.3 不做什么（v2.0）
 
-- **不交付 CLI**：`cmd/dbsync` 与 `internal/cli` 留到 v2.x；v2.0 只发桌面工作台；
+- **不交付 CLI/CI**：`cmd/dbsync` 与 `internal/cli` 留到 v2.x；v2.0 只发 Windows 桌面工作台；
+- **不做自动更新、主题切换、多语言**：固定浅色、仅中文；
 - 不做数据迁移以外的 ETL、不做定时任务调度（P2 的漂移检测另立）；
 - 不读取也不生成权限/角色/表空间/分区方案（IR 没有这些字段；v2.1 再评估"只读报告"）；
 - 不做 Oracle / 达梦 / 人大金仓（方言接口留好，M5 以后再评估）；
@@ -457,7 +466,7 @@ type Type struct {
 	Precision int    // Decimal
 	Scale     int    // Decimal
 	Encoding  TextEncoding // UTF8/UTF16/ASCII/Latin1；只对 Text 有意义
-	Collation string
+	Collation string       // 有效排序规则；同方言参与比较，跨方言仅展示
 	Raw       string // 方言原生类型名，仅用于展示与排错
 }
 
@@ -515,7 +524,7 @@ type Column struct {
 | 项 | 行为 |
 | :--- | :--- |
 | JSON 键序 | `jsonb` 读取时已重排；跨方言比较只做"提示"，不阻断 |
-| 文本排序规则 | 只影响 DDL 生成，不影响数据值比较；`COLLATE` 差异按"可接受"提示 |
+| 文本排序规则 | **同方言参与列比较**：不同则生成 ALTER COLLATE（不阻断，但索引要重建）；跨方言只展示名称，不判定 |
 | 浮点 NaN/-0 | 归一化后再比较，可能与某些库的位级差异不一致（不视为数据差异） |
 | 无时区时间 | 跨方言按墙上时间比较，不做时区推断 |
 | 计算列 / rowversion | **不参与数据比对与 DML**：值由数据库生成，两端必然不同；只在结构差异里报告定义 |
@@ -700,9 +709,9 @@ type Capabilities struct {
 
 | 方言 | 必读差异 |
 | :--- | :--- |
-| SQL Server | `sys.*` 目录视图 + `OBJECT_DEFINITION` 读对象；`datetime2` 精度；`datetimeoffset`；`timestamp` 是 rowversion；计算列 `is_computed`；`IDENTITY(seed,inc)` 必须读；`COLLATE Latin1_General_100_BIN2` 是码点序（BIN 不是） |
-| MySQL | `information_schema`；DDL 隐式提交；`utf8mb4_bin`/`utf8mb4_0900_bin`；`ON UPDATE CURRENT_TIMESTAMP`；`AUTO_INCREMENT`；唯一约束以索引形式存在（读取时要还原为约束语义） |
-| PostgreSQL | `pg_catalog`（`pg_attribute`/`pg_constraint`/`pg_index`）；`search_path` 决定 schema；`COLLATE "C"` 是字节序；`jsonb` 重排；分区表与继承需要显式排除；`SERIAL` 读成 identity |
+| SQL Server | `sys.*` 目录视图 + `OBJECT_DEFINITION` 读对象；`datetime2` 精度；`datetimeoffset`；`timestamp` 是 rowversion；计算列 `is_computed`；`IDENTITY(seed,inc)` 必须读；`COLLATE Latin1_General_100_BIN2` 是码点序（BIN 不是）；**collation 从 `sys.columns.collation_name` 读** |
+| MySQL | `information_schema`；DDL 隐式提交；`utf8mb4_bin`/`utf8mb4_0900_bin`；`ON UPDATE CURRENT_TIMESTAMP`；`AUTO_INCREMENT`；唯一约束以索引形式存在（读取时要还原为约束语义）；**collation 从 `COLUMNS.COLLATION_NAME` + `CHARACTER_SET_NAME` 读有效值** |
+| PostgreSQL | `pg_catalog`（`pg_attribute`/`pg_constraint`/`pg_index`）；`search_path` 决定 schema；`COLLATE "C"` 是字节序；`jsonb` 重排；分区表与继承需要显式排除；`SERIAL` 读成 identity；**collation 从 `pg_attribute.attcollation` 关联 `pg_collation` 读** |
 | SQLite | `pragma table_info/index_list/foreign_key_list`；类型是"亲和性"，按声明类型映射；**无真正 ALTER，改列要按官方 12 步重建表**（M2 实现）；`COLLATE BINARY`；无用户/权限概念。**连接级坑**：`PRAGMA foreign_keys=ON`/`busy_timeout` 是每连接设置，必须写进 DSN（`_pragma=...`）；`:memory:` 多连接会得到多个独立库，需 `file::memory:?cache=shared` + `MaxOpenConns(1)`；写并发用 WAL（`_pragma=journal_mode(WAL)`）+ busy_timeout；**SQLite 是单写者，`--parallel` 默认降为 1** |
 
 ### 9.3 连接、DSN 与凭据
@@ -853,6 +862,7 @@ baseline.dbsync             # 加密：age(ZIP 字节流)（魔数 age-encryptio
 扩展名不因加密改变，读取时按**文件头魔数**判断；`.age` 后缀作为兼容别名接受。这样 `snapshot://./baseline.dbsync` 在加密与否时都成立，避免"忘记改后缀"这类错误。
 
 - 明文用 ZIP：`unzip -l`/`dbsync snapshot inspect` 都能看，满足"出问题能自己查"。
+- **默认明文**：`--encrypt none`（默认）直接写 ZIP；`--encrypt age` 才加密。敏感数据带出内网时必须手动开启，UI 要显著提示"当前快照未加密"。
 - 加密用 [age](https://filippo.io/age)：口令模式 `age.NewScryptRecipient`（只能有唯一 recipient）；也支持 X25519 公钥模式。
 - **加密不改容器**：age v1.3+ 提供 `DecryptReaderAt`，可直接把 `*os.File`（`io.ReaderAt`）解成明文 `io.ReaderAt` 交给 `zip.NewReader`，**不需要落明文临时文件**；只有输入是 stdin/管道（不可 seek）时才落临时文件。
 - **关闭顺序**：写入时 `zip.Writer` 包在 age `WriteCloser` 上，必须先 `zip.Close()` 再 `age.Close()`——否则中央目录没写完、最后一块密文没 flush，包直接损坏。
@@ -939,15 +949,20 @@ CHECKSUMS.txt
 
 | 判定 | 条件 | 生成变更 | 阻断 | plan/apply 退出码 |
 | :--- | :--- | :--- | :--- | :---: |
-| 等价 | `ID`、位宽、长度、精度、标度、编码全同 | 否 | 否 | 0 |
+| 等价 | `ID`、位宽、长度、精度、标度、编码、`Collation` 全同 | 否 | 否 | 0 |
 | 可接受 | 同 ID 但文本编码不同（`varchar`↔`nvarchar`）、**source 比 target 宽**（标度/长度放宽） | 是（带提示） | 否 | 0 |
+| 修改 | 同 ID/参数，但 `Collation` 不同 | 是（ALTER COLLATE，索引重建） | 否 | 0 |
 | 阻断 | 跨 ID 且不在转换族（`text`→`int`）、**source 的长度/精度/标度小于 target**（收窄）、target 可空而 source 非空且存在 NULL | **否** | 是 | 4 |
+
+> **Collation 比较**：只对文本列、只在同方言内比较；MySQL 比较 `CHARACTER_SET_NAME + COLLATION_NAME` 的有效值，SQL Server 读 `sys.columns.collation_name`，PostgreSQL 读 `attcollation`，SQLite 没有列级 collation（跳过并记 info）。跨方言的 collation 名称不可比，只展示不判定。
+>
+> Collation 变更**不阻断**，但会重建该列上的索引；唯一索引列还要按新 collation 查重（见 §13.3）。
 
 > 收窄方向容易写反：`source` 是"要变成的样子"。`source varchar(50)` 覆盖 `target varchar(100)` 是收窄，可能截断；反过来是放宽，安全。
 >
 > **阻断语义**：阻断项**不会**写进可执行计划；`plan` 以退出码 4 结束并输出诊断，绝不生成"带注释的半份脚本"。`diff` 不做阻断（它只报告），阻断项以诊断形式输出，是否失败由 `--fail-on` 决定。
 >
-> **`--ignore` 语义**：`--ignore=type-encoding` 表示这类差异"既不生成变更、也不报诊断"，必须在报告里记一条 info，避免"忽略"变成"静默"。可忽略项只有"可接受"级；阻断级不可忽略。
+> **`--ignore` 语义**：`--ignore=type-encoding` 表示这类差异"既不生成变更、也不报诊断"，必须在报告里记一条 info，避免"忽略"变成"静默"。可忽略项只有"可接受"级；阻断级不可忽略；**排序规则不提供忽略开关**（既然选择比较，就不做假开关）。
 
 转换族白名单（可配）：`Int↔Decimal`、`Date↔Timestamp`、`Int↔Uint`（无负数时）。白名单之外一律阻断，避免"看起来能转"。
 
@@ -1086,7 +1101,7 @@ renames:
 | 0 preflight | 只读检查 | 阻断项不通过则整体失败，不生成可执行计划 |
 | 1 drop dependents | 删除**参与数据变更或阻塞结构变更**的外键与唯一索引；视图按 §13.1.1 | 精确选取：只动受影响的表，不搞全库删除 |
 | 2 data-cleanup | DELETE（target 独有行） | 先删，避免后续加约束/改键时被历史数据卡住 |
-| 3 schema-additive | CREATE TABLE、ADD COLUMN（**先按可空加**）、放宽类型/可空性；**DROP target 独有的表/列**（破坏性） | 目标独有的列必须在装载前删掉，否则带 NOT NULL 的旧列会让 INSERT 失败；NOT NULL 收紧留到阶段 5 |
+| 3 schema-additive | CREATE TABLE、ADD COLUMN（**先按可空加**）、放宽类型/可空性、**collation 变更**；**DROP target 独有的表/列**（破坏性） | 目标独有的列必须在装载前删掉，否则带 NOT NULL 的旧列会让 INSERT 失败；NOT NULL 收紧留到阶段 5 |
 | 4 data-load | INSERT / UPDATE | 此时表结构已能容纳新数据，且不再有"只属于 target"的列挡路 |
 | 5 schema-finalize | UNIQUE/CHECK/索引/FK、收窄类型、**自增计数器重设** | 主键变更走阶段 3 的整表替换路径，不在此阶段；数据已对齐，唯一性与外键在最后统一校验 |
 | 6 objects | 视图/过程/函数/触发器/序列 | 先按 source 定义重建阶段 1 摘下的对象，再应用对象差异 |
@@ -1105,6 +1120,7 @@ renames:
 | 外键 | 凡是**本计划要改数据或改结构**的表，其相关外键在阶段 1 统一删除，阶段 5 重建。只靠"仅删受阻的"不够：阶段 2 删行与阶段 4 插行同时存在时，父/子顺序不存在单一解（评估文档未覆盖这一点） |
 | 唯一索引/唯一约束 | 对**有数据变更**的表，阶段 1 删除、阶段 5 重建。否则"两行交换唯一值"（A→B、B→A）必然中途冲突；`--index-early` 不改变这条规则 |
 | 普通索引 | 默认保留（写入变慢但省一次重建）；`--rebuild-indexes` 时随唯一索引一起重建 |
+| collation 变更列上的索引 | 阶段 1 删除、阶段 5 重建；MySQL 可能隐式重建，但计划里仍显式处理，保证各阶段一致 |
 | 视图 | 默认**不删**。若某变更被依赖视图阻塞，预检报 `E_VIEW_BLOCK` 并给出视图清单；只有显式 `--recreate-views` 才在阶段 1 摘下、阶段 6 按 **source 的定义**重建。**source 中已不存在的视图不要重建**——它本来就该被删除 |
 | 触发器 | 默认保留；`--disable-triggers` 时按方言禁用/启用，避免数据装载期间重复写入审计表 |
 
@@ -1152,6 +1168,7 @@ func (g *Graph) SCC() [][]NodeID
 | 唯一约束/索引 | **最终数据**有重复（同步表看 source，未同步表看 target） | 去重或改用普通索引 |
 | CHECK 约束 | **最终数据**不满足表达式（同步表看 source，未同步表看 target） | 清洗数据，或先以 `NOT VALID`/`WITH NOCHECK` 方式添加 |
 | 外键约束 | **最终数据**有孤儿行（同步表看 source，未同步表看 target） | 先补父行或清理子行 |
+| 排序规则变更 | 该列被唯一索引/主键引用，且新 collation 下出现重复 | 按新 collation 去重，或阶段 1 删索引、阶段 5 重建 |
 | 删除表 | 有外键/视图引用 | 阻断，需 `--allow-destructive` |
 | 改名候选 | 启发式命中但未确认 | 提示，需 `--renames` 确认 |
 | MySQL 时间范围 | `TimestampTZ` 值早于 1970 或晚于 2038 | 改用 `datetime` 并明确语义，或阻断 |
@@ -1178,6 +1195,7 @@ func (g *Graph) SCC() [][]NodeID
   - SQLite：显式 rowid/主键即可，`AUTOINCREMENT` 的 `sqlite_sequence` 会自动上调。
   `--exclude-identity` 仅用于重建数据，开启时告警。
 - **自增计数器重设**（阶段 5 必做）：SQL Server 的 `IDENTITY_INSERT` **不会**更新当前种子，必须 `DBCC CHECKIDENT ('t', RESEED, <max>)`；PostgreSQL 的 identity/sequence 要 `setval`；MySQL/SQLite 会随显式插入自动上调。漏掉这一步，同步后第一次自动插入就会撞主键。
+- **排序规则**：文本列 DDL 必须显式输出 collation——MySQL 用 `MODIFY COLUMN <完整定义> CHARACTER SET <cs> COLLATE <coll>`，SQL Server/PG 用 `ALTER COLUMN ... COLLATE <coll>`；SQLite 没有列级 collation，遇到 `Collation` 差异报 `E_COLLATION_UNSUPPORTED` 并跳过。collation 变更列上的索引在阶段 1 删除、阶段 5 重建。
 - **回滚脚本**：只为可逆操作生成（CREATE→DROP、ADD COLUMN→DROP COLUMN、INSERT→按主键 DELETE）；不可逆操作在脚本里用注释标明，**不再伪造 `RolledBack` 标志**。
 
 ### 13.5 Plan 的机器格式
@@ -1344,7 +1362,7 @@ snapshot://./baseline.dbsync?pass_env=DBSYNC_SNAPSHOT_PASS
 
 | 命令 | 作用 | 关键参数 |
 | :--- | :--- | :--- |
-| `dbsync snapshot create` | 导出快照（默认含数据） | `--source` `--output` `--tables` `--schema-only` `--with-count` `--encrypt none\|age` `--pass-env` `--age-recipient` |
+| `dbsync snapshot create` | 导出快照（默认含数据、**默认不加密**） | `--source` `--output` `--tables` `--schema-only` `--with-count` `--encrypt none\|age`（默认 `none`） `--pass-env` `--age-recipient` |
 | `dbsync snapshot inspect` | 查看 manifest/表清单 | `--json` `--pass-env` |
 | `dbsync snapshot verify` | 校验摘要与完整性 | `--pass-env` |
 | `dbsync diff` | 比对并输出差异 | `--source` `--target` `--tables` `--include` `--exclude` `--schema-only` `--data` `--format` `--output` `--fail-on` `--rows` |
@@ -1413,11 +1431,10 @@ policies:
 ### 15.5 示例
 
 ```bash
-# 导出生产基线（加密）；DSN 与口令都走环境变量，不进命令行
-DBSYNC_SNAPSHOT_PASS=... \
-DBSYNC_SOURCE_DSN="mssql://sa@prod:1433?database=app&encrypt=true" \
+# 导出生产基线（默认不加密；敏感环境加 --encrypt age）
+DBSYNC_SOURCE_DSN="mysql://user@host:3306/app" \
 dbsync snapshot create --source-env DBSYNC_SOURCE_DSN \
-  --output baseline.dbsync --encrypt age --tables "dbo.*"
+  --output baseline.dbsync --tables "app.*"
 
 # 比对：快照（期望）→ 同方言测试库（现状）
 dbsync diff --source snapshot://./baseline.dbsync --target "mssql://sa@test/app?encrypt=true" \
@@ -1509,7 +1526,7 @@ JSON 结构（节选）：
 - 取消：Go 侧维护 `map[runID]context.CancelFunc`，前端调 `Cancel(runID)`；不要靠关闭 channel。
 - 大数据：差异列表分页（每页 500 行）+ 虚拟滚动；行级 diff 只取选中表。**v2.0 必须有基础数据差异页（只读、分页、列高亮）**，搜索/导出/按列视图放 v2.1。
 - WebView2：Windows 10/11 通常自带；安装包内置引导（`wails doctor` 可诊断），缺失时给下载指引。
-- **构建平台**：Wails v3 Linux 依赖 GTK4/WebKitGTK 6.0 与 CGO，**不能在 Windows 上交叉编译 Linux GUI**；GUI 的 Linux 产物必须在 Linux/CI 上构建。CLI 是纯 Go，可自由交叉编译。
+- **平台**：v2.0 只发 Windows 10/11 x64；不做 macOS/Linux GUI（未来版本再评估）。
 - 不为 GUI 单独写 SQL/差异代码；出现第二份实现即视为退回原版 #25/#26。
 
 ---
@@ -1602,11 +1619,11 @@ func (e *Error) Unwrap() error
 
 ### 20.2 集成矩阵
 
-docker compose 起 `mcr.microsoft.com/mssql/server:2022-latest`、`mysql:8.4`、`postgres:16`、SQLite（文件）。**每个方言在自己的 source↔target 配对里跑**（同方言），跨方言只跑"结构报告"用例（只读、不断言可执行）：
+**先跑 MySQL 矩阵**（M1 主方言），再跑 SQL Server / PostgreSQL / SQLite。docker compose 起 `mysql:8.4`、`mcr.microsoft.com/mssql/server:2022-latest`、`postgres:16`、SQLite（文件）。每个方言在自己的 source↔target 配对里跑（同方言），跨方言只跑"结构报告"用例（只读、不断言可执行）：
 
-1. 建源/目标 schema（含外键环、自引用、跨 schema 同名表、二进制、换行、`\N`、时区）；
+1. 建源/目标 schema（含外键环、自引用、跨 schema 同名表、二进制、换行、`\N`、时区、collation 差异）；
 2. `plan` → `apply` → 再 `diff`；
-3. 断言：第二次 diff 为空、退出码 0、无阻断项。
+3. 断言：第二次 diff 为空、无阻断项。
 
 ### 20.3 关键用例（对应 P0）
 
@@ -1621,6 +1638,8 @@ docker compose 起 `mcr.microsoft.com/mssql/server:2022-latest`、`mysql:8.4`、
 | `TestCaseOnlyPKDifference` | 大小写不同的两行都能保留，不撞键 |
 | `TestCrossSchemaSameName` | 两表分别处理，不抛重复键 |
 | `TestColumnOrderIndependent` | 两端物理列序不同，不产生假变更 |
+| `TestCollationCompared` | MySQL 源 `utf8mb4_0900_ai_ci`、目标 `utf8mb4_bin` → 计划含 ALTER COLLATE，执行后二次 diff 为空 |
+| `TestCollationUniquePreflight` | 唯一索引列改 collation 后出现重复 → 阻断，不生成计划 |
 | `TestAddedColumnBackfill` | 新增列的非默认值被回填；等于默认值不产生 UPDATE |
 | `TestCycleTwoPhase` | 环内表仍被建，FK 在阶段 5 |
 | `TestExistingFkHandled` | 既有外键在阶段 1 删除、阶段 5 重建，数据阶段不因父/子顺序失败 |
@@ -1670,24 +1689,24 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 
 **出口**：坏例集能跑、全红；schema 冻结。
 
-### M1 值模型 + SQL Server + 快照（1–2 周）
+### M1 值模型 + MySQL + 快照（1–2 周）
 
 | ID | 任务 | 验收 |
 | :--- | :--- | :--- |
 | M1-1 | `value` 包：Kind/Value/Decimal/Encode/Compare/Hash | 属性测试绿 |
-| M1-2 | SQL Server 方言：Introspect + ReadType/EmitType + Emit 基础 | 能读 IR、生成 CREATE |
-| M1-3 | 快照 v2 读写（明文 + age） | round-trip 无损 |
+| M1-2 | **MySQL 方言**：Introspect + ReadType/EmitType + Emit 基础（含 collation 读取） | 能读 IR、生成 CREATE |
+| M1-3 | 快照 v2 读写（**默认明文**，可选 age） | round-trip 无损 |
 
-**出口**：service 层能创建/校验/读取快照（SQL Server），不依赖 CLI。
+**出口**：service 层能创建/校验/读取快照（MySQL），不依赖 CLI。
 
-### M2 四方言核心 + 比对/计划/执行（3–4 周）
+### M2 补齐三方言 + 比对/计划/执行（3–4 周）
 
 | ID | 任务 | 验收 |
 | :--- | :--- | :--- |
 | M2-1 | `diff`：结构 + 数据 + 归并 + 排序断言 | 单表比对正确 |
-| M2-2 | `plan`：依赖图、SCC、预检、阶段 | SQL Server 全链路 |
+| M2-2 | `plan`：依赖图、SCC、预检、阶段、collation 变更 | MySQL 全链路 |
 | M2-3 | `execute`：阶段事务、进度、dry-run | 执行后再比对为空 |
-| M2-4 | MySQL / PostgreSQL / SQLite 方言 | 四方言矩阵雏形 |
+| M2-4 | SQL Server / PostgreSQL / SQLite 方言 | 四方言矩阵 |
 | M2-5 | 基准与 N3/N4 实测 | 数字写进 README，不达标就调架构 |
 
 **出口**：Docker 里四方言"建表→比对→生成→执行→再比对=无差异"（通过 service 测试，而非 CLI）。
@@ -1701,9 +1720,9 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 | M3-1 | Wails v3 外壳、三阶段工作台、端点卡片、对象树/检查器 | 不跳页完成"比较→计划→执行" |
 | M3-2 | 项目 + 凭据库 + 连接抽屉 | 逻辑名连接、重启恢复、密码不落日志 |
 | M3-3 | 结构差异 + **基础数据差异网格**（只读、分页、列高亮） | 数据 DML 可被看见再执行 |
-| M3-4 | 比较选项 + 规则预览 | 选项与比较器一致，无假开关；列顺序不出现 |
+| M3-4 | 比较选项 + 规则预览 | 选项与比较器一致；排序规则默认比较；列顺序不出现 |
 | M3-5 | 计划页 + 执行页（三道闸/进度/自检）+ 整库 DDL 导出 | 与 service 同一份 Plan；失败可定位 |
-| M3-6 | 安装包与 WebView2 检测 | 干净 Windows 可装 |
+| M3-6 | **便携 ZIP**（最快交付）+ WebView2 检测；Inno Setup 后置 | 解压即用；缺 WebView2 有引导 |
 
 **出口**：v2.0 DoD 全部勾选。
 
@@ -1740,24 +1759,28 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 | 大表差异集撑爆内存 | OOM | `--max-changes` + `--spill` |
 | SQLite 改列需重建表 | 实现复杂、易丢数据 | M2 明确"重建表"路径与回滚脚本 |
 | Wails 依赖 WebView2 | 老内网机不可用；**v2.0 没有 CLI 兜底**，装不上就完全不可用 | 安装包内置检测与引导；提供离线 WebView2 安装包说明；列为 v2.0 发布阻塞风险 |
+| Go 1.25 与 Wails v3 不兼容 | 工具链装不上，M3 直接卡住 | M0 二选一：升级 Go 1.26，或回退 Wails v2 |
+| collation 变更重建索引 | 大表锁表/耗时，唯一键可能冲突 | 阶段 1 删索引、阶段 5 重建；唯一列先按新 collation 查重 |
+| 快照默认明文 | 数据带出内网时泄露 | 敏感场景手动开 age；UI 明确提示"当前未加密" |
 | 单人维护 | 工期与质量 | M0 坏例集 + 自动化矩阵，降低"人肉记忆" |
 | 序列当前值不同步 | 同步后自增值可能冲突或跳号 | 文档明确边界；identity 表用 §13.4 的 reseed，独立 sequence 手工处理 |
 
 ### 23.2 开放问题（M0 关闭）
 
-1. MySQL 5.7 是否在支持范围？（决定 `utf8mb4_bin` vs `utf8mb4_0900_bin`、CHECK 约束支持）
-2. SQL Server 最低版本？（决定 `datetime2`、`BIN2`、`STRING_AGG` 可用性）
-3. SQL Server BIN2 与 Go 的 UTF-8 字节序在**补充平面字符**（emoji、CJK 扩展 B）上是否完全一致？不一致则 SQL Server 文本主键必须走外排（需要实测向量，不能只信文档）。
-4. 是否需要"仅生成差异、不读全表"的采样模式？（与正确性冲突，需产品取舍）
-5. GUI 是否需要离线安装包内置 WebView2？（体积 + 合规）
+1. **MySQL 版本**：生产/测试库是 8.0.17+ 还是 5.7？前者可用 `utf8mb4_0900_bin`，后者只能 `utf8mb4_bin`（PAD SPACE）。测试库版本需要确认；凭据不写入仓库。
+2. **Go 1.25 vs Wails v3**：Wails v3 要求 Go 1.26+，当前机器是 1.25。二选一：升级 Go 到 1.26（推荐，保留 Wails v3），或改用 Wails v2（Go 1.25 可编译，但文档/API 要整体回退）。
+3. SQL Server 最低版本？（决定 `datetime2`、`BIN2`、`STRING_AGG` 可用性；MySQL 优先后可放到 M2 前定）
+4. SQL Server BIN2 与 Go 的 UTF-8 字节序在**补充平面字符**（emoji、CJK 扩展 B）上是否完全一致？不一致则 SQL Server 文本主键必须走外排（需要实测向量，不能只信文档）。
+5. 是否需要"仅生成差异、不读全表"的采样模式？（与正确性冲突，需产品取舍）
+6. WebView2 离线策略：预装 / 内置 Bootstrapper / 内置固定运行时（无 CLI 兜底，这是发布阻塞项）。
 
 ### 23.3 ADR 索引
 
 | ADR | 决策 | 状态 |
 | :--- | :--- | :--- |
-| ADR-001 | Go 1.26 + Wails v3；**桌面工作台先行，CLI 暂缓** | 已定 |
+| ADR-001 | Go + Wails v3；桌面工作台先行，CLI 暂缓（**Go 版本待定：1.26 升级 or Wails v2**） | 待 M0 确认 |
 | ADR-002 | 值归一化规则（NaN/-0/十进制/时区） | 已定，M1 复核 |
-| ADR-003 | 快照 = ZIP + NDJSON，加密用 age | 已定 |
+| ADR-003 | 快照 = ZIP + NDJSON；**默认不加密**，按需 age | 已定 |
 | ADR-004 | 方向统一 source→target | 已定 |
 | ADR-005 | 退出码 0/1/2/3/4/5（v2.x CLI） | 已定，暂不实现 |
 | ADR-006 | 排序：数据库二进制排序 + 单调断言 + 外排回退 | 已定 |
@@ -1765,6 +1788,12 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 | ADR-008 | v2.0 不做跨方言数据同步，只做结构报告 | 已定 |
 | ADR-009 | v2.0 只交付桌面工作台，CLI 推到 v2.x；GUI 必须含基础数据页 | 已定 |
 | ADR-010 | 列顺序不参与比较，不提供相关开关 | 已定 |
+| ADR-011 | MySQL 优先，M1 做 MySQL；其余三方言 M2 | 已定 |
+| ADR-012 | 只做 Windows 10/11 x64，不做 macOS/Linux GUI | 已定 |
+| ADR-013 | 排序规则参与比较；差异生成 ALTER COLLATE，索引重建 | 已定 |
+| ADR-014 | 快照默认不加密；敏感场景手动开 age | 已定 |
+| ADR-015 | 仅中文、固定浅色、无主题切换、无自动更新 | 已定 |
+| ADR-016 | 发布以便携 ZIP 优先，Inno Setup 后置 | 已定 |
 
 ---
 
@@ -1901,7 +1930,7 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 | 结构完整性 | 统计代码围栏（必须偶数）、逐表核对 `\|` 列数、标题层级 | 修复 1 处断裂代码块（§13.5 的 `Phase/Step` 跑到围栏外）；修复后 64 个围栏、全部表格列数一致 |
 | 交叉引用 | 提取全部 `§x.y` 与标题编号比对 | 修正 3 处指错（§1 的三问、§2.4 的评估文档编号、§6.5 的属性测试位置） |
 | 术语与方向 | 全文检查 source/target、from/to、current/desired 的用法 | 报告字段由 `from/to` 改为 `current/desired`，并写死方向 |
-| 数字一致性 | 工期、内存预算、用例计数、退出码逐项对照 | 统一 7–11 周（CLI 暂缓后）；N3 改为 384 MB（含 256 MiB 数据预算）；`--max-changes` 降到 50 万；测试 20 例 |
+| 数字一致性 | 工期、内存预算、用例计数、退出码逐项对照 | 统一 7–11 周（CLI 暂缓后）；N3 改为 384 MB（含 256 MiB 数据预算）；`--max-changes` 降到 50 万；测试 22 例 |
 | 参数一致性 | 提取全部 `--flag`，对照命令表/全局表 | 补全 `--source-env/--target-env/--schema-map/--optimistic/--batch/--with-count` 等；`--fail-on` 取值统一 |
 | 逻辑闭环 | 逐条走"读入→比对→计划→执行→再比对" | 发现并修复 7 个阻断级问题（E.2） |
 | Go 可行性 | 独立 Go 评审核查片段、驱动 API、age/Wails/xxh3 用法 | 发现并修复 12 处（E.3） |
