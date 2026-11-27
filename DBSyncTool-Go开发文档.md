@@ -17,7 +17,7 @@
 | 语言 | Go 1.26（已确认 `go1.26.0 windows/amd64`）；模块路径 `gitee.com/wangbenchi66/dbsync` |
 | 入口 | Windows 桌面工作台唯一交付；核心 `service` 单一实现；CLI 暂缓（v2.x） |
 | 执行 | **永不执行 DDL/DML**；只读比对 + SQL 预览 |
-| 数据库顺序 | **MySQL 8.0.16 → SQLite → PostgreSQL → SQL Server（均已接）** |
+| 数据库顺序 | **MySQL 8.0.16 优先（兼容 5.7+/MariaDB 常见元数据）→ SQLite → PostgreSQL → SQL Server（均已接）** |
 | 平台 | Windows 10/11 x64（WebView2） |
 | 方向 | `source`（期望）→ `target`（现状），计划 = 让 target 变成 source |
 | 数据模型 | 类型化 `Value` + 规范化编码 + 客户端哈希 |
@@ -711,7 +711,7 @@ type Capabilities struct {
 | 方言 | 必读差异 |
 | :--- | :--- |
 | SQL Server | `sys.*` 目录视图 + `OBJECT_DEFINITION` 读对象；`datetime2` 精度；`datetimeoffset`；`timestamp` 是 rowversion；计算列 `is_computed`；`IDENTITY(seed,inc)` 必须读；`COLLATE Latin1_General_100_BIN2` 是码点序（BIN 不是）；**collation 从 `sys.columns.collation_name` 读**；**连接加 `ApplicationIntent=ReadOnly` 并使用只读账号**（SQL Server 没有可靠的会话级只读开关） |
-| MySQL | `information_schema`；DDL 隐式提交；**8.0.16 用 `utf8mb4_bin`（PAD SPACE），8.0.17+ 可探测 `utf8mb4_0900_bin`（NO PAD）**；`ON UPDATE CURRENT_TIMESTAMP`；`AUTO_INCREMENT`；唯一约束以索引形式存在（读取时要还原为约束语义）；**collation 从 `COLUMNS.COLLATION_NAME` + `CHARACTER_SET_NAME` 读有效值** |
+| MySQL | `information_schema`；DDL 隐式提交；**以 8.0.16 为基线，兼容 5.7+/MariaDB**：`CHECK_CONSTRAINTS`/`GENERATION_EXPRESSION` 缺失时自动回退；排序统一用 `utf8mb4_bin`（不依赖 0900_bin，避免旧版本不识别）；`ON UPDATE CURRENT_TIMESTAMP`；`AUTO_INCREMENT`；唯一约束以索引形式存在（读取时要还原为约束语义）；**collation 从 `COLUMNS.COLLATION_NAME` + `CHARACTER_SET_NAME` 读有效值** |
 | PostgreSQL | `pg_catalog`（`pg_attribute`/`pg_constraint`/`pg_index`）；`search_path` 决定 schema；`COLLATE "C"` 是字节序；`jsonb` 重排；分区表与继承需要显式排除；`SERIAL` 读成 identity；**collation 从 `pg_attribute.attcollation` 关联 `pg_collation` 读** |
 | SQLite | `pragma table_info/index_list/foreign_key_list`；类型是"亲和性"，按声明类型映射；**无真正 ALTER，改列要按官方 12 步重建表**（M2 实现）；`COLLATE BINARY`；无用户/权限概念。**连接级坑**：`PRAGMA foreign_keys=ON`/`busy_timeout` 是每连接设置，必须写进 DSN（`_pragma=...`）；`:memory:` 多连接会得到多个独立库，需 `file::memory:?cache=shared` + `MaxOpenConns(1)`；写并发用 WAL（`_pragma=journal_mode(WAL)`）+ busy_timeout；**SQLite 是单写者，`--parallel` 默认降为 1** |
 
@@ -1737,7 +1737,7 @@ go test -fuzz=FuzzSnapshot -fuzztime=30m ./internal/snapshot
 | ADR-014 | 快照默认不加密；敏感场景手动开 age | 已定 |
 | ADR-015 | 仅中文、固定浅色、无主题切换、无自动更新 | 已定 |
 | ADR-016 | 发布以便携 ZIP 优先，Inno Setup 后置 | 已定 |
-| ADR-017 | MySQL 8.0.16 用 `utf8mb4_bin`；8.0.17+ 探测到 `utf8mb4_0900_bin` 才用 | 已定 |
+| ADR-017 | MySQL 统一用 `utf8mb4_bin`（兼容 5.7+/8.0/MariaDB）；不强制 `utf8mb4_0900_bin` | 已定 |
 
 ---
 
