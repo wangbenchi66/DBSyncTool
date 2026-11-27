@@ -508,6 +508,14 @@ func (s *Service) SnapshotDelete(path string) error {
 	return library.Delete(dir, path)
 }
 
+func (s *Service) SnapshotSetMeta(path string, tags []string, note string) error {
+	dir, err := library.DefaultDir()
+	if err != nil {
+		return err
+	}
+	return library.SetMeta(dir, path, tags, note)
+}
+
 // Report 生成只读差异报告（md/html/json）。
 func (s *Service) Report(runID, format string) (string, error) {
 	s.mu.Lock()

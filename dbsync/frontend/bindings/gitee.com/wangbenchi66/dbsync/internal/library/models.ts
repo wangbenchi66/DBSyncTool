@@ -10,5 +10,7 @@ export interface Entry {
     "rows": number;
     "hasData": boolean;
     "size": number;
+    "tags"?: string[] | null;
+    "note"?: string;
     "error"?: string;
 }

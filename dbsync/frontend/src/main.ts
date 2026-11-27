@@ -25,6 +25,7 @@ type PlanView = {
 type LibraryEntry = {
   path: string; name: string; schema: string; createdAt: string;
   tables: number; rows: number; hasData: boolean; size: number; error?: string;
+  tags?: string[]; note?: string;
 };
 
 const $ = (id: string) => document.getElementById(id) as HTMLElement;
@@ -181,13 +182,26 @@ async function openLibrary() {
       ? (entries as LibraryEntry[]).map((e) => `
         <div class="lib-item">
           <span class="name">${esc(e.name)}</span>
-          <span class="meta">${esc(e.schema)} · ${e.tables} 表 · ${e.rows} 行 · ${e.hasData ? "含数据" : "仅结构"}</span>
+          <span class="meta">${esc(e.schema)} · ${e.tables} 表 · ${e.rows} 行 · ${e.hasData ? "含数据" : "仅结构"}${e.tags?.length ? ` · ${e.tags.map(esc).join(" / ")}` : ""}${e.note ? ` · ${esc(e.note)}` : ""}</span>
           <button data-path="${esc(e.path)}" class="ghost use">使用</button>
+          <button data-path="${esc(e.path)}" class="ghost tag">标签</button>
           <button data-path="${esc(e.path)}" class="ghost del">删除</button>
         </div>`).join("")
       : '<div class="empty">快照库为空。先用“导出源端快照”生成，或把 .dbsync 文件放进库目录。</div>';
     list.querySelectorAll<HTMLButtonElement>("button.use").forEach((b) => {
       b.onclick = () => useSnapshot(b.dataset.path!);
+    });
+    list.querySelectorAll<HTMLButtonElement>("button.tag").forEach((b) => {
+      b.onclick = async () => {
+        const entry = (entries as LibraryEntry[]).find((x) => x.path === b.dataset.path);
+        const tagsRaw = prompt("标签（逗号分隔）", (entry?.tags ?? []).join(", "));
+        if (tagsRaw === null) return;
+        const note = prompt("备注", entry?.note ?? "");
+        if (note === null) return;
+        const tags = tagsRaw.split(",").map((s) => s.trim()).filter(Boolean);
+        await App.SnapshotSetMeta(b.dataset.path!, tags, note);
+        await openLibrary();
+      };
     });
     list.querySelectorAll<HTMLButtonElement>("button.del").forEach((b) => {
       b.onclick = async () => {

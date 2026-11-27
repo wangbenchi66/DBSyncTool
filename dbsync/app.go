@@ -68,6 +68,10 @@ func (a *App) SnapshotDelete(path string) error {
 	return a.svc.SnapshotDelete(path)
 }
 
+func (a *App) SnapshotSetMeta(path string, tags []string, note string) error {
+	return a.svc.SnapshotSetMeta(path, tags, note)
+}
+
 func (a *App) Report(runID, format string) (string, error) {
 	return a.svc.Report(runID, format)
 }

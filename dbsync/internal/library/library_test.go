@@ -40,3 +40,26 @@ func TestListImportDelete(t *testing.T) {
 		t.Fatal("删除失败")
 	}
 }
+
+func TestMeta(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(t.TempDir(), "m.dbsync")
+	schema := &model.Schema{Name: "app"}
+	if err := snapshot.Write(src, schema, snapshot.WriteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	e, err := Import(dir, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := SetMeta(dir, e.Path, []string{"prod", "baseline"}, "周五基线"); err != nil {
+		t.Fatal(err)
+	}
+	list, err := List(dir)
+	if err != nil || len(list) != 1 {
+		t.Fatal(err)
+	}
+	if len(list[0].Tags) != 2 || list[0].Note != "周五基线" {
+		t.Fatalf("meta 不符: %+v", list[0])
+	}
+}

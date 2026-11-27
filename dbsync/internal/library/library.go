@@ -2,6 +2,7 @@
 package library
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -22,8 +23,17 @@ type Entry struct {
 	Rows      int       `json:"rows"`
 	HasData   bool      `json:"hasData"`
 	Size      int64     `json:"size"`
+	Tags      []string  `json:"tags,omitempty"`
+	Note      string    `json:"note,omitempty"`
 	Error     string    `json:"error,omitempty"`
 }
+
+type meta struct {
+	Tags []string `json:"tags,omitempty"`
+	Note string   `json:"note,omitempty"`
+}
+
+const metaFile = "index.json"
 
 func DefaultDir() (string, error) {
 	base, err := os.UserConfigDir()
@@ -39,6 +49,7 @@ func List(dir string) ([]Entry, error) {
 	if err := EnsureDir(dir); err != nil {
 		return nil, err
 	}
+	metas := loadMeta(dir)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
@@ -54,6 +65,10 @@ func List(dir string) ([]Entry, error) {
 			continue
 		}
 		item := Entry{Path: path, Name: e.Name(), Size: info.Size()}
+		if m, ok := metas[e.Name()]; ok {
+			item.Tags = m.Tags
+			item.Note = m.Note
+		}
 		m, err := snapshot.Inspect(path)
 		if err != nil {
 			item.Error = err.Error()
@@ -130,7 +145,46 @@ func Delete(dir, path string) error {
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("只能删除快照库内的文件")
 	}
-	return os.Remove(path)
+	if err := os.Remove(path); err != nil {
+		return err
+	}
+	metas := loadMeta(dir)
+	delete(metas, filepath.Base(path))
+	return saveMeta(dir, metas)
+}
+
+// SetMeta 保存快照的标签/备注。
+func SetMeta(dir, path string, tags []string, note string) error {
+	dir, _ = filepath.Abs(dir)
+	path, _ = filepath.Abs(path)
+	rel, err := filepath.Rel(dir, path)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("只能标记快照库内的文件")
+	}
+	metas := loadMeta(dir)
+	metas[filepath.Base(path)] = meta{Tags: tags, Note: note}
+	return saveMeta(dir, metas)
+}
+
+func loadMeta(dir string) map[string]meta {
+	out := map[string]meta{}
+	b, err := os.ReadFile(filepath.Join(dir, metaFile))
+	if err != nil {
+		return out
+	}
+	_ = json.Unmarshal(b, &out)
+	if out == nil {
+		out = map[string]meta{}
+	}
+	return out
+}
+
+func saveMeta(dir string, metas map[string]meta) error {
+	b, err := json.MarshalIndent(metas, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, metaFile), append(b, '\n'), 0o644)
 }
 
 func entryOf(path string) (Entry, error) {

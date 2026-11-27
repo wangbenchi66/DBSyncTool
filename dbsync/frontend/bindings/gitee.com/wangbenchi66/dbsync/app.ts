@@ -60,6 +60,10 @@ export function SnapshotLibraryDir(): $CancellablePromise<string> {
     return $Call.ByID(721098055);
 }
 
+export function SnapshotSetMeta(path: string, tags: string[] | null, note: string): $CancellablePromise<void> {
+    return $Call.ByID(581756542, path, tags, note);
+}
+
 export function TestConnection(ep: service$0.Endpoint): $CancellablePromise<service$0.ConnInfo> {
     return $Call.ByID(1257240193, ep);
 }
