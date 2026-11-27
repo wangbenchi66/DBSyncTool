@@ -23,6 +23,7 @@ import (
 	"gitee.com/wangbenchi66/dbsync/internal/model"
 	"gitee.com/wangbenchi66/dbsync/internal/plan"
 	"gitee.com/wangbenchi66/dbsync/internal/report"
+	"gitee.com/wangbenchi66/dbsync/internal/rules"
 	"gitee.com/wangbenchi66/dbsync/internal/snapshot"
 )
 
@@ -38,6 +39,7 @@ type CompareRequest struct {
 	Target           Endpoint `json:"target"`
 	CompareData      bool     `json:"compareData"`
 	AllowDestructive bool     `json:"allowDestructive"`
+	ApplyRules       bool     `json:"applyRules"`
 }
 
 type MultiRequest struct {
@@ -45,6 +47,7 @@ type MultiRequest struct {
 	Targets          []Endpoint `json:"targets"`
 	CompareData      bool       `json:"compareData"`
 	AllowDestructive bool       `json:"allowDestructive"`
+	ApplyRules       bool       `json:"applyRules"`
 }
 
 type MultiTarget struct {
@@ -288,6 +291,7 @@ func (s *Service) CompareMulti(ctx context.Context, req MultiRequest) (*MultiVie
 		v, err := s.Compare(ctx, CompareRequest{
 			Source: req.Source, Target: t,
 			CompareData: req.CompareData, AllowDestructive: req.AllowDestructive,
+			ApplyRules: req.ApplyRules,
 		})
 		if err != nil {
 			mt.Error = err.Error()
@@ -327,6 +331,11 @@ func (s *Service) Compare(ctx context.Context, req CompareRequest) (*CompareView
 		defer to.db.Close()
 	}
 	d := diff.CompareSchema(so.schema, to.schema)
+	if req.ApplyRules {
+		if rs, err := rules.Load(); err == nil {
+			rules.Filter(d, rs)
+		}
+	}
 	if req.CompareData {
 		if err := attachMixed(ctx, so, to, d); err != nil {
 			return nil, err
@@ -568,6 +577,10 @@ func (s *Service) SnapshotSetMeta(path string, tags []string, note string) error
 	}
 	return library.SetMeta(dir, path, tags, note)
 }
+
+func (s *Service) Rules() ([]rules.Rule, error) { return rules.Load() }
+
+func (s *Service) SaveRules(rs []rules.Rule) error { return rules.Save(rs) }
 
 // Report 生成只读差异报告（md/html/json）。
 func (s *Service) Report(runID, format string) (string, error) {

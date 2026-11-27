@@ -24,6 +24,7 @@ export interface CompareRequest {
     "target": Endpoint;
     "compareData": boolean;
     "allowDestructive": boolean;
+    "applyRules": boolean;
 }
 
 export interface CompareView {
@@ -102,6 +103,7 @@ export interface MultiRequest {
     "targets": Endpoint[] | null;
     "compareData": boolean;
     "allowDestructive": boolean;
+    "applyRules": boolean;
 }
 
 export interface MultiTarget {

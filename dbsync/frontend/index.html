@@ -35,6 +35,8 @@
   <div class="actions">
     <label><input id="compareData" type="checkbox" checked/> 比较数据</label>
     <label><input id="allowDestructive" type="checkbox"/> 显示破坏性</label>
+    <label><input id="applyRules" type="checkbox"/> 应用忽略规则</label>
+    <button id="btnRules" class="ghost">规则</button>
     <input id="snapshotOut" placeholder="快照输出路径，如 src.dbsync"/>
     <button id="btnSnapshot" class="ghost">导出源端快照</button>
     <button id="btnLibrary" class="ghost">快照库</button>
@@ -78,6 +80,17 @@
     <div class="modal-head"><b>快照库</b><button id="closeLibrary" class="ghost">关闭</button></div>
     <div class="modal-path" id="libraryPath"></div>
     <div id="libraryList" class="library-list"></div>
+  </div>
+</div>
+
+<div id="rulesModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head"><b>忽略规则</b><button id="closeRules" class="ghost">关闭</button></div>
+    <div class="multi-body">
+      <p class="muted">每行：类型:模式 备注。类型 table/column/view/routine/trigger；支持 * ?；大小写不敏感。</p>
+      <textarea id="rulesText" placeholder="table:tmp_* 临时表&#10;column:users.legacy_* 历史列"></textarea>
+      <button id="saveRules" class="primary">保存规则</button>
+    </div>
   </div>
 </div>
 

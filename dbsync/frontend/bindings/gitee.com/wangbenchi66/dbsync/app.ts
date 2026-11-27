@@ -15,6 +15,9 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 import * as library$0 from "./internal/library/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as rules$0 from "./internal/rules/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as service$0 from "./internal/service/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -44,8 +47,16 @@ export function Report(runID: string, format: string): $CancellablePromise<strin
     return $Call.ByID(3751069251, runID, format);
 }
 
+export function Rules(): $CancellablePromise<rules$0.Rule[] | null> {
+    return $Call.ByID(3413838504);
+}
+
 export function SaveReport(runID: string, format: string, path: string): $CancellablePromise<void> {
     return $Call.ByID(358675690, runID, format, path);
+}
+
+export function SaveRules(rs: rules$0.Rule[] | null): $CancellablePromise<void> {
+    return $Call.ByID(2515270215, rs);
 }
 
 export function SnapshotDelete(path: string): $CancellablePromise<void> {

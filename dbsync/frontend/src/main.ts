@@ -191,6 +191,7 @@ async function runMulti() {
       targets,
       compareData: input("compareData").checked,
       allowDestructive: input("allowDestructive").checked,
+      applyRules: input("applyRules").checked,
     });
     const list = $("multiList");
     list.innerHTML = (res?.targets ?? []).map((t: any) => {
@@ -201,6 +202,41 @@ async function runMulti() {
     setStatus(`多目标完成：${res?.targets?.length ?? 0} 个目标`);
   } catch (e) {
     setStatus("多目标比较失败");
+    setMsg(String(e), true);
+  }
+}
+
+async function openRules() {
+  try {
+    const rs: { kind: string; pattern: string; note?: string }[] = await App.Rules();
+    (document.getElementById("rulesText") as HTMLTextAreaElement).value =
+      rs.map((r) => `${r.kind}:${r.pattern}${r.note ? " " + r.note : ""}`).join("\n");
+    $("rulesModal").classList.remove("hidden");
+  } catch (e) {
+    setMsg(String(e), true);
+  }
+}
+
+async function saveRules() {
+  const lines = (document.getElementById("rulesText") as HTMLTextAreaElement).value.split("\n");
+  const rs: { kind: string; pattern: string; note?: string }[] = [];
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    const i = line.indexOf(":");
+    if (i <= 0) continue;
+    const kind = line.slice(0, i).trim().toLowerCase();
+    const rest = line.slice(i + 1).trim();
+    const sp = rest.indexOf(" ");
+    const pattern = sp < 0 ? rest : rest.slice(0, sp);
+    const note = sp < 0 ? "" : rest.slice(sp + 1).trim();
+    if (pattern) rs.push({ kind, pattern, note });
+  }
+  try {
+    await App.SaveRules(rs);
+    $("rulesModal").classList.add("hidden");
+    setStatus(`已保存 ${rs.length} 条忽略规则`);
+  } catch (e) {
     setMsg(String(e), true);
   }
 }
@@ -287,6 +323,7 @@ async function compare() {
       target: endpoint("target"),
       compareData: input("compareData").checked,
       allowDestructive: input("allowDestructive").checked,
+      applyRules: input("applyRules").checked,
     });
     if (!view) throw new Error("没有返回比较结果");
     activeTable = view.tables.find((t) => t.status !== "same") ?? view.tables[0] ?? null;
@@ -339,6 +376,9 @@ $("btnReport").addEventListener("click", saveReport);
 $("btnMulti").addEventListener("click", () => $("multiModal").classList.remove("hidden"));
 $("closeMulti").addEventListener("click", () => $("multiModal").classList.add("hidden"));
 $("runMulti").addEventListener("click", runMulti);
+$("btnRules").addEventListener("click", openRules);
+$("closeRules").addEventListener("click", () => $("rulesModal").classList.add("hidden"));
+$("saveRules").addEventListener("click", saveRules);
 $("closeLibrary").addEventListener("click", () => $("libraryModal").classList.add("hidden"));
 $("libraryModal").addEventListener("click", (e) => {
   if (e.target === $("libraryModal")) $("libraryModal").classList.add("hidden");

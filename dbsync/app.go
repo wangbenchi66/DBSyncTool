@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"gitee.com/wangbenchi66/dbsync/internal/library"
+	"gitee.com/wangbenchi66/dbsync/internal/rules"
 	"gitee.com/wangbenchi66/dbsync/internal/service"
 	"gitee.com/wangbenchi66/dbsync/internal/snapshot"
 )
@@ -77,6 +78,10 @@ func (a *App) SnapshotDelete(path string) error {
 func (a *App) SnapshotSetMeta(path string, tags []string, note string) error {
 	return a.svc.SnapshotSetMeta(path, tags, note)
 }
+
+func (a *App) Rules() ([]rules.Rule, error) { return a.svc.Rules() }
+
+func (a *App) SaveRules(rs []rules.Rule) error { return a.svc.SaveRules(rs) }
 
 func (a *App) Report(runID, format string) (string, error) {
 	return a.svc.Report(runID, format)
