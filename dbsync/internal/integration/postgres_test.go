@@ -63,8 +63,15 @@ INSERT INTO dbsync_pg_tgt.users VALUES (1,'a@x',10.00,true),(3,'c@x',30.00,true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(p.Phases) != 0 || len(p.Diagnostics) == 0 {
-		t.Fatalf("非 MySQL 预览应只给提示: %+v", p)
+	if len(p.Diagnostics) == 0 {
+		t.Fatalf("非 MySQL 应给结构预览限制提示: %+v", p)
+	}
+	var dml int
+	for _, ph := range p.Phases {
+		dml += len(ph.Statements)
+	}
+	if dml == 0 {
+		t.Fatalf("应生成 PostgreSQL 数据 DML 预览: %+v", p)
 	}
 	var name string
 	if err := admin.QueryRowContext(ctx, `SELECT email FROM dbsync_pg_tgt.users WHERE id=3`).Scan(&name); err != nil {

@@ -373,11 +373,21 @@ func (s *Service) Plan(ctx context.Context, runID string, allowDestructive bool)
 		return nil, fmt.Errorf("运行 %s 不存在，请重新比较", runID)
 	}
 	if sess.source.Kind != "mysql" || sess.target.Kind != "mysql" {
-		return &PlanView{
-			RunID: runID, Blocked: false,
-			Diagnostics: []Diagnostic{{Severity: "warning", Code: "PREVIEW_MYSQL_ONLY", Message: "SQL 预览目前只支持 MySQL；差异本身仍可查看"}},
-			Phases:      []PhaseView{},
-		}, nil
+		kind := sess.target.Kind
+		if kind == "snapshot" || kind == "dir" {
+			kind = sess.source.Kind
+		}
+		if kind == "snapshot" || kind == "dir" || kind == "" {
+			kind = "mysql"
+		}
+		p := plan.BuildData(sess.diff, sess.sourceSchema, sess.targetSchema, kind, plan.Options{
+			AllowDestructive: allowDestructive || sess.allowDrop,
+			CompareData:      sess.diff.HasData,
+		})
+		s.mu.Lock()
+		sess.plan = p
+		s.mu.Unlock()
+		return toPlanView(runID, p), nil
 	}
 	p := plan.Build(sess.diff, sess.sourceSchema, sess.targetSchema, plan.Options{
 		AllowDestructive: allowDestructive || sess.allowDrop,
